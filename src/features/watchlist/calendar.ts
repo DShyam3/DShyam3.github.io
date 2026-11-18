@@ -42,7 +42,7 @@ export function buildCalendarEvents(
   const weekStart = calendarWeekStart(today);
   for (const entry of schedule) {
     const item = watchlist.find((title) => isScheduleFor(entry, title));
-    if (!item) continue;
+    if (!item || (item.library_state && item.library_state !== 'active')) continue;
     const push = (date: string, label: string, releaseDate?: string) => events.push({
       id: `${entry.id}:${date}`, date, item, schedule: entry, label, releaseDate,
       kind: 'plan', unreleased: !!releaseDate && releaseDate > todayKey,
@@ -54,7 +54,7 @@ export function buildCalendarEvents(
     let cursor = addDays(weekStart, DAYS.indexOf(entry.day));
     // Weekly movie entries are legacy manual plans, with no episode progression.
     if (item.category !== 'TV Shows') {
-      if (item.status !== 'Watched' && item.status !== 'Completed') push(calendarDateKey(cursor), 'Weekly plan');
+      if (!item.watched && item.status !== 'Watched' && item.status !== 'Completed') push(calendarDateKey(cursor), 'Weekly plan');
       continue;
     }
     const seasons = [...(item.seasons ?? [])].filter((season) => season.season_number > 0).sort((a, b) => a.season_number - b.season_number);
@@ -91,6 +91,7 @@ export function buildCalendarEvents(
   }
 
   for (const item of watchlist) {
+    if (item.library_state && item.library_state !== 'active') continue;
     if (schedule.some((entry) => isScheduleFor(entry, item))) continue;
     const suggest = (date: string | undefined, label: string, suffix: string) => {
       if (!validDate(date) || date < todayKey) return;
@@ -104,7 +105,7 @@ export function buildCalendarEvents(
         if (season.watched || (premiere && isEpisodeWatched(item.id, season.season_number, 1))) continue;
         suggest(premiere?.release_date ?? season.release_date, `Season ${season.season_number} premiere`, String(season.season_number));
       }
-    } else if (item.status !== 'Watched' && item.status !== 'Completed') {
+    } else if (!item.watched && item.status !== 'Watched' && item.status !== 'Completed') {
       suggest(item.release_date, 'Film release', 'release');
     }
   }

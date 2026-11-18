@@ -9,7 +9,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { persistWatchedProgress } from './up-next-query';
 import { watchedEpisodeKeys, watchlistLibraryQuery, type WatchlistLibrary } from './library-query';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
 import { isSameTitle, isShowWithId, titleKey, type TitleRef } from './title-ref';
+import { applyRatings, ratingColumn, watchlistRatingsQuery, withRating, type RatingTarget } from './ratings-query';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
 import {
   resolveFavouriteCategory,
@@ -32,6 +33,7 @@ const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date);
 import { useAuth } from '@/contexts/AuthContext';
 import { NIGHTLY_SYNC_HOUR_UTC } from './sync-logic';
 import { releaseYear } from './watchlist-utils';
+import { libraryStatus, isValidPersonalRating, type LibraryState } from './library-state';
 
 // Returns a referentially-stable function that always calls the latest
 // version of `fn`. Used so the context value below doesn't hand out a new
@@ -98,6 +100,7 @@ async function readFunctionError(
 }
 
 export interface Episode {
+  personal_rating?: number | null;
   id?: number;
   episode_number: number;
   /**
@@ -112,6 +115,7 @@ export interface Episode {
 }
 
 export interface Season {
+  personal_rating?: number | null;
   id?: number;
   season_number: number;
   release_date?: string;
@@ -122,6 +126,10 @@ export interface Season {
 }
 
 export interface WatchlistItem {
+  watched?: boolean;
+  watched_at?: string | null;
+  library_state?: LibraryState;
+  personal_rating?: number | null;
   id: string;
   title: string;
   category: 'TV Shows' | 'Movies' | 'Upcoming';
@@ -255,6 +263,15 @@ interface WatchlistContextType {
     category: string;
   }) => boolean;
   removeWatchlistItem: (ref: TitleRef) => Promise<void>;
+  setMovieWatched: (item: WatchlistItem, watched: boolean) => Promise<void>;
+  setLibraryState: (item: WatchlistItem, state: LibraryState) => Promise<void>;
+  setPersonalRating: (item: WatchlistItem, rating: number | null, seasonNumber?: number, episodeNumber?: number) => Promise<void>;
+  /**
+   * Whether the owner's scores are in. `ready` too when there are none to
+   * wait for (a visitor). Rating controls show only when ready, so a failed
+   * read is never mistaken for "nothing rated".
+   */
+  ratingsStatus: 'loading' | 'ready' | 'failed';
   addFavourite: (item: NewFavourite) => Promise<void>;
   /** Fills in missing TMDB facts on existing favourites. Admin-only. */
   syncFavouriteFacts: () => Promise<void>;
@@ -342,7 +359,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const loadedShowsRef = useRef<Set<string>>(new Set());
   /** Same, for plot summaries. */
   const loadedDescriptionsRef = useRef<Set<string>>(new Set());
-  const { isAdmin } = useAuth();
+  const { isAdmin, isAuthLoading } = useAuth();
   // Public visitors can browse the watchlist (fetchData below), but the
   // auto-sync writes to sync_log/tv_shows/etc. and is admin-only -- RLS now
   // enforces that at the DB level, so gate it client-side too rather than
@@ -576,6 +593,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
   const getAutoStatus = useCallback(
     (item: WatchlistItem) => {
+      const personalStatus = libraryStatus(item);
+      if (['Hidden', 'Stopped watching', 'Watched', 'Completed', 'Watching'].includes(personalStatus)) return personalStatus;
       const now = new Date();
       now.setHours(0, 0, 0, 0);
 
@@ -595,7 +614,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       if (!item.seasons || item.seasons.length === 0) return 'Returning Series';
 
       const futureSeasons = item.seasons.filter(
-        (s) => s.release_date && new Date(s.release_date) > now,
+        (s) => s.season_number > 0 && s.release_date && new Date(s.release_date) > now,
       );
       if (futureSeasons.length > 0) {
         const earliestSeason = futureSeasons.reduce((earliest, current) => {
@@ -617,50 +636,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         return 'Coming Soon';
       }
 
-      let watchedCount = 0;
-      let totalEpisodes = 0;
-      let hasPartiallyWatchedSeason = false;
-
-      for (const s of item.seasons) {
-        const seasonEpisodes = s.episodes;
-        const seasonTotal = seasonEpisodes.length;
-        totalEpisodes += seasonTotal;
-
-        let seasonWatchedCount = 0;
-        for (const ep of seasonEpisodes) {
-          if (
-            watchedEpisodes.has(
-              `${item.id}-s${s.season_number}-e${ep.episode_number}`,
-            )
-          ) {
-            seasonWatchedCount++;
-          }
-        }
-
-        watchedCount += seasonWatchedCount;
-        if (seasonWatchedCount > 0 && seasonWatchedCount < seasonTotal) {
-          hasPartiallyWatchedSeason = true;
-        }
-      }
-
-      if (watchedCount === 0) return 'To Watch';
-      if (watchedCount === totalEpisodes && totalEpisodes > 0) {
-        return item.series_status === 'Ended' ||
-          item.series_status === 'Canceled' ||
-          item.series_status === 'Cancelled'
-          ? 'Completed'
-          : 'Watched';
-      }
-
-      if (hasPartiallyWatchedSeason) {
-        return 'Watching';
-      }
-
-      // If no partially watched season, but some episodes ARE watched (and we aren't finished),
-      // it means we finished a season and haven't started the next.
-      return 'To Watch';
+      return personalStatus;
     },
-    [watchedEpisodes],
+    [],
   );
 
   const addItemKey = (item: {
@@ -707,16 +685,20 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             trailer_key: item.trailer_key || null,
             directors: item.directors ?? null,
             top_cast: item.top_cast ?? null,
+            // "Seen it" from discovery: straight to Finished. The row's
+            // trigger stamps watched_at.
+            watched: item.watched === true,
           });
           if (error) throw error;
           await fetchData();
-          toast({ title: 'Success', description: 'Movie added to watchlist' });
+          toast({ title: 'Success', description: item.watched ? 'Film added as watched' : 'Movie added to watchlist' });
         } catch (error) {
           toast({
             title: 'Error',
             description: 'Failed to add movie',
             variant: 'destructive',
           });
+          throw error;
         }
       } else if (item.category === 'TV Shows') {
         try {
@@ -743,6 +725,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           let failedSeasonCount = 0;
           let detailsFailed = false;
 
+          const now = new Date();
+          const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
           if (item.tmdb_id) {
             // The show row exists by now, so this must not reach the outer
             // catch: that says "Failed to add" about a row that is there,
@@ -793,6 +777,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       title: v.name,
                       runtime: v.runtime || null,
                       release_date: v.air_date,
+                      // "Seen it": every episode aired so far is watched; the
+                      // season trigger follows from the episodes.
+                      watched: item.watched === true && !!v.air_date && v.air_date <= todayIso,
                     }));
                     await supabase.from('tv_show_episodes').insert(eps);
                   } else {
@@ -830,6 +817,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             description: 'Failed to add TV Show',
             variant: 'destructive',
           });
+          throw error;
         }
       }
     } finally {
@@ -846,6 +834,64 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     title: string;
     category: string;
   }) => pendingAddKeys.has(addItemKey(item));
+
+  const reportPersonalUpdateError = (error: unknown) => {
+    toast({ title: 'Could not save', description: 'Your library change was not saved. Please try again.', variant: 'destructive' });
+    throw error;
+  };
+
+  const setMovieWatched = async (item: WatchlistItem, watched: boolean) => {
+    try {
+      if (!isAdmin || item.category !== 'Movies') throw new Error('Movie update unavailable');
+      const { data, error } = await supabase.from('movies').update({ watched }).eq('id', Number(item.id)).select('id, watched_at').single();
+      if (error || !data) throw error ?? new Error('Movie update failed');
+      setWatchlist((prev) => prev.map((row) => row.category === item.category && row.id === item.id ? { ...row, watched, watched_at: data.watched_at } : row));
+    } catch (error) { reportPersonalUpdateError(error); }
+  };
+
+  const setLibraryState = async (item: WatchlistItem, library_state: LibraryState) => {
+    try {
+      if (!isAdmin || !['active', 'hidden', 'stopped'].includes(library_state)) throw new Error('Library update unavailable');
+      const table = item.category === 'Movies' ? 'movies' : 'tv_shows';
+      const { data, error } = await supabase.from(table).update({ library_state }).eq('id', Number(item.id)).select('id').single();
+      if (error || !data) throw error ?? new Error('Library update failed');
+      setWatchlist((prev) => prev.map((row) => row.category === item.category && row.id === item.id ? { ...row, library_state } : row));
+    } catch (error) { reportPersonalUpdateError(error); }
+  };
+
+  // Scores live in the owner-only watchlist_ratings table, one row per
+  // title, season or episode. The library itself never carries them; they
+  // are laid on at render (applyRatings) from their own query, so they are
+  // never in the public library cache.
+  const setPersonalRating = async (item: WatchlistItem, personal_rating: number | null, seasonNumber?: number, episodeNumber?: number) => {
+    try {
+      if (!isAdmin || !isValidPersonalRating(personal_rating)) throw new Error('Invalid rating');
+      if (episodeNumber !== undefined && seasonNumber === undefined) throw new Error('Season required');
+      const current = watchlist.find((row) => isSameTitle(row, item));
+      if (!current) throw new Error('Title unavailable');
+      const season = current.seasons?.find((row) => row.season_number === seasonNumber);
+      const episode = season?.episodes.find((row) => row.episode_number === episodeNumber);
+      if (seasonNumber !== undefined && item.category !== 'TV Shows') throw new Error('Rating target unavailable');
+      const targetId = episodeNumber !== undefined ? episode?.id : seasonNumber !== undefined ? season?.id : Number(item.id);
+      if (!targetId) throw new Error('Rating target unavailable');
+      const target: RatingTarget = episodeNumber !== undefined
+        ? { episode_id: targetId }
+        : seasonNumber !== undefined
+          ? { season_id: targetId }
+          : item.category === 'Movies' ? { movie_id: targetId } : { tv_show_id: targetId };
+      const column = ratingColumn(target);
+      const { error } = personal_rating === null
+        ? await supabase.from('watchlist_ratings').delete().eq(column, targetId)
+        : await supabase.from('watchlist_ratings').upsert(
+          { ...target, rating: personal_rating, updated_at: new Date().toISOString() },
+          { onConflict: column },
+        );
+      if (error) throw error;
+      // A read still in flight would land after this and undo the new score.
+      await queryClient.cancelQueries({ queryKey: watchlistRatingsQuery.queryKey });
+      queryClient.setQueryData(watchlistRatingsQuery.queryKey, (rows) => withRating(rows ?? [], target, personal_rating));
+    } catch (error) { reportPersonalUpdateError(error); }
+  };
 
   const removeWatchlistItem = async (ref: TitleRef) => {
     const itemToRemove = watchlist.find((item) => isSameTitle(item, ref));
@@ -904,7 +950,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         (item.tmdb_id &&
           f.tmdb_id === item.tmdb_id &&
           f.media_type === item.media_type) ||
-        f.title.toLowerCase() === item.title.toLowerCase(),
+        ((!item.tmdb_id || !f.tmdb_id) && f.media_type === item.media_type && f.title.toLowerCase() === item.title.toLowerCase()),
     );
     if (exists) {
       toast({
@@ -915,7 +961,21 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const facts = item.facts ?? {};
+      // A heart from a card or a detail has no TMDB facts to hand, and the
+      // favourite's section is derived from them -- without this it files
+      // under Others until the next facts refresh. A failed lookup keeps that
+      // fallback rather than blocking the favourite.
+      let facts: TmdbFacts = item.facts ?? {};
+      if (!item.facts && item.tmdb_id) {
+        const details = await fetchTMDBProxy<TMDBDetails>(`${item.media_type}/${item.tmdb_id}`).catch(() => null);
+        if (details) {
+          facts = {
+            original_language: details.original_language ?? null,
+            origin_country: details.origin_country ?? [],
+            genre_ids: details.genres?.map((genre) => genre.id).filter((id): id is number => typeof id === 'number') ?? [],
+          };
+        }
+      }
       const { error } = await supabase.from('favourites').insert({
         title: item.title,
         poster: item.poster || null,
@@ -941,6 +1001,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         description: 'Failed to add favourite',
         variant: 'destructive',
       });
+      throw error;
     }
   };
 
@@ -981,6 +1042,25 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
+  /** The series' latest watch, re-read after a watched write: the database
+   *  stamps episode dates, and an unwatch can move it back or clear it. A
+   *  failed read leaves the old date; the next library read corrects it. */
+  const showWatchedAtReads = useRef(new Map<string, number>());
+  const refreshShowWatchedAt = async (showId: string) => {
+    // Quick toggles on one show fire overlapping reads; only the latest one
+    // applies, so an older reply cannot bring back a date just undone.
+    const read = (showWatchedAtReads.current.get(showId) ?? 0) + 1;
+    showWatchedAtReads.current.set(showId, read);
+    const { data, error } = await supabase
+      .from('watchlist_show_last_watched')
+      .select('last_watched_at')
+      .eq('tv_show_id', Number(showId))
+      .maybeSingle();
+    if (error || showWatchedAtReads.current.get(showId) !== read) return;
+    const watchedAt = data?.last_watched_at ?? null;
+    setWatchlist((prev) => prev.map((show) => isShowWithId(show, showId) ? { ...show, watched_at: watchedAt } : show));
+  };
+
   const toggleEpisodeWatched = async (
     showId: string,
     seasonNumber: number,
@@ -1001,6 +1081,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       );
       await persistWatchedProgress(queryClient, [episode?.id], nextWatched);
       markEpisodesWatched(showId, seasonNumber, new Set([episodeNumber]), nextWatched);
+      void refreshShowWatchedAt(showId);
       setWatchedEpisodes((prev) => {
         const next = new Set(prev);
         if (nextWatched) next.add(episodeKey);
@@ -1043,6 +1124,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       markEpisodesWatched(
         showId, seasonNumber, new Set(episodes.map((ep) => ep.episode_number)), nextWatched,
       );
+      void refreshShowWatchedAt(showId);
       setWatchedEpisodes((prev) => {
         const next = new Set(prev);
         for (const ep of episodes) {
@@ -1278,6 +1360,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const stableCancelSync = useStableCallback(cancelSync);
   const stableAddWatchlistItem = useStableCallback(addWatchlistItem);
   const stableIsAddPending = useStableCallback(isAddPending);
+  const stableSetMovieWatched = useStableCallback(setMovieWatched);
+  const stableSetLibraryState = useStableCallback(setLibraryState);
+  const stableSetPersonalRating = useStableCallback(setPersonalRating);
   const stableRemoveWatchlistItem = useStableCallback(removeWatchlistItem);
   const stableAddFavourite = useStableCallback(addFavourite);
   const stableRemoveFavourite = useStableCallback(removeFavourite);
@@ -1286,9 +1371,22 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const stableIsEpisodeWatched = useStableCallback(isEpisodeWatched);
   const stableIsSeasonWatched = useStableCallback(isSeasonWatched);
 
+  // The owner's scores, laid onto the library for the owner only. A
+  // signed-out session never reads them, and a cached copy from before
+  // signing out is ignored.
+  const ratings = useQuery({ ...watchlistRatingsQuery, enabled: isAdmin });
+  const ratedWatchlist = useMemo(
+    () => (isAdmin && ratings.data ? applyRatings(watchlist, ratings.data) : watchlist),
+    [isAdmin, ratings.data, watchlist],
+  );
+  const ratingsStatus: WatchlistContextType['ratingsStatus'] = isAuthLoading
+    ? 'loading'
+    // Scores already in stay usable when a background refetch fails.
+    : !isAdmin || ratings.data !== undefined ? 'ready' : ratings.isError ? 'failed' : 'loading';
+
   const value = useMemo(
     () => ({
-      watchlist,
+      watchlist: ratedWatchlist,
       favourites,
       loading,
       syncing,
@@ -1306,6 +1404,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       addWatchlistItem: stableAddWatchlistItem,
       isAddPending: stableIsAddPending,
       removeWatchlistItem: stableRemoveWatchlistItem,
+      setMovieWatched: stableSetMovieWatched,
+      setLibraryState: stableSetLibraryState,
+      setPersonalRating: stableSetPersonalRating,
+      ratingsStatus,
       addFavourite: stableAddFavourite,
       removeFavourite: stableRemoveFavourite,
       toggleEpisodeWatched: stableToggleEpisodeWatched,
@@ -1318,7 +1420,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       fetchData,
     }),
     [
-      watchlist,
+      ratedWatchlist,
       favourites,
       loading,
       syncing,
@@ -1336,6 +1438,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       stableAddWatchlistItem,
       stableIsAddPending,
       stableRemoveWatchlistItem,
+      stableSetMovieWatched,
+      stableSetLibraryState,
+      stableSetPersonalRating,
+      ratingsStatus,
       stableAddFavourite,
       stableRemoveFavourite,
       stableToggleEpisodeWatched,

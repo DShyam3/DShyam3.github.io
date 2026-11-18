@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import { resolveFavouriteCategory, type TmdbFacts } from './favourite-category';
+import type { LibraryState } from './library-state';
 import { releaseYear } from './watchlist-utils';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
@@ -15,14 +16,14 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
   // Each read is paged: the Data API stops at 1,000 rows without saying
   // so, and a single title-ordered read would drop the end of the
   // alphabet first. `id` breaks title ties so pages never overlap.
-  const [moviesResult, showsResult, favouritesResult] = await Promise.all([
+  const [moviesResult, showsResult, favouritesResult, lastWatchedResult] = await Promise.all([
     // Every column except `overview`. Plot summaries are 218 kB of the
     // movies table's 357 kB and are only read by the detail dialog, so
     // they load per item in loadItemDescription instead.
     selectAllPages((from, to) => supabase
       .from('movies')
       .select(
-        'id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime',
+        'id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime, watched, watched_at, library_state',
         { count: 'exact' },
       )
       .order('title', { ascending: true })
@@ -38,7 +39,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       // As above: no `overview` (62 kB of tv_shows' 108 kB).
       .select(
         `
-                id, title, platform, genre, status, poster, release_date, tmdb_id,
+                id, title, platform, genre, status, poster, release_date, tmdb_id, library_state,
                 tv_show_seasons (
                   id, season_number, release_date, watched,
                   tv_show_episodes (id, episode_number, watched, runtime, release_date)
@@ -51,11 +52,25 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       .range(from, to), (show) => String(show.id)),
     selectAllPages((from, to) => supabase
       .from('favourites')
-      .select('*', { count: 'exact' })
+      .select('id, title, poster, media_type, tmdb_id, created_at, category, original_language, origin_country, genre_ids', { count: 'exact' })
       .order('title', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to), (favourite) => String(favourite.id)),
+    // When each series was last watched: one row per show with a dated
+    // watch, so far fewer rows than shows and no paging needed. On a stack
+    // without the view (migration 20261118074422 not applied) the read
+    // fails and series simply carry no watch date.
+    supabase.from('watchlist_show_last_watched').select('tv_show_id, last_watched_at'),
   ]);
+  // Personal scores are not read here: they live in the owner-only
+  // watchlist_ratings table, which this public read cannot see (ratings-query).
+
+  const lastWatched = new Map<string, string>();
+  if (!lastWatchedResult.error) {
+    for (const row of lastWatchedResult.data ?? []) {
+      if (row.tv_show_id != null && row.last_watched_at) lastWatched.set(String(row.tv_show_id), row.last_watched_at);
+    }
+  }
 
   if (moviesResult.error) throw moviesResult.error;
   if (showsResult.error) throw showsResult.error;
@@ -64,6 +79,9 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
   const mappedMovies: WatchlistItem[] = (moviesResult.data || []).map(
     (movie) => ({
       id: movie.id.toString(),
+      watched: movie.watched,
+      watched_at: movie.watched_at,
+      library_state: movie.library_state as LibraryState,
       title: movie.title,
       category: 'Movies',
       description: undefined,
@@ -89,6 +107,8 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
   const mappedShows: WatchlistItem[] = (showsResult.data || []).map(
     (show) => ({
       id: show.id.toString(),
+      library_state: show.library_state as LibraryState,
+      watched_at: lastWatched.get(String(show.id)) ?? null,
       title: show.title,
       category: 'TV Shows' as const,
       status: show.status || 'Plan to Watch',

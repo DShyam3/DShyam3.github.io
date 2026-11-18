@@ -189,118 +189,6 @@ footer.app-footer { padding-block: .75rem; }
   .record-inspector { right: max(1rem, calc((100vw - var(--page-max)) / 2)); }
 }
 
-/* The middle area is fixed; each News column owns its vertical scroll. */
-.app-shell[data-section="watchlist"] .app-frame[data-layout="workspace"] {
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.watchlist-news-workspace {
-  display: grid;
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  gap: .75rem;
-  padding-block: .75rem;
-  overflow: hidden;
-}
-.watchlist-news-workspace > .news-column {
-  min-height: 0;
-  min-width: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  border: 1px solid hsl(var(--border) / .45);
-  border-radius: 1.5rem;
-  background: hsl(var(--card) / .18);
-  padding: 1rem;
-}
-.news-column > .news-pane { min-width: 0; }
-.news-column { scroll-padding-top: 4rem; }
-.news-column[data-panel="week"] { scroll-padding-top: 7rem; }
-.news-column .news-pane-heading {
-  position: sticky;
-  top: -1rem;
-  z-index: 2;
-  margin: -1rem -1rem .75rem;
-  padding: 1rem;
-  background: hsl(var(--background));
-  border-bottom: 1px solid hsl(var(--border) / .4);
-}
-.news-column .news-card-grid { gap: .75rem; }
-.news-column .content-rail { gap: .75rem; }
-.news-column .content-rail > .item-card > button { align-items: flex-start; }
-@media (max-height: 600px) {
-  .news-column .news-pane-heading { position: static; }
-  .news-column, .news-column[data-panel="week"] { scroll-padding-top: .5rem; }
-  .watchlist-news-workspace { padding-block: .375rem; }
-}
-.news-column .news-update-row { grid-template-columns: 44px minmax(0, 1fr); gap: .5rem; }
-.news-update-row > :first-child { width: 44px; grid-row: 1 / 4; }
-.news-update-row > span:nth-child(2), .news-update-row > span:nth-child(3) { white-space: normal; overflow-wrap: anywhere; }
-.news-update-row > span:nth-child(4) { display: none; }
-.news-update-row > span:last-child { grid-column: 2; grid-row: 3; justify-self: start; text-align: left; }
-.news-column-upcoming > section + section { margin-top: 1.5rem; }
-.news-panel-switcher { display: flex; align-items: center; gap: .75rem; flex-shrink: 0; padding-top: .5rem; }
-.news-panel-switcher select { min-height: 2.75rem; }
-.app-shell[data-section="watchlist"] .app-frame[data-layout="workspace"] > .app-toolbar { flex-shrink: 0; position: static; }
-/* Five columns, each with a floor. Where they cannot all fit -- 1280px with
-   the inspector open leaves about 640px for five -- the row scrolls sideways
-   instead of squeezing every column until titles break a letter per line.
-   The floor is in rem so Larger display raises it with the type. No scroll
-   snap: the row is only a column or two wider than the view, so snap points
-   pulled every short swipe back to where it started. */
-@media (min-width: 1280px) and (min-height: 600px) {
-  .watchlist-news-workspace {
-    grid-template-columns: repeat(5, minmax(11rem, 1fr));
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
-  }
-  /* The columns fill the row, so a sideways swipe always starts over one.
-     Contained on x, it would stop there and never reach the row. */
-  .watchlist-news-workspace > .news-column { overscroll-behavior-x: auto; }
-  .news-panel-switcher { display: none; }
-}
-@media not all and (min-width: 1280px) and (min-height: 600px) {
-  .watchlist-news-workspace:not([data-active-panel="next"]) > [data-panel="next"],
-  .watchlist-news-workspace:not([data-active-panel="week"]) > [data-panel="week"],
-  .watchlist-news-workspace:not([data-active-panel="now"]) > [data-panel="now"],
-  .watchlist-news-workspace:not([data-active-panel="upcoming"]) > [data-panel="upcoming"],
-  .watchlist-news-workspace:not([data-active-panel="updates"]) > [data-panel="updates"] { display: none; }
-}
-.watchlist-news-workspace .news-pane .content-rail {
-  flex-direction: column;
-  overflow: visible;
-  padding-right: .25rem;
-}
-.watchlist-news-workspace .news-pane .content-rail > .item-card {
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-  flex: none;
-}
-.watchlist-news-workspace .news-pane .news-card-grid {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-.watchlist-news-workspace .news-pane-your-week .news-agenda {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-/* A narrow column stacks the poster above the text, so a title gets the
-   card's whole width rather than what is left beside a 3.5rem poster. */
-.watchlist-news-workspace > .news-column { container: news-column / inline-size; }
-@container (max-width: 13rem) {
-  .watchlist-news-workspace .item-card > button { flex-direction: column; align-items: flex-start; }
-}
-@container news-column (max-width: 15rem) {
-  .news-column .news-update-row { grid-template-columns: minmax(0, 1fr); }
-  /* span:last-child is listed to outrank the wide layout's date placement. */
-  .news-column .news-update-row > *,
-  .news-column .news-update-row > span:last-child { grid-column: 1; grid-row: auto; }
-}
 /* Distance viewing is opted into, not inferred from the screen's pixel count. */
 html[data-display="larger"] { font-size: 125%; }
 html[data-display="larger"] .card-grid { --card-min: 12rem; }
@@ -365,12 +253,6 @@ html[data-display="larger"] .city-remove-btn { opacity: 1; }
    keeps p-6 beside a px- or pr- override, which may leave less than the lane. */
 .glass-dialog.p-6:not([class*="px-"]):not([class*="pr-"]) > .dialog-body { margin-right: -.75rem; padding-right: .75rem; }
 
-@media (min-width: 1280px) {
-  .watchlist-news-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
-  .watchlist-news-grid > section:has(.watchlist-news-full-width) { grid-column: 1 / -1; }
-  .watchlist-news-grid > section:has(.content-rail) { grid-column: 1 / -1; }
-}
-
 .travel-sidebar-labels { flex-wrap: wrap; }
 .travel-sidebar-labels .dot-matrix-text { white-space: normal; }
 
@@ -393,7 +275,6 @@ html[data-display="larger"] .app-shell[data-section="watchlist"] .card-grid { --
 .watchlist-poster-card .card-meta { grid-template-columns: minmax(0, 1fr); grid-template-rows: 1.5rem 1.25rem; align-items: center; justify-items: start; }
 .watchlist-poster-card .card-meta > * { max-width: 100%; }
 .watchlist-poster-card:hover { transform: none; }
-.watchlist-updates-scroll { scrollbar-gutter: stable; scrollbar-width: thin; }
 
 /* A narrow week column is too tight for a card's title to share its row with
    the poster and actions menu, so the title takes a line of its own beneath

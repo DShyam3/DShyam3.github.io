@@ -2995,3 +2995,33 @@ tab navigated to TrueLayer; opening `/finance?connect_bank=1` directly made no
 phone app-to-app round trip, whether a paused original tab on iOS receives the
 BroadcastChannel refresh when resumed, the desktop round trip against real
 TrueLayer, and signed-in production.
+
+### Library shelves by status; News split into Following and Discover — 2026-11-17
+
+Status is the primary axis of the Library, and type (films or series) is a
+filter that applies to every shelf, not a tab of its own. "Caught up" is not
+"Watched": a running series with every aired episode watched sits on Up to date
+and returns to Watching by itself when the next episode airs, because its shelf
+is computed from air dates; Finished holds only watched films and series that
+ended and were watched to the end. News has two tabs, Following and Discover,
+with no blended "For you" feed, because one list that mixed the owner's releases
+with suggestions answered two questions at once and buried both. This supersedes
+the 2026-09-29 decision that films get no watched state: films now carry a
+watched flag, set by Mark as watched or by Seen it.
+
+Closure: `src/features/watchlist/library-state.ts` (`libraryShelf`) and
+`src/features/watchlist/discovery.ts`, shown in `src/pages/WatchlistNews.tsx`.
+
+## Personal ratings in their own owner-only table — 2026-11-18
+
+Scores moved off the public `movies`, `tv_shows`, `tv_show_seasons` and
+`tv_show_episodes` rows into `watchlist_ratings`, readable only through
+`(SELECT public.is_admin())` policies. The alternative, column privileges
+(revoke table SELECT from anon, grant every column but the score), keeps one
+table but turns every future column on four tables into a grant someone must
+remember, and breaks any anonymous `select('*')`; the credits columns landing
+the same day would have been the first casualty. A separate table makes
+privacy the default for anything rating-shaped. The library read stays public
+and never carries scores; the owner's session lays them on from their own
+query, so they never enter the shared library cache either.
+

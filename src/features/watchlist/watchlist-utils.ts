@@ -324,9 +324,13 @@ export const movieReleaseSentence = (days: number, dateStr: string): string => {
  * sentence long before it truncates two names either side of a glyph.
  */
 export const platformChangeSentence = (
-    from: string | null,
-    to: string | null,
+    rawFrom: string | null,
+    rawTo: string | null,
 ): string | null => {
+    // "Online" is the sync's word for "none of the tracked services", so a
+    // move to or from it is gaining or losing a service, not a swap.
+    const from = rawFrom === 'Online' ? null : rawFrom;
+    const to = rawTo === 'Online' ? null : rawTo;
     if (from && to) return `${from} → ${to}`;
     if (!from && to) return `Now on ${to}`;
     if (from && !to) return `Left ${from}`;

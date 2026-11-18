@@ -417,6 +417,8 @@ describe('platformChangeSentence', () => {
 
   it('returns null when neither side is known', () => {
     expect(platformChangeSentence(null, null)).toBeNull();
+    expect(platformChangeSentence('Online', 'BBC iPlayer')).toBe('Now on BBC iPlayer');
+    expect(platformChangeSentence('Netflix', 'Online')).toBe('Left Netflix');
   });
 });
 

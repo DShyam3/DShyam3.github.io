@@ -1,10 +1,12 @@
 import { useState, useEffect, useId, useRef, useMemo, useCallback } from 'react';
-import { ExternalLink, Trash2, CalendarDays, Calendar, Heart, RefreshCcw } from 'lucide-react';
+import { ExternalLink, Trash2, CalendarDays, Calendar, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useWatchlist, type WatchlistItem, type Season } from '@/features/watchlist/useWatchlist';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
 import { TrailerButton } from './TrailerButton';
+import { LibraryActions } from './LibraryActions';
+import { useAuth } from '@/contexts/AuthContext';
 import { CreditsList, DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
 import { currentSeasonNumber, displayTitle, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 import { detailTrailer } from '@/features/watchlist/trailer';
@@ -34,7 +36,6 @@ interface WatchlistDetailDialogProps {
     episodeNumber: number,
   ) => boolean;
   isSeasonWatched: (showId: string, season: Season) => boolean;
-  onMoveToFavourites?: () => void;
   onResync?: () => void;
   syncing?: boolean;
 }
@@ -53,7 +54,6 @@ export function WatchlistDetailDialog({
   toggleSeasonWatched,
   isEpisodeWatched,
   isSeasonWatched,
-  onMoveToFavourites,
   onResync,
   syncing,
 }: WatchlistDetailDialogProps) {
@@ -71,7 +71,8 @@ export function WatchlistDetailDialog({
     [item.id],
   );
   const { askDelete, deleteDialog } = useDeleteConfirm();
-  const { loadShowEpisodes, loadItemDescription } = useWatchlist();
+  const { loadShowEpisodes, loadItemDescription, setPersonalRating, ratingsStatus } = useWatchlist();
+  const { isAdmin } = useAuth();
 
   // The grid only loads episode numbers and watched flags; episode titles,
   // air dates and runtimes are fetched here, for this show only, the first
@@ -279,6 +280,8 @@ export function WatchlistDetailDialog({
             </div>
           ) : null}
 
+          <LibraryActions key={`${item.category}:${item.id}`} item={item} />
+
           {hasSeasons && item.seasons ? (
             <div
               className="rounded-xl border border-border/50 bg-background/45 p-2.5"
@@ -286,6 +289,7 @@ export function WatchlistDetailDialog({
               aria-label="Episodes"
             >
               <SeasonEpisodeList
+                onRate={isAdmin && ratingsStatus === 'ready' ? (rating, seasonNumber, episodeNumber) => setPersonalRating(item, rating, seasonNumber, episodeNumber) : undefined}
                 showId={item.id}
                 seasons={item.seasons}
                 selectedSeason={selectedSeason}
@@ -298,7 +302,7 @@ export function WatchlistDetailDialog({
             </div>
           ) : null}
 
-          {(onSchedule || onMoveToFavourites || onResync || onDelete) ? (
+          {(onSchedule || onResync || onDelete) ? (
             // Two by two: the inspector and the sheet are never wide enough for
             // four in a row, and a 0-basis flex row squeezed them until the
             // labels spilled out. A last action left alone on its row (News
@@ -317,18 +321,6 @@ export function WatchlistDetailDialog({
                 >
                   <CalendarDays className="h-3.5 w-3.5" />
                   {isScheduled ? 'Unschedule' : 'Schedule'}
-                </Button>
-              ) : null}
-
-              {onMoveToFavourites ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onMoveToFavourites}
-                  className="gap-1.5 text-xs justify-center hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
-                >
-                  <Heart className="h-3.5 w-3.5" />
-                  Favourite
                 </Button>
               ) : null}
 
@@ -389,6 +381,9 @@ export function WatchlistDetailDialog({
     });
   }, [
     open,
+    isAdmin,
+    setPersonalRating,
+    ratingsStatus,
     instanceId,
     isTVShow,
     hasSeasons,
@@ -406,7 +401,6 @@ export function WatchlistDetailDialog({
     onCloseAutoFocus,
     onSchedule,
     onRemoveFromSchedule,
-    onMoveToFavourites,
     onResync,
     onDelete,
     askDelete,

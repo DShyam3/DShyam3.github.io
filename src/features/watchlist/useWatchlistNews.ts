@@ -60,12 +60,15 @@ export const pinnedTitleQuery = queryOptions({
           .from('tv_shows')
           .select('id, title, poster, backdrop, release_date')
           .eq('pinned', true)
+          .eq('library_state', 'active')
           .limit(1)
           .maybeSingle(),
         supabase
           .from('movies')
           .select('id, title, poster, backdrop, release_date')
           .eq('pinned', true)
+          .eq('library_state', 'active')
+          .eq('watched', false)
           .limit(1)
           .maybeSingle(),
       ]);

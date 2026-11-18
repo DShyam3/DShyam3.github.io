@@ -41,7 +41,10 @@ CREATE TABLE IF NOT EXISTS "public"."movies" (
     "pinned" boolean DEFAULT false NOT NULL,
     "trailer_key" "text",
     "directors" "text"[],
-    "top_cast" "text"[]
+    "top_cast" "text"[],
+    "watched" boolean DEFAULT false NOT NULL,
+    "watched_at" timestamp with time zone,
+    "library_state" "text" DEFAULT 'active'::"text" NOT NULL
 );
 
 ALTER TABLE "public"."movies" OWNER TO "postgres";
@@ -160,7 +163,8 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
     "pinned" boolean DEFAULT false NOT NULL,
     "trailer_key" "text",
     "creators" "text"[],
-    "top_cast" "text"[]
+    "top_cast" "text"[],
+    "library_state" "text" DEFAULT 'active'::"text" NOT NULL
 );
 
 ALTER TABLE "public"."tv_shows" OWNER TO "postgres";
@@ -274,6 +278,14 @@ ALTER TABLE ONLY "public"."weekly_schedule"
 
 ALTER TABLE ONLY "public"."weekly_schedule"
     ADD CONSTRAINT "weekly_schedule_tv_show_id_day_of_week_key" UNIQUE ("tv_show_id", "day_of_week");
+
+ALTER TABLE ONLY "public"."movies"
+    ADD CONSTRAINT "movies_library_state_check"
+    CHECK ("library_state" IN ('active', 'hidden', 'stopped'));
+
+ALTER TABLE ONLY "public"."tv_shows"
+    ADD CONSTRAINT "tv_shows_library_state_check"
+    CHECK ("library_state" IN ('active', 'hidden', 'stopped'));
 
 CREATE INDEX "idx_tv_shows_tmdb_id" ON "public"."tv_shows" USING "btree" ("tmdb_id");
 
@@ -405,6 +417,9 @@ CREATE OR REPLACE TRIGGER "tr_update_season_watched" AFTER INSERT OR DELETE OR U
 DROP TRIGGER IF EXISTS "tr_set_watched_at" ON "public"."tv_show_episodes";
 
 CREATE TRIGGER "tr_set_watched_at" BEFORE INSERT OR UPDATE OF "watched" ON "public"."tv_show_episodes" FOR EACH ROW EXECUTE FUNCTION "public"."set_watched_at"();
+
+-- Film watch dates use the same transition-aware stamping as episodes.
+CREATE TRIGGER "tr_set_movie_watched_at" BEFORE INSERT OR UPDATE OF "watched" ON "public"."movies" FOR EACH ROW EXECUTE FUNCTION "public"."set_watched_at"();
 
 -- Records platform/status history into watchlist_events for the News page.
 -- One function (log_watchlist_event(), 01_functions.sql) on triggers over
@@ -705,3 +720,107 @@ COMMENT ON COLUMN "public"."favourites"."origin_country" IS
 
 COMMENT ON COLUMN "public"."favourites"."genre_ids" IS
     'TMDB genre ids (e.g. 16 = Animation, 18 = Drama), for deriving the favourites grid''s category bucket from TMDB data instead of the frozen category string. Left null on every pre-migration row and never backfilled in SQL -- the value only exists in TMDB and is fetched by an admin-triggered client action; a fabricated value here reads exactly like a real one. Falls back to category when null.';
+
+-- TMDB titles the owner marked "Not interested" on Watchlist News discovery,
+-- kept in the database so the dismissal follows the owner across devices.
+-- Insert and delete only: a dismissal is made or undone, never edited.
+CREATE TABLE IF NOT EXISTS "public"."watchlist_dismissed_suggestions" (
+    "id" bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "media" "text" NOT NULL,
+    "tmdb_id" integer NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "watchlist_dismissed_suggestions_media_check" CHECK (("media" = ANY (ARRAY['movie'::"text", 'tv'::"text"]))),
+    CONSTRAINT "watchlist_dismissed_suggestions_tmdb_id_check" CHECK (("tmdb_id" > 0)),
+    CONSTRAINT "watchlist_dismissed_suggestions_media_tmdb_id_key" UNIQUE ("media", "tmdb_id")
+);
+
+ALTER TABLE "public"."watchlist_dismissed_suggestions" OWNER TO "postgres";
+
+COMMENT ON TABLE "public"."watchlist_dismissed_suggestions" IS
+    'TMDB titles the owner marked "Not interested" on Watchlist News discovery. Identity is media + tmdb_id because TMDB film and show ids can collide. Public read so the public page hides the same suggestions; writes are admin only.';
+
+ALTER TABLE "public"."watchlist_dismissed_suggestions" ENABLE ROW LEVEL SECURITY;
+
+-- Public read, like the rest of the watchlist: a TMDB id and a media type,
+-- nothing private. No UPDATE policy -- rows are inserted or deleted.
+CREATE POLICY "Public Read Access" ON "public"."watchlist_dismissed_suggestions" FOR SELECT TO "anon", "authenticated" USING (true);
+
+CREATE POLICY "Admin insert" ON "public"."watchlist_dismissed_suggestions" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
+
+CREATE POLICY "Admin delete" ON "public"."watchlist_dismissed_suggestions" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
+
+-- A fresh table starts from the image's default of ALL for anon and
+-- authenticated, so the REVOKE is load-bearing: TRUNCATE is not filtered by
+-- RLS and the grant is the only barrier. The identity column needs no
+-- sequence grant.
+REVOKE ALL ON TABLE "public"."watchlist_dismissed_suggestions" FROM PUBLIC, "anon", "authenticated";
+
+GRANT SELECT ON TABLE "public"."watchlist_dismissed_suggestions" TO "anon";
+
+GRANT SELECT, INSERT, DELETE ON TABLE "public"."watchlist_dismissed_suggestions" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."watchlist_dismissed_suggestions" TO "service_role";
+
+-- The owner's personal scores, kept out of the public-read watchlist tables so
+-- a visitor can never read them through the API. One row per rated target;
+-- exactly one of the four target columns is set. The UNIQUE constraints back
+-- client upserts (onConflict on each column) and index the foreign keys.
+-- No updated_at trigger exists in 01_functions.sql, so the client sets it.
+CREATE TABLE IF NOT EXISTS "public"."watchlist_ratings" (
+    "id" bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "movie_id" integer REFERENCES "public"."movies"("id") ON DELETE CASCADE,
+    "tv_show_id" integer REFERENCES "public"."tv_shows"("id") ON DELETE CASCADE,
+    "season_id" integer REFERENCES "public"."tv_show_seasons"("id") ON DELETE CASCADE,
+    "episode_id" integer REFERENCES "public"."tv_show_episodes"("id") ON DELETE CASCADE,
+    "rating" numeric NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "watchlist_ratings_rating_check" CHECK (("rating" BETWEEN 0.5 AND 10 AND mod("rating", 0.5) = 0)),
+    CONSTRAINT "watchlist_ratings_one_target_check" CHECK (num_nonnulls("movie_id", "tv_show_id", "season_id", "episode_id") = 1),
+    CONSTRAINT "watchlist_ratings_movie_id_key" UNIQUE ("movie_id"),
+    CONSTRAINT "watchlist_ratings_tv_show_id_key" UNIQUE ("tv_show_id"),
+    CONSTRAINT "watchlist_ratings_season_id_key" UNIQUE ("season_id"),
+    CONSTRAINT "watchlist_ratings_episode_id_key" UNIQUE ("episode_id")
+);
+
+ALTER TABLE "public"."watchlist_ratings" OWNER TO "postgres";
+
+COMMENT ON TABLE "public"."watchlist_ratings" IS
+    'The owner''s personal scores for films, shows, seasons and episodes; kept apart from the public watchlist tables so they are never readable by visitors; exactly one target per row.';
+
+ALTER TABLE "public"."watchlist_ratings" ENABLE ROW LEVEL SECURITY;
+
+-- Admin only, reads included. No anon policy at all.
+CREATE POLICY "Admin read" ON "public"."watchlist_ratings" FOR SELECT TO "authenticated" USING ((SELECT "public"."is_admin"()));
+
+CREATE POLICY "Admin insert" ON "public"."watchlist_ratings" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
+
+CREATE POLICY "Admin update" ON "public"."watchlist_ratings" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
+
+CREATE POLICY "Admin delete" ON "public"."watchlist_ratings" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
+
+-- anon holds nothing: TRUNCATE is not filtered by RLS, so the grant is the
+-- only barrier. The identity column needs no sequence grant.
+REVOKE ALL ON TABLE "public"."watchlist_ratings" FROM PUBLIC, "anon", "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."watchlist_ratings" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."watchlist_ratings" TO "service_role";
+
+-- Latest episode watch date per series, so the Library can sort finished
+-- series by when they were watched. security_invoker keeps the underlying
+-- RLS in force; tv_show_episodes.watched_at is already public-read, so this
+-- exposes nothing new.
+CREATE OR REPLACE VIEW "public"."watchlist_show_last_watched" WITH (security_invoker = true) AS
+SELECT s.tv_show_id,
+       max(e.watched_at) AS last_watched_at
+FROM   "public"."tv_show_episodes" e
+JOIN   "public"."tv_show_seasons"  s ON s.id = e.season_id
+WHERE  e.watched_at IS NOT NULL
+GROUP  BY s.tv_show_id;
+
+COMMENT ON VIEW "public"."watchlist_show_last_watched" IS
+    'The most recent episode watched_at per series, for sorting finished series by when they were watched. Series with no dated watch are absent. security_invoker; public read, like the episode table beneath it.';
+
+REVOKE ALL ON TABLE "public"."watchlist_show_last_watched" FROM PUBLIC, "anon", "authenticated";
+
+GRANT SELECT ON TABLE "public"."watchlist_show_last_watched" TO "anon", "authenticated";

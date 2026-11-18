@@ -1,7 +1,22 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { selectUpNextRail } from './watchlist-utils';
-import type { UpNextItem } from './useUpNext';
+
+/** A row of the watchlist_up_next view. Nothing renders the rail now; the
+ *  query stays because a watched write still refreshes it (and it is tested). */
+export interface UpNextItem {
+  tv_show_id: number;
+  title: string;
+  poster: string | null;
+  platform: string;
+  season_number: number;
+  episode_number: number;
+  episode_title: string | null;
+  release_date: string | null;
+  runtime: number | null;
+  state: 'ready' | 'upcoming' | 'unscheduled';
+  season_in_progress: boolean;
+}
 
 export const upNextQueryOptions = queryOptions({
   queryKey: ['watchlist', 'up-next'],

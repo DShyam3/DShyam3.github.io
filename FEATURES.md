@@ -227,42 +227,9 @@ proxy so the API key never reaches the browser.
 
 **News and Library navigation:**
 
-- **News** — the default view. A segmented pill at the top switches between
-  this week and this month, with the selected option filled. Out Now shows a
-  list of compact poster-and-text rows for season premieres and film releases
-  from the past week or month. Each row shows a small poster,
-  the title, the release date (with "Season N ·" before it for a later season)
-  and the platform mark. Watch Next shows: the next episode of any season
-  already under way, plus anything aired in the last 14 days. Watch Next skips
-  specials (season 0); a show whose only unwatched episodes are specials does
-  not appear. Its vertical rows have separate title-detail buttons and provider links. Upcoming shows the same compact rows for season premieres and film
-  releases in the coming week or month, nearest first, each with a small dated
-  pill showing the days left ("3d", or "Today"). The pinned Countdown card sits inside Upcoming and uses an overlay
-  layout, showing the title's landscape backdrop where one is stored, else the poster. The Updates column covers the past week or
-  month: new episodes ("S1E23 · Emotion and Reason"), platform moves
-  ("Netflix → Disney+") and status changes (Ended, Cancelled, In production,
-  Returning), each with a poster, the title with the change beneath it, then
-  the platform and the relative date. A title appears in only one place — Watch
-  Next first, then Out Now, then Updates — and shows you are caught up on are
-  left out of Out Now and Updates. Clicking any card or row opens that title's
-  details. TMDB's specials season is left out, and a card whose artwork is
-  missing shows its title instead. News poster cards, including Upcoming
-  cards, always show an explicit Add to schedule or Scheduled · remove action.
-  Admins can schedule a film or show from News, Library and detail cards using the shared Smart scheduling dialog. TV shows default to a weekly schedule on their
-  release weekday, while films default to a one-off calendar date; either mode
- can be selected in the schedule dialog. Known episode release dates suggest the weekday; when no date is available, a day must be chosen. Episode rows keep names visible, mark
-  the next unwatched released episode as "Next up", and disable episodes whose
- release date has not arrived. News keeps its page frame and middle workspace fixed. On large, tall screens, Watch Next, Your Week, Out Now, Upcoming and Updates form five independently scrolling columns. When the five columns don't fit, such as with the inspector open on a laptop, the row scrolls sideways. In narrow columns, cards put the poster above the text. Smaller or shorter screens use a selector to show one column. Headings stay visible except in short windows. Calendar days place their date above their content, with an expandable explanation. Empty Watch Next and Out Now sections remain visible. When a News section fails to load, it says "Could not load …" instead of
-  showing an empty "Nothing this week"; Watch Next keeps showing the rows it
-  last loaded. Announcements are ordered by recency, capped at 1,000 and marked
-  partial when capped. Events for titles that have been removed from the
-  library are not shown. "Today" and the schedule month follow the viewer's
-  local date.
-- **Library** — a searchable grid of every title, with season and episode
-  lists and progress. Cards size to available width at every screen height.
-  Platform, genre and status filters live in
-  a compact Filters popover. Episode
-  names appear for watched and unwatched episodes, with a fallback when unavailable. The header shows TV time watched across the library using known runtimes of episodes marked watched, loaded independently of opening details. The library and news pages load every title however large the library grows; a read that cannot be completed shows as failed rather than as a shorter list.
+- **News** — a single scrolling page with two tabs, `Following` (the default) and `Discover`, and an `All` / `Films` / `Series` switch that is remembered in the browser. `This week` and `This month` appear on `Following` only. `Following` opens with `Worth your attention`, which shows something out now first, then the pinned countdown title, then the next release, each with one line of time, date and platform and a separate `View details` button. Below it, a collapsible `Your week` and the `OUT NOW`, `UPDATES` and `UPCOMING` sections. The pinned countdown has no card of its own: it is the featured title, or the first `Upcoming` card. `Discover` shows `COMING SOON`, films in UK cinemas and new series in the next six months that are outside your library (12 tiles), and `YOU MIGHT LIKE`, which loads more with `Show more suggestions`. Suggestions are built from five kinds of title that take turns: ones you scored 8 or higher, favourites newest first, titles you recently watched, shows in progress, and saved titles not out yet, soonest first ("Because you're waiting for X"); other saved titles follow. The strongest 24 rotate weekly, and each batch takes turns between four source titles; once those run out, suggestions continue with TMDB's most-voted titles. Poster tiles show three across on a phone and six on desktop, and each tile says `Like X`. `Not interested` is on every tile. It is remembered in the browser, and for the admin it is saved across devices. For the admin, tiles also offer `Add to watchlist` and `Seen it`, which adds a title as already watched: a film as watched, a series with every aired episode watched. Tapping a poster opens its details with the synopsis, trailer and the same actions; the full reason for a suggestion is shown there.
+- **Library** — a searchable grid of every title, sorted onto shelves by status: `Watching`, `To watch`, `Upcoming`, `Up to date`, `Finished`, then, separately, `Stopped watching` and `Hidden`. Each title sits on one shelf. `Up to date` holds a running series with every aired episode watched, and it returns to `Watching` by itself when the next episode airs. `Finished` holds watched films and ended series watched to the end. `Favourites` lists the titles you have favourited. An `All` / `Films` / `Series` switch, remembered in the browser, applies to every shelf, its count and `Favourites`. Search covers the whole library from any shelf. Favouriting from a card's menu is a single tap that adds or removes the favourite.
+- **Personal Ratings** — tap-to-rate picker from `0.5` to `10` in `0.5` steps, with `Clear rating`, on movies, TV shows, seasons, and watched episodes. A season can be rated once at least one of its episodes is watched, and an episode only once it is watched. After watching, the app may ask `Watched — rate it?`, `Finished — rate the show?` or `Finished season N — rate it?`, each with `Skip` for that visit. Season pages show an independent episode average, `Episode average: X/10 · Y of Z rated`. Ratings are stored apart from the public library and only the signed-in owner can read them, in the page or through the API.
 - **Your Week** — part of News, showing today's plans and days with plans or
   suggested releases. Expand calendar offers week and month views with previous,
   next and current-period controls. Weekly TV plans place one unwatched episode
@@ -288,11 +255,11 @@ proxy so the API key never reaches the browser.
   screens. The calendar header and controls stay visible while its body scrolls.
   The former Schedule view opens News.
 
-Library has a compact category picker, search field, Filters popover and text-only
-sort choices. `/watchlist/library?category=favourites` opens Library on the Favourites category. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the category picker; while Refresh favourite details runs, Sync shows its percentage in place of the icon. Library details end with Schedule, Favourite, Resync and Delete for admins, two by two.
-The Library sort picker, shown for TV Shows, Movies and Currently Watching,
-offers Latest releases, and Quickest to finish for shows or Shortest first for
-films. Quickest to finish ranks shows by the runtime of every aired episode not
+Library has a compact shelf picker, search field, Filters popover and text-only
+sort choices. `/watchlist/library?category=favourites` opens Library on Favourites. Old category links still open the matching shelf: `?category=tv-shows` and `?category=movies` open To watch filtered to Series or Films, `watched` opens Finished, and `currently-watching` opens Watching. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the shelf picker; while Refresh favourite details runs, Sync shows its percentage in place of the icon. Library details for an admin hold a history and rating panel first: the personal rating, Mark as watched for films, a Favourite toggle, and Library visibility (In library, Hidden or Stopped watching). Schedule, Resync and Delete follow.
+Each shelf says what it holds under its count. Search looks on every shelf and groups its results under the shelf each title is on. Signed-out visitors do not see the Hidden and Stopped watching shelves, and search leaves those titles out for them.
+
+The sort picker offers different choices on each shelf. Watching and To watch offer Title A–Z, Latest releases, and Quickest to finish for series or Shortest first for films. Finished opens on Recently watched — a film by when you marked it watched, a series by its latest watched episode — with titles that have no watch date after the rest in title order; it also offers Your rating and Title. Your rating is offered only to the signed-in owner. Stopped watching offers Title and Your rating. Upcoming and Up to date run by air date. Quickest to finish ranks shows by the runtime of every aired episode not
 yet watched, across all regular seasons; watched seasons and episodes count for
 nothing. A show with a season still airing, one with some episodes out and more
 dated, cannot be finished yet, so it is not ranked by the episodes out so far;
@@ -306,7 +273,7 @@ aired left reads "Up to date", and one with nothing aired at all reads "Not
 aired yet". Shows sort in this order: those with a known time, quickest first;
 then those with no runtime to go on, fewest episodes first; then those still
 airing; then those with nothing left to watch. Films under Shortest first sort
-by runtime and show it on the card. On Currently Watching, Latest releases
+by runtime and show it on the card. On Watching, Latest releases
 orders by each show's latest season date. While a title's detail is open the
 order holds still, and it catches up when the detail closes.
 
@@ -316,8 +283,10 @@ scheduling actions separate from title details. Titles show up to two lines;
 the full title is available in the tooltip, accessible label and details.
 News details support scheduling and episode watched-state controls for admins.
 
-Marking an episode or season watched or unwatched refreshes Watch Next to match
-the saved progress. Watched marks change only after the save succeeds. If a save
+Marking an episode or season watched or unwatched moves the title to the
+shelf that matches the saved progress. While its details are open the card
+stays where it was, so the details stay open; the grid catches up when they
+close. Watched marks change only after the save succeeds. If a save
 fails, an error toast appears and the existing watched marks stay unchanged.
 
 Details open in the side inspector, or a sheet on narrower or shorter screens:

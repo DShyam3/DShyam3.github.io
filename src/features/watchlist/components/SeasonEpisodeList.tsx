@@ -1,11 +1,15 @@
+import { useState } from 'react';
+import { PersonalRating } from './PersonalRating';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Season } from '@/features/watchlist/useWatchlist';
 import { daysUntil } from '@/features/watchlist/watchlist-utils';
+import { summarizeRatings } from '../rating-summary';
 
 interface SeasonEpisodeListProps {
   seasons: Season[];
+  onRate?: (rating: number | null, seasonNumber: number, episodeNumber?: number) => Promise<void>;
   showId: string;
   toggleEpisodeWatched?: (
     showId: string,
@@ -34,6 +38,7 @@ interface SeasonEpisodeListProps {
 
 export function SeasonEpisodeList({
   seasons,
+  onRate,
   showId,
   toggleEpisodeWatched,
   toggleSeasonWatched,
@@ -42,6 +47,7 @@ export function SeasonEpisodeList({
   selectedSeason,
   onSelectSeason,
 }: SeasonEpisodeListProps) {
+  const [skippedSeasons, setSkippedSeasons] = useState<Set<number>>(new Set());
   const currentSeason = seasons.find((s) => s.season_number === selectedSeason);
 
   const formatDate = (dateString?: string) => {
@@ -72,6 +78,14 @@ export function SeasonEpisodeList({
 
   const seasonFullyWatched = currentSeason ? isSeasonWatched(showId, currentSeason) : false;
   const currentWatchedCount = currentSeason ? getWatchedCount(currentSeason) : 0;
+  const promptSeason =
+    !!currentSeason &&
+    seasonFullyWatched &&
+    currentSeason.personal_rating == null &&
+    !skippedSeasons.has(currentSeason.season_number);
+  const episodeRatingSummary = currentSeason
+    ? summarizeRatings(currentSeason.episodes.map((ep) => ep.personal_rating))
+    : null;
 
   return (
     // The episode list is never its own scroller: it renders in the
@@ -120,6 +134,22 @@ export function SeasonEpisodeList({
                 {currentSeason.episodes.length} episodes
               </span>
             </div>
+
+            {onRate && (
+              <PersonalRating
+                key={currentSeason.season_number}
+                label={`Season ${currentSeason.season_number} overall rating`}
+                value={currentSeason.personal_rating}
+                onChange={currentWatchedCount > 0 ? (rating) => onRate(rating, currentSeason.season_number) : undefined}
+                prompt={promptSeason ? `Finished season ${currentSeason.season_number} — rate it?` : undefined}
+                onSkip={promptSeason ? () => setSkippedSeasons((prev) => new Set(prev).add(currentSeason.season_number)) : undefined}
+              />
+            )}
+            {onRate && episodeRatingSummary && episodeRatingSummary.average !== null && (
+              <p className="text-xs text-muted-foreground tabular-nums">
+                Episode average: {episodeRatingSummary.average}/10 · {episodeRatingSummary.rated} of {episodeRatingSummary.total} rated
+              </p>
+            )}
 
             {/* Mark Season Complete button */}
             {toggleSeasonWatched && currentSeason.episodes.length > 0 && (
@@ -171,7 +201,8 @@ export function SeasonEpisodeList({
               episode.episode_number,
             );
             // Air day counts as released, matching the Up Next rail and News.
-            const released = (daysUntil(episode.release_date, new Date()) ?? 0) <= 0;
+            const daysToEpisode = daysUntil(episode.release_date, new Date());
+            const released = daysToEpisode !== null && daysToEpisode <= 0;
             const previousEpisodes = currentSeason.episodes.filter(
               (candidate) => candidate.episode_number < episode.episode_number,
             );
@@ -234,6 +265,13 @@ export function SeasonEpisodeList({
                     </div>
                   )}
                 </div>
+                {onRate && (
+                  <PersonalRating
+                    label={`Episode ${episode.episode_number} rating`}
+                    value={episode.personal_rating}
+                    onChange={watched ? (rating) => onRate(rating, currentSeason.season_number, episode.episode_number) : undefined}
+                  />
+                )}
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Calendar className="h-3 w-3" />
                   {formatDate(episode.release_date)}
