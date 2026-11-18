@@ -128,3 +128,11 @@ export function curateDiscovery(items: DiscoveryItem[], watchlist: WatchlistItem
     return true;
   });
 }
+
+/** Give films and series space before the display limit, preserving each source's order. */
+export function interleaveUpcoming(items: DiscoveryItem[]): DiscoveryItem[] {
+  return takeTurns([
+    items.filter((item) => item.media === 'movie'),
+    items.filter((item) => item.media === 'tv'),
+  ]);
+}

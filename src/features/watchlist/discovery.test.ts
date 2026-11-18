@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { curateDiscovery, discoverySeeds, interleaveBySeed, type DiscoveryItem } from './discovery';
+import { curateDiscovery, discoverySeeds, interleaveBySeed, interleaveUpcoming, type DiscoveryItem } from './discovery';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -163,5 +163,29 @@ describe('curateDiscovery', () => {
       'tv:700',
       'movie:800',
     ]);
+  });
+});
+
+describe('interleaveUpcoming', () => {
+  it('shows films and series within the first twelve even with a full movie source', () => {
+    const films = Array.from({ length: 20 }, (_, index) => makeDiscoveryItem({ id: index + 1, media: 'movie' }));
+    const series = Array.from({ length: 8 }, (_, index) => makeDiscoveryItem({ id: index + 1, media: 'tv' }));
+    const mixed = interleaveUpcoming([...films, ...series]);
+    expect(mixed.slice(0, 12).map((item) => `${item.media}:${item.id}`)).toEqual([
+      'movie:1', 'tv:1', 'movie:2', 'tv:2', 'movie:3', 'tv:3',
+      'movie:4', 'tv:4', 'movie:5', 'tv:5', 'movie:6', 'tv:6',
+    ]);
+    expect(mixed.filter((item) => item.media === 'movie')).toEqual(films);
+    expect(mixed.filter((item) => item.media === 'tv')).toEqual(series);
+    expect(new Set(mixed.map((item) => `${item.media}:${item.id}`)).size).toBe(28);
+  });
+
+  it('fills remaining places from the longer source and handles one or no media types', () => {
+    const films = [makeDiscoveryItem({ id: 1 }), makeDiscoveryItem({ id: 2 }), makeDiscoveryItem({ id: 3 })];
+    const series = [makeDiscoveryItem({ id: 1, media: 'tv' })];
+    expect(interleaveUpcoming([...films, ...series])).toEqual([films[0], series[0], films[1], films[2]]);
+    expect(interleaveUpcoming(films)).toEqual(films);
+    expect(interleaveUpcoming(series)).toEqual(series);
+    expect(interleaveUpcoming([])).toEqual([]);
   });
 });

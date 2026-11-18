@@ -9,6 +9,7 @@ import { getPlatform } from './sync-logic';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
 import { CREDITS_APPEND, pickCreators, pickDirectors, pickTopCast } from './credits';
 import { releaseYear } from './watchlist-utils';
+import { seriesStatus } from './discovery-add';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
 const TMDB_BACKDROP_BASE_URL = 'https://image.tmdb.org/t/p/w1280';
@@ -102,6 +103,7 @@ export function useTMDB() {
 
             return {
                 title: data.title || data.name,
+                series_status: seriesStatus(type, data.status),
                 overview: data.overview,
                 poster: data.poster_path ? getPosterUrl(data.poster_path) : null,
                 backdrop: data.backdrop_path ? getBackdropUrl(data.backdrop_path) : null,
