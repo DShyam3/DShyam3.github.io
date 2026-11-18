@@ -101,6 +101,9 @@ export function useTMDB() {
                 ...(type === 'movie'
                     ? (pickCollection(data) ?? { collection_id: null, collection_name: null })
                     : { collection_id: null, collection_name: null }),
+                // TV show callers forward this to addWatchlistItem so it
+                // doesn't refetch `tv/{id}` a second time for the season list.
+                seasons: type === 'tv' ? data.seasons ?? [] : [],
             };
         } catch (error) {
             console.error('TMDB Detail Error:', error);

@@ -376,7 +376,10 @@ const Watchlist = () => {
         const details = await getMovieDetails(result.id, result.media_type);
         if (!details) return;
         // The result's own type: with All selected the search spans both.
-        await addWatchlistItem(newItemFromDetails(details, result.media_type === 'tv' ? 'TV Shows' : 'Movies'));
+        await addWatchlistItem(
+          newItemFromDetails(details, result.media_type === 'tv' ? 'TV Shows' : 'Movies'),
+          { seasons: details.seasons },
+        );
         setAddedItems((prev) => new Set(prev).add(resultKey));
       } catch {
         // addWatchlistItem has already shown the failure.

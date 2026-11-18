@@ -28,7 +28,7 @@ export function useAddToLibrary() {
             ...newItemFromDetails(details, entry.mediaType === 'movie' ? 'Movies' : 'TV Shows'),
             watched: options?.watched === true,
           },
-          { watchedWhen: options?.watchedWhen },
+          { watchedWhen: options?.watchedWhen, seasons: details.seasons },
         );
       } finally {
         setPending((prev) => {

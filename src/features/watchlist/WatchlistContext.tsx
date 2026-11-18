@@ -16,12 +16,12 @@ import { useToast } from '@/hooks/use-toast';
 import { useCooldown } from '@/hooks/useCooldown';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
-import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
+import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails, TMDBSeasonSummary } from './tmdb-types';
 import { missingCategoryColumns } from './category-schema';
 import { isSameTitle, isShowWithId, titleKey, type TitleRef } from './title-ref';
 import { applyRatings, ratingColumn, watchlistRatingsQuery, withRating, type RatingTarget } from './ratings-query';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
-import { setWatchedArgs, type WatchedWhen } from './watched-when';
+import { localNoonIso, setWatchedArgs, type WatchedWhen } from './watched-when';
 import {
   resolveFavouriteCategory,
   type FavouriteCategory,
@@ -253,6 +253,8 @@ export interface AddWatchlistOptions {
   skipRefresh?: boolean;
   /** When an item added as watched was watched; absent means now. */
   watchedWhen?: WatchedWhen;
+  /** Pre-fetched TMDB seasons so TV adds do not refetch `tv/{id}`. */
+  seasons?: TMDBSeasonSummary[];
 }
 
 interface WatchlistContextType {
@@ -720,13 +722,63 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             genre_ids: item.genre_ids ?? null,
             original_language: item.original_language ?? null,
             origin_country: item.origin_country ?? null,
-          }).select('id').single();
+          }).select('id, watched, watched_at').single();
           const { data: inserted, error } = firstInsert.error && missingCategoryColumns(firstInsert.error.message)
-            ? await supabase.from('movies').insert(payload).select('id').single()
+            ? await supabase.from('movies').insert(payload).select('id, watched, watched_at').single()
             : firstInsert;
           if (error) throw error;
           const marked = await markAddedWatched('movie', [inserted.id]);
-          if (!options.skipRefresh) await fetchData();
+          if (!options.skipRefresh) {
+            let watched = inserted.watched;
+            let watchedAt = inserted.watched_at;
+            if (laterWhen && marked) {
+              const { data: updatedRow } = await supabase
+                .from('movies')
+                .select('watched, watched_at')
+                .eq('id', inserted.id)
+                .maybeSingle();
+              if (updatedRow) {
+                watched = updatedRow.watched;
+                watchedAt = updatedRow.watched_at;
+              }
+            }
+            const newMovie: WatchlistItem = {
+              id: inserted.id.toString(),
+              watched,
+              watched_at: watchedAt,
+              library_state: 'active',
+              title: item.title,
+              category: 'Movies',
+              description: item.description || undefined,
+              descriptionLoaded: Boolean(item.description),
+              year: item.year || undefined,
+              runtime: item.runtime || undefined,
+              genres: item.genres ?? [],
+              genre_ids: item.genre_ids ?? null,
+              original_language: item.original_language ?? null,
+              origin_country: item.origin_country ?? null,
+              image_url: item.image_url || undefined,
+              backdrop_url: item.backdrop_url || undefined,
+              link: item.tmdb_id ? `https://www.themoviedb.org/movie/${item.tmdb_id}` : undefined,
+              tmdb_id: item.tmdb_id || undefined,
+              release_date: item.release_date || undefined,
+              created_at: item.release_date ? new Date(item.release_date).toISOString() : new Date().toISOString(),
+              streaming_platform: payload.platform,
+              trailer_key: item.trailer_key || undefined,
+              directors: item.directors ?? undefined,
+              top_cast: item.top_cast ?? undefined,
+              imdb_id: item.imdb_id ?? undefined,
+              collection_id: item.collection_id ?? undefined,
+              collection_name: item.collection_name ?? undefined,
+            };
+            setWatchlist((prev) => [...prev, newMovie]);
+            if (item.collection_id) {
+              void queryClient.invalidateQueries({ queryKey: ['watchlist', 'library-collections'] });
+            }
+            if (watched) {
+              void invalidateWatchDerived(queryClient);
+            }
+          }
           if (!options.quiet && marked) {
             toast({ title: 'Success', description: item.watched ? 'Film added as watched' : 'Movie added to watchlist' });
           }
@@ -771,6 +823,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           let failedSeasonCount = 0;
           let detailsFailed = false;
           const airedEpisodeIds: number[] = [];
+          const insertedSeasons: Season[] = [];
 
           const now = new Date();
           const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -778,14 +831,16 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             // The show row exists by now, so this must not reach the outer
             // catch: that says "Failed to add" about a row that is there,
             // never refetches it, and lets a retry insert it twice.
-            const showDetails = await fetchTMDBProxy<TMDBDetails>(
-              `tv/${item.tmdb_id}`,
-            ).catch((error) => {
-              console.error(`Failed to load "${item.title}" from TMDB:`, error);
-              detailsFailed = true;
-              return {} as TMDBDetails;
-            });
-            const validSeasons = (showDetails.seasons || []).filter(
+            const rawSeasons = options.seasons !== undefined
+              ? options.seasons
+              : (await fetchTMDBProxy<TMDBDetails>(
+                `tv/${item.tmdb_id}`,
+              ).catch((error) => {
+                console.error(`Failed to load "${item.title}" from TMDB:`, error);
+                detailsFailed = true;
+                return {} as TMDBDetails;
+              })).seasons || [];
+            const validSeasons = rawSeasons.filter(
               // Skip Season 0 and seasons with no episodes
               (s) => s.season_number !== 0 && s.episode_count !== 0,
             );
@@ -828,10 +883,31 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       // season trigger follows from the episodes.
                       watched: !laterWhen && item.watched === true && !!v.air_date && v.air_date <= todayIso,
                     }));
-                    const { data: insertedEps } = await supabase.from('tv_show_episodes').insert(eps).select('id, release_date');
-                    for (const ep of insertedEps ?? []) {
-                      if (ep.release_date && ep.release_date <= todayIso) airedEpisodeIds.push(ep.id);
-                    }
+                    const { data: insertedEps } = await supabase
+                      .from('tv_show_episodes')
+                      .insert(eps)
+                      .select('id, episode_number, title, release_date, runtime, watched');
+                    const mappedEpisodes: Episode[] = (insertedEps ?? [])
+                      .sort((a, b) => (a.episode_number || 0) - (b.episode_number || 0))
+                      .map((ep) => {
+                        if (ep.release_date && ep.release_date <= todayIso) airedEpisodeIds.push(ep.id);
+                        return {
+                          id: ep.id,
+                          episode_number: ep.episode_number,
+                          title: ep.title || `Episode ${ep.episode_number}`,
+                          release_date: ep.release_date || undefined,
+                          runtime: ep.runtime || undefined,
+                          watched: ep.watched,
+                        };
+                      });
+                    insertedSeasons.push({
+                      id: season.id,
+                      season_number: season.season_number,
+                      release_date: season.release_date || undefined,
+                      trailer_key: season.trailer_key || undefined,
+                      watched: mappedEpisodes.length > 0 && mappedEpisodes.every((ep) => ep.watched),
+                      episodes: mappedEpisodes,
+                    });
                   } else {
                     // No valid episodes, remove the season
                     await supabase.from('tv_show_seasons')
@@ -852,7 +928,64 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           }
 
           const marked = await markAddedWatched('episode', airedEpisodeIds);
-          if (!options.skipRefresh) await fetchData();
+          if (!options.skipRefresh) {
+            const airedIdSet = new Set(airedEpisodeIds);
+            const finalSeasons = insertedSeasons
+              .sort((a, b) => a.season_number - b.season_number)
+              .map((season) => {
+                if (!laterWhen || !marked || airedIdSet.size === 0) return season;
+                const episodes = season.episodes.map((ep) =>
+                  ep.id && airedIdSet.has(ep.id) ? { ...ep, watched: true } : ep,
+                );
+                return {
+                  ...season,
+                  episodes,
+                  watched: episodes.length > 0 && episodes.every((ep) => ep.watched),
+                };
+              });
+            const showIdStr = show.id.toString();
+            loadedShowsRef.current.add(showIdStr);
+            const watchedAt = marked && item.watched && airedEpisodeIds.length > 0
+              ? (laterWhen?.mode === 'at'
+                ? localNoonIso(laterWhen.date)
+                : laterWhen?.mode === 'unknown'
+                  ? null
+                  : new Date().toISOString())
+              : null;
+            const newShow: WatchlistItem = {
+              id: showIdStr,
+              library_state: 'active',
+              watched_at: watchedAt,
+              title: item.title,
+              category: 'TV Shows',
+              status: show.status || 'Plan to Watch',
+              description: item.description || undefined,
+              descriptionLoaded: Boolean(item.description),
+              year: item.year || releaseYear(show.release_date),
+              genres: item.genres ?? [],
+              genre_ids: item.genre_ids ?? null,
+              original_language: item.original_language ?? null,
+              origin_country: item.origin_country ?? null,
+              image_url: item.image_url || undefined,
+              backdrop_url: item.backdrop_url || undefined,
+              link: item.tmdb_id ? `https://www.themoviedb.org/tv/${item.tmdb_id}` : undefined,
+              tmdb_id: item.tmdb_id || undefined,
+              release_date: item.release_date || undefined,
+              created_at: item.release_date ? new Date(item.release_date).toISOString() : new Date().toISOString(),
+              streaming_platform: payload.platform,
+              series_status: (show.status as WatchlistItem['series_status']) || undefined,
+              trailer_key: item.trailer_key || undefined,
+              creators: item.creators ?? undefined,
+              top_cast: item.top_cast ?? undefined,
+              imdb_id: item.imdb_id ?? undefined,
+              episodesLoaded: true,
+              seasons: finalSeasons,
+            };
+            setWatchlist((prev) => [...prev, newShow]);
+            if (marked && item.watched && airedEpisodeIds.length > 0) {
+              void invalidateWatchDerived(queryClient);
+            }
+          }
           if (!marked) return true;
           if (options.quiet && !detailsFailed && failedSeasonCount === 0) return true;
           toast({

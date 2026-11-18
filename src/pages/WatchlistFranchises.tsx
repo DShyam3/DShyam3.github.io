@@ -205,7 +205,7 @@ export default function WatchlistFranchises() {
           <p className="text-sm text-muted-foreground">No unsaved TV spin-off groups found.</p>
         )}
         {openTvFranchises.length > 0 && (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
             {openTvFranchises.map((franchise) => (
               <TvFranchiseCard
                 key={franchise.key}
@@ -240,7 +240,7 @@ export default function WatchlistFranchises() {
           <p className="text-sm text-muted-foreground">Film series appear here as the nightly sync fills them in.</p>
         )}
         {openCollections.length > 0 && (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
             {openCollections.map((collection) => (
               <CollectionCard
                 key={collection.collectionId}

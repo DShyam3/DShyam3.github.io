@@ -67,7 +67,7 @@ function useAddSuggestion(item: DiscoveryItem) {
   };
   const add = (watched: boolean, watchedWhen?: WatchedWhen) => run(async () => {
     const data = await fetchDetail();
-    await addWatchlistItem(discoveryAddPayload(item, data, watched), { watchedWhen });
+    await addWatchlistItem(discoveryAddPayload(item, data, watched), { watchedWhen, seasons: data.seasons });
     // The library refresh removes this suggestion once the save succeeds.
   }, 'Could not add this title. Please try again.');
   const loadDetail = () => run(async () => { await fetchDetail(); }, 'Could not load details. Try again.');
@@ -304,7 +304,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           <p className="text-sm text-muted-foreground">No incomplete series, spin-offs or likely seen titles found in this view.</p>
         )}
         {discovery.franchises.length > 0 && (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
             {discovery.franchises.map((group) => (
               <DiscoveryFranchiseCard
                 key={group.key}
