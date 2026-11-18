@@ -264,11 +264,18 @@ export function useDiscovery(type: LibraryType) {
   });
 
   const recommendationItems = useMemo(() => {
-    const movieList = (movieRecommendations.data?.pages ?? []).flatMap((page) => interleaveBySeed(page.items));
-    const tvList = (tvRecommendations.data?.pages ?? []).flatMap((page) => interleaveBySeed(page.items));
-    if (type === 'movie') return movieList;
-    if (type === 'tv') return tvList;
-    return interleaveUpcoming([...movieList, ...tvList]);
+    const moviePages = movieRecommendations.data?.pages ?? [];
+    const tvPages = tvRecommendations.data?.pages ?? [];
+    if (type === 'movie') return moviePages.flatMap((page) => interleaveBySeed(page.items));
+    if (type === 'tv') return tvPages.flatMap((page) => interleaveBySeed(page.items));
+    const pageCount = Math.max(moviePages.length, tvPages.length);
+    const interleaved: DiscoveryItem[] = [];
+    for (let i = 0; i < pageCount; i += 1) {
+      const m = moviePages[i] ? interleaveBySeed(moviePages[i].items) : [];
+      const t = tvPages[i] ? interleaveBySeed(tvPages[i].items) : [];
+      interleaved.push(...interleaveUpcoming([...m, ...t]));
+    }
+    return interleaved;
   }, [type, movieRecommendations.data, tvRecommendations.data]);
 
   const upcomingItems = useMemo(
@@ -489,7 +496,8 @@ export function useDiscovery(type: LibraryType) {
     loadingMore,
     loadMore: () => {
       for (const q of activeQueries) {
-        if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
+        if (q.isError && !q.isFetching) void q.refetch();
+        else if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
       }
     },
     // Only after a total failure, which is one page: refetching every loaded

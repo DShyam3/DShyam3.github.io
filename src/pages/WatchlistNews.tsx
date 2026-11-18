@@ -49,7 +49,7 @@ import './WatchlistNews.css';
 import { DiscoverySection } from '@/features/watchlist/components/DiscoverySection';
 import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
 import { LIBRARY_TYPE_OPTIONS, type LibraryType, isFollowedState } from '@/features/watchlist/library-state';
-import { WeekStrip, YourWeek } from '@/features/watchlist/components/YourWeek';
+import { readDeclinedReleases, WeekStrip, YourWeek } from '@/features/watchlist/components/YourWeek';
 
 /** Which entity a click on a card or row resolves to -- looked up in
  *  `useWatchlist()`'s list by both fields, since a TV show and a movie id
@@ -451,6 +451,8 @@ const WatchlistNews = () => {
   const { schedule, loading: scheduleLoading, addToSchedule, removeFromSchedule, updateScheduleDay, removeFromScheduleByWatchlistId, isInSchedule } = useSchedule();
   const [detailScheduleOpen, setDetailScheduleOpen] = useState(false);
   const [selectedRef, setSelectedRef] = useState<EntityRef | null>(null);
+  const [weekOpen, setWeekOpen] = useState(false);
+  const [declinedReleases, setDeclinedReleases] = useState<string[]>(readDeclinedReleases);
   // Page level (REHAUL_PLAN.md 8.C-bis): drives both Upcoming (forward) and
   // Updates (backward), and Out Now (backward) too.
   const [newsWindow, setNewsWindow] = useState<UpdatesWindow>(readStoredNewsWindow);
@@ -721,31 +723,42 @@ const WatchlistNews = () => {
         {newsPanel === 'following' ? <>
           {featured && <FeaturedCard key={`${featured.entityType}:${featured.entityId}`} featured={featured} run={featuredRun} onOpen={() => openDetail(featured)} />}
           {!pinnedLoading && pinnedFailed && <SectionFailure>Could not load the countdown.</SectionFailure>}
-          <details className="rounded-2xl border border-border/60 bg-card p-4">
-            <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-6 gap-y-3 text-sm font-semibold">
-              <span className="shrink-0">Your week · view your schedule</span>
+          <section aria-label="Your week" className="rounded-2xl border border-border/60 bg-card p-4">
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+              <button
+                type="button"
+                aria-expanded={weekOpen}
+                onClick={() => setWeekOpen((open) => !open)}
+                className="flex min-h-11 shrink-0 cursor-pointer items-center text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+              >
+                Your week · {weekOpen ? 'hide schedule' : 'view your schedule'}
+              </button>
               {!scheduleLoading && !watchlistLoading && (
-                <span className="hidden min-w-[18rem] flex-1 sm:flex">
-                  <WeekStrip schedule={schedule} watchlist={watchlist} isEpisodeWatched={isEpisodeWatched} />
-                </span>
+                <div className="hidden min-w-[18rem] flex-1 sm:flex">
+                  <WeekStrip schedule={schedule} watchlist={watchlist} isEpisodeWatched={isEpisodeWatched} declined={declinedReleases} />
+                </div>
               )}
-            </summary>
-            <div className="pt-4">
-              <YourWeek
-                schedule={schedule}
-                loading={scheduleLoading || watchlistLoading}
-                watchlist={watchlist}
-                removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
-                updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
-                addToSchedule={isAdmin ? addToSchedule : undefined}
-                toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
-                isEpisodeWatched={isEpisodeWatched}
-                isSeasonWatched={isSeasonWatched}
-                getAutoStatus={getAutoStatus}
-                isInSchedule={isInSchedule}
-              />
             </div>
-          </details>
+            {weekOpen && (
+              <div className="pt-4">
+                <YourWeek
+                  schedule={schedule}
+                  loading={scheduleLoading || watchlistLoading}
+                  watchlist={watchlist}
+                  declined={declinedReleases}
+                  onDeclineChange={setDeclinedReleases}
+                  removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
+                  updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
+                  addToSchedule={isAdmin ? addToSchedule : undefined}
+                  toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
+                  isEpisodeWatched={isEpisodeWatched}
+                  isSeasonWatched={isSeasonWatched}
+                  getAutoStatus={getAutoStatus}
+                  isInSchedule={isInSchedule}
+                />
+              </div>
+            )}
+          </section>
           <section className="space-y-3" aria-labelledby="news-out-now">
             <h2 id="news-out-now" className="news-pane-heading"><DotMatrixText text="OUT NOW" size="sm" /></h2>
             {outNowLoading && <p role="status" className="text-sm text-muted-foreground">Loading new releases…</p>}

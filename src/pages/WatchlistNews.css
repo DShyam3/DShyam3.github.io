@@ -25,10 +25,10 @@
 
 /* Featured: the backdrop sits to the right, fading into the card on the left
    and bottom so the text always reads against the card colour. */
-.news-featured-backdrop { opacity: .55; }
+.news-featured-backdrop { opacity: .45; }
 .news-featured-scrim {
   background:
-    linear-gradient(90deg, hsl(var(--card)) 0%, hsl(var(--card)) 30%, hsl(var(--card) / .75) 55%, hsl(var(--card) / .15) 100%),
+    linear-gradient(90deg, hsl(var(--card)) 0%, hsl(var(--card)) 42%, hsl(var(--card) / .88) 65%, hsl(var(--card) / .3) 100%),
     linear-gradient(0deg, hsl(var(--card)) 0%, transparent 45%);
 }
 @media (max-width: 639px) {

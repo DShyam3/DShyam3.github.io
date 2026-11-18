@@ -194,8 +194,17 @@ export function SeasonEpisodeList({
               <WatchedWhenMenu
                 releaseDate={currentSeason.release_date}
                 onPick={(when) => {
-                  onSelectSeason(currentSeason.season_number);
-                  toggleSeasonWatched(showId, currentSeason.season_number, when);
+                  const completedNumber = currentSeason.season_number;
+                  const willPromptRating =
+                    Boolean(onRate) &&
+                    currentSeason.personal_rating == null &&
+                    !skippedSeasons.has(completedNumber);
+                  onSelectSeason(completedNumber);
+                  void Promise.resolve(toggleSeasonWatched(showId, completedNumber, when)).then(() => {
+                    if (!willPromptRating) {
+                      advanceAfterSeason(completedNumber);
+                    }
+                  });
                 }}
                 className="w-full whitespace-normal h-auto py-1.5"
               >
@@ -217,18 +226,8 @@ export function SeasonEpisodeList({
                 size="sm"
                 onClick={() => {
                   const completedNumber = currentSeason.season_number;
-                  const willComplete = !seasonFullyWatched;
-                  const willPromptRating =
-                    willComplete &&
-                    Boolean(onRate) &&
-                    currentSeason.personal_rating == null &&
-                    !skippedSeasons.has(completedNumber);
                   onSelectSeason(completedNumber);
-                  void Promise.resolve(toggleSeasonWatched(showId, completedNumber)).then(() => {
-                    if (willComplete && !willPromptRating) {
-                      advanceAfterSeason(completedNumber);
-                    }
-                  });
+                  void toggleSeasonWatched(showId, completedNumber);
                 }}
                 className="w-full gap-2 text-xs transition-[color,background-color,border-color] whitespace-normal h-auto py-1.5 text-muted-foreground hover:bg-secondary"
               >

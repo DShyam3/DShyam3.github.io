@@ -1303,8 +1303,8 @@ const Watchlist = () => {
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2 py-3">
           <div className="space-y-1">
-            <CountLabel count={loading ? undefined : selectedCategory === 'Favourites' ? typedFavourites.length : filteredWatchlist.length} noun={searching ? `${filteredWatchlist.length === 1 ? 'result' : 'results'} across your library` : selectedCategory.toLowerCase()} />
-            <p className="text-sm text-muted-foreground">{searching ? 'Search looks on every shelf; each result sits under the shelf it is on.' : SHELF_HINTS[selectedCategory]}</p>
+            <CountLabel count={loading ? undefined : selectedCategory === 'Favourites' ? typedFavourites.length : filteredWatchlist.length} noun={searching ? `${filteredWatchlist.length === 1 ? 'result' : 'results'} ${searchAllShelves ? 'across your library' : `on ${selectedCategory}`}` : selectedCategory.toLowerCase()} />
+            <p className="text-sm text-muted-foreground">{searching ? (searchAllShelves ? 'Search looks on every shelf; each result sits under the shelf it is on.' : `Searching on ${selectedCategory} only.`) : SHELF_HINTS[selectedCategory]}</p>
           </div>
           {isAdmin && selectedCategory === 'Favourites' && <Button variant="outline" size="sm" onClick={syncFavouriteFacts} disabled={syncing}><RefreshCcw className="mr-2 h-4 w-4" />Refresh favourite details</Button>}
         </div>
@@ -1479,7 +1479,7 @@ const Watchlist = () => {
               </CardGrid>
             ) : filteredWatchlist.length === 0 ? (
               <p className="text-center py-16 text-muted-foreground">
-                {searching ? `Nothing in your library matches “${searchQuery.trim()}”` : `Nothing on ${selectedCategory} yet`}
+                {searching ? `Nothing ${searchAllShelves ? 'in your library' : `on ${selectedCategory}`} matches “${searchQuery.trim()}”` : `Nothing on ${selectedCategory} yet`}
               </p>
             ) : searching && searchAllShelves ? (
               <div className="space-y-8">

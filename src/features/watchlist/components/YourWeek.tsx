@@ -22,25 +22,31 @@ interface YourWeekProps extends ScheduleActions {
   schedule: ScheduleEntry[];
   watchlist: WatchlistItem[];
   loading: boolean;
+  declined?: string[];
+  onDeclineChange?: (ids: string[]) => void;
 }
 
-export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekProps) {
+export function readDeclinedReleases(): string[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(DECLINED_RELEASES_KEY) ?? '[]');
+    return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string' && id.startsWith('suggestion:')) : [];
+  } catch { return []; }
+}
+
+export function YourWeek({ schedule, watchlist, loading, declined: controlledDeclined, onDeclineChange, ...actions }: YourWeekProps) {
   const [expanded, setExpanded] = useState(false);
   const [view, setView] = useState<'week' | 'month'>('week');
   const [anchor, setAnchor] = useState(() => new Date());
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [scheduleEvent, setScheduleEvent] = useState<CalendarEvent | null>(null);
-  const [declined, setDeclined] = useState<string[]>(() => {
-    try {
-      const saved: unknown = JSON.parse(localStorage.getItem(DECLINED_RELEASES_KEY) ?? '[]');
-      return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string' && id.startsWith('suggestion:')) : [];
-    } catch { return []; }
-  });
+  const [localDeclined, setLocalDeclined] = useState<string[]>(readDeclinedReleases);
+  const declined = controlledDeclined ?? localDeclined;
   const [declineError, setDeclineError] = useState('');
   const saveDeclined = (ids: string[]) => {
     try {
       localStorage.setItem(DECLINED_RELEASES_KEY, JSON.stringify(ids));
-      setDeclined(ids);
+      setLocalDeclined(ids);
+      onDeclineChange?.(ids);
       setDeclineError('');
     } catch {
       setDeclineError('Could not save your choice. Allow browser storage and try again.');
@@ -256,28 +262,20 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
   );
 }
 
-/** Suggestions the viewer declined in the full calendar, read from the same
- *  store so the strip and the calendar never disagree. */
-function readDeclined(): string[] {
-  try {
-    const saved: unknown = JSON.parse(localStorage.getItem(DECLINED_RELEASES_KEY) ?? '[]');
-    return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : [];
-  } catch { return []; }
-}
-
 /**
  * This week at a glance, for the closed "Your week" bar: one cell per day,
  * up to two posters and a "+N" for the rest. Read-only -- the full calendar
  * behind the bar is where anything changes.
  */
-export function WeekStrip({ schedule, watchlist, isEpisodeWatched }: {
+export function WeekStrip({ schedule, watchlist, isEpisodeWatched, declined: controlledDeclined }: {
   schedule: ScheduleEntry[];
   watchlist: WatchlistItem[];
   isEpisodeWatched: (showId: string, season: number, episode: number) => boolean;
+  declined?: string[];
 }) {
   const today = new Date();
   const todayKey = calendarDateKey(today);
-  const declined = readDeclined();
+  const declined = controlledDeclined ?? readDeclinedReleases();
   const events = buildCalendarEvents(schedule, watchlist, isEpisodeWatched, today)
     .filter((event) => event.kind === 'plan' || !declined.includes(event.id));
   const start = calendarWeekStart(today);
@@ -299,7 +297,7 @@ export function WeekStrip({ schedule, watchlist, isEpisodeWatched }: {
             aria-label={`${date.toLocaleDateString('en-GB', { weekday: 'long' })}: ${dayEvents.length ? dayEvents.map((event) => event.item.title).join(', ') : 'nothing'}`}
             className={cn('flex min-w-0 flex-col items-center gap-1 rounded-lg border px-1 py-1.5', isToday ? 'border-primary/50 bg-primary/5' : 'border-border/50')}
           >
-            <span aria-hidden="true" className={cn('text-[10px] uppercase tracking-wide', isToday ? 'text-primary' : 'text-muted-foreground')}>
+            <span aria-hidden="true" className={cn('text-xs uppercase tracking-wide', isToday ? 'text-primary' : 'text-muted-foreground')}>
               {date.toLocaleDateString('en-GB', { weekday: 'narrow' })}
             </span>
             <span aria-hidden="true" className="flex h-8 items-center gap-0.5">
@@ -309,7 +307,7 @@ export function WeekStrip({ schedule, watchlist, isEpisodeWatched }: {
                   {event.item.image_url && <img src={event.item.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />}
                 </span>
               ))}
-              {dayEvents.length > 2 && <span className="text-[10px] text-muted-foreground">+{dayEvents.length - 2}</span>}
+              {dayEvents.length > 2 && <span className="text-xs text-muted-foreground">+{dayEvents.length - 2}</span>}
             </span>
           </li>
         );
