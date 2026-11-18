@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, type ButtonProps } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,18 +19,28 @@ interface WatchedWhenMenuProps {
   onPick: (when: WatchedWhen) => void;
   releaseDate?: string;
   disabled?: boolean;
+  /** Replaces "On release date (…)": a series dates each episode by its own air date. */
+  releaseText?: string;
   /** The trigger label. */
   children: ReactNode;
   className?: string;
+  variant?: ButtonProps['variant'];
+  size?: ButtonProps['size'];
+  /** For an icon-only trigger. */
+  label?: string;
 }
 
 /** Marks something watched, asking when: now, on release, unknown, or a picked day. */
 export function WatchedWhenMenu({
   onPick,
   releaseDate,
+  releaseText,
   disabled,
   children,
   className,
+  variant,
+  size = 'sm',
+  label,
 }: WatchedWhenMenuProps) {
   const [open, setOpen] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -45,7 +55,7 @@ export function WatchedWhenMenu({
 
   const notOutYet = !!releaseDate && !isOnOrBefore(releaseDate.slice(0, 10), today);
 
-  const releaseLabel =releaseDate
+  const releaseLabel = releaseDate
     ? new Date(releaseDate).toLocaleDateString('en-GB', {
         day: 'numeric',
         month: 'short',
@@ -67,8 +77,11 @@ export function WatchedWhenMenu({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          size="sm"
+          variant={variant}
+          size={size}
           disabled={disabled}
+          aria-label={label}
+          title={label}
           className={cn('min-h-10 gap-2 text-xs', className)}
         >
           {children}
@@ -120,7 +133,7 @@ export function WatchedWhenMenu({
               disabled={!releaseDate || notOutYet}
               onSelect={() => pick({ mode: 'release' })}
             >
-              On release date{releaseLabel ? ` (${releaseLabel}${notOutYet ? ', not out yet' : ''})` : ''}
+              {releaseText ?? `On release date${releaseLabel ? ` (${releaseLabel}${notOutYet ? ', not out yet' : ''})` : ''}`}
             </DropdownMenuItem>
             <DropdownMenuItem className="min-h-10" onSelect={() => pick({ mode: 'unknown' })}>
               Date unknown

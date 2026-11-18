@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Check, Film, Plus, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, type ButtonProps } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,9 @@ import { discoveryDate, discoveryKey, interleaveUpcoming, type DiscoveryItem, ty
 import { useDiscovery } from '../useDiscovery';
 import { discoveryAddPayload } from '../discovery-add';
 import type { LibraryType } from '../library-state';
+import type { WatchedWhen } from '../watched-when';
 import { TrailerButton } from './TrailerButton';
+import { WatchedWhenMenu } from './WatchedWhenMenu';
 
 type Detail = NonNullable<Awaited<ReturnType<ReturnType<typeof useTMDB>['getMovieDetails']>>>;
 
@@ -53,9 +55,9 @@ function useAddSuggestion(item: DiscoveryItem) {
     setPending(true); setError('');
     try { await action(); } catch { setError(failure); } finally { setPending(false); }
   };
-  const add = (watched: boolean) => run(async () => {
+  const add = (watched: boolean, watchedWhen?: WatchedWhen) => run(async () => {
     const data = await fetchDetail();
-    await addWatchlistItem(discoveryAddPayload(item, data, watched));
+    await addWatchlistItem(discoveryAddPayload(item, data, watched), { watchedWhen });
     // The library refresh removes this suggestion once the save succeeds.
   }, 'Could not add this title. Please try again.');
   const loadDetail = () => run(async () => { await fetchDetail(); }, 'Could not load details. Try again.');
@@ -74,11 +76,25 @@ function SuggestionActions({ item, onDismiss, actions, layout }: {
   // be dated in the future too.
   const date = discoveryDate(item).slice(0, 10);
   const released = item.kind !== 'upcoming' && (!date || date <= new Date().toLocaleDateString('en-CA'));
+  // Seen it asks when, as Mark as watched does: a title seen years ago must
+  // not land in the Diary as watched today.
+  const seenIt = (children: ReactNode, style: { size: ButtonProps['size']; className: string; label?: string }) => (
+    <WatchedWhenMenu
+      releaseDate={date || undefined}
+      releaseText={item.media === 'tv' ? 'On each episode\'s air date' : undefined}
+      disabled={actions.pending}
+      onPick={(when) => { void actions.add(true, when); }}
+      variant="outline"
+      {...style}
+    >
+      {children}
+    </WatchedWhenMenu>
+  );
   if (layout === 'row') {
     return (
       <div className="flex flex-wrap gap-2">
         {isAdmin && <Button onClick={() => { void actions.add(false); }} disabled={actions.pending}><Plus className="h-4 w-4" />Add to watchlist</Button>}
-        {isAdmin && released && <Button variant="outline" onClick={() => { void actions.add(true); }} disabled={actions.pending}><Check className="h-4 w-4" />Seen it</Button>}
+        {isAdmin && released && seenIt(<><Check className="h-4 w-4" />Seen it</>, { size: 'default', className: 'min-h-10 text-sm' })}
         <Button variant="ghost" onClick={onDismiss} disabled={actions.pending}><X className="h-4 w-4" />Not interested</Button>
       </div>
     );
@@ -92,11 +108,7 @@ function SuggestionActions({ item, onDismiss, actions, layout }: {
           <Plus className="h-4 w-4" />
         </Button>
       )}
-      {isAdmin && released && (
-        <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => { void actions.add(true); }} disabled={actions.pending} aria-label={`Add ${title} as already watched`} title="Seen it">
-          <Check className="h-4 w-4" />
-        </Button>
-      )}
+      {isAdmin && released && seenIt(<Check className="h-4 w-4" />, { size: 'icon', className: 'h-11 w-11', label: `Add ${title} as already watched` })}
       <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground" onClick={onDismiss} disabled={actions.pending} aria-label={`Not interested in ${title}`} title="Not interested">
         <X className="h-4 w-4" />
       </Button>
