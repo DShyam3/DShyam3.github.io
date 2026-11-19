@@ -1,8 +1,8 @@
 # State
 
-Updated 2026-11-19 · `main`, based on `39201dcb`; the payslip, reimbursement and future-holiday changes are prepared for this commit and push. Migration `20261119150000_payslip_reimbursement_links.sql` is written but **not applied** because the connected Supabase project reports `INACTIVE` and database reads timed out. The last confirmed Pages deployment is run `44483401937` for separate Watchlist work; deployment of this changeset is unverified.
+Updated 2026-11-19 · `main`; the payslip, reimbursement and future-holiday code was committed and pushed in `d5120557`. Migration `20261119150000_payslip_reimbursement_links.sql` is written but **not applied** because the connected Supabase project reports `INACTIVE` and database reads timed out. The last confirmed Pages deployment is run `44483401937` for separate Watchlist work; deployment of the payslip changes is unverified.
 
-## Local work in the tree
+## Pushed payslip changes
 
 - Payslip history uses a full-width ledger within each group. The group heading shows totals; rows show the complete employer and gross with take-home and labelled status. The clicked detail dialog remains as before.
 - Once the reimbursement table is available, a payslip can record a reimbursement payment line manually. Matching suggests penny-exact prior spending within 120 days, with explicit confirmation; confirmed expenses show in the transaction ledger and stale links need review. Until then, the reimbursement controls are hidden.
@@ -18,7 +18,7 @@ Updated 2026-11-19 · `main`, based on `39201dcb`; the payslip, reimbursement an
 | `npm run typecheck:functions` | pass |
 | Targeted Vitest (reimbursement, payslip reconciliation, RLS) | 3 files, 17 tests pass |
 | `npm run build` | pass |
-| `npm run ship-check` | command passed; scan verdict **Do not launch yet** (93/100, one reported critical blocker; Semgrep skipped) |
+| `npm run ship-check` | command passed; scan verdict **Do not launch yet** (93/100, one reported critical finding later inspected as a false positive; Semgrep skipped) |
 | Browser and database migration | not verified / not applied |
 
 ## Earlier landed work
@@ -38,7 +38,7 @@ Updated 2026-11-19 · `main`, based on `39201dcb`; the payslip, reimbursement an
 
 ## Still unverified and blockers
 
-- No browser verification of this local payslip/reimbursement/holiday work. New PDF imports still capture summary figures, not reimbursement line items; enter those lines manually for matching.
+- No browser verification of the pushed payslip/reimbursement/holiday work. New PDF imports still capture summary figures, not reimbursement line items; enter those lines manually for matching.
 - The connected Supabase project reports `INACTIVE`; its migration list and a read-only table check timed out. The reimbursement table migration has not been applied or database-tested; the controls stay hidden until the table is available.
 - The 2026-11-19 finance sync reported “Revolut: bank access needs renewing; reconnect this bank”. Not yet reconnected.
 - Prior browser work remains open for staged warmup, Watchlist flows, signed-in admin flows, show creator/cast dialog and the items in Next.
