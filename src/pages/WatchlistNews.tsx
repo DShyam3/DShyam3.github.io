@@ -755,7 +755,7 @@ const WatchlistNews = () => {
     .slice(0, rowLimit);
 
   const toolbar = (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="ultrawide-toolbar flex flex-wrap items-center justify-between gap-3">
       <WatchlistNav current="news" />
       <SegmentedControl label="News view" options={NEWS_PANEL_OPTIONS} value={newsPanel} onChange={setNewsPanel} />
     </div>
@@ -764,75 +764,81 @@ const WatchlistNews = () => {
   return (
     <AppShell title="Watchlist" subtitle="A little inspiration for your next watch" toolbar={toolbar}>
       <div className="curated-news space-y-8 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="ultrawide-toolbar flex flex-wrap items-center justify-between gap-3">
           <SegmentedControl label="Show films, series or both" options={LIBRARY_TYPE_OPTIONS} value={newsType} onChange={setNewsType} />
           {newsPanel === 'following' && <SegmentedControl label="News time range" options={NEWS_WINDOW_OPTIONS} value={newsWindow} onChange={setNewsWindow} />}
         </div>
-        {newsPanel === 'following' ? <>
-          {featured && <FeaturedCard key={`${featured.entityType}:${featured.entityId}`} featured={featured} run={featuredRun} onOpen={() => openDetail(featured)} />}
-          {!pinnedLoading && pinnedFailed && <SectionFailure>Could not load the countdown.</SectionFailure>}
-          <section aria-label="Your week" className="rounded-2xl border border-border/60 bg-card p-4">
-            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-              <button
-                type="button"
-                aria-expanded={weekOpen}
-                onClick={() => setWeekOpen((open) => !open)}
-                className="flex min-h-11 shrink-0 cursor-pointer items-center text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
-              >
-                Your week · {weekOpen ? 'hide schedule' : 'view your schedule'}
-              </button>
-              {!scheduleLoading && !watchlistLoading && (
-                <div className="hidden min-w-[18rem] flex-1 sm:flex">
-                  <WeekStrip schedule={schedule} watchlist={watchlist} isEpisodeWatched={isEpisodeWatched} declined={declinedReleases} />
-                </div>
-              )}
+        {newsPanel === 'following' ? (
+          <div className="ultrawide-news-grid">
+            <div className="space-y-8 min-w-0">
+              {featured && <FeaturedCard key={`${featured.entityType}:${featured.entityId}`} featured={featured} run={featuredRun} onOpen={() => openDetail(featured)} />}
+              {!pinnedLoading && pinnedFailed && <SectionFailure>Could not load the countdown.</SectionFailure>}
+              <section className="space-y-3" aria-labelledby="news-out-now">
+                <h2 id="news-out-now" className="news-pane-heading"><DotMatrixText text="OUT NOW" size="sm" /></h2>
+                {outNowLoading && <p role="status" className="text-sm text-muted-foreground">Loading new releases…</p>}
+                {outNowFailed && <SectionFailure>Some new releases could not load.</SectionFailure>}
+                {!outNowLoading && !outNowFailed && visibleOutNow.length === 0 && (
+                  <p className="px-2 py-3 text-xs text-muted-foreground">{newsWindow === 'week' ? 'Nothing new this week' : 'Nothing new this month'}</p>
+                )}
+                {visibleOutNow.length > 0 && (
+                  <div className="news-card-grid">
+                    {visibleOutNow.map((item) => (
+                      <NewsPosterCard
+                        key={item.key}
+                        title={item.title}
+                        poster={item.poster}
+                        platform={item.platform}
+                        sub={`${item.kind === 'premiere' ? `Season ${item.seasonNumber} · ` : ''}Out ${shortDay(item.date)}`}
+                        onClick={() => openDetail({ entityType: item.kind === 'movie' ? 'movie' : 'tv_show', entityId: item.entityId })}
+                        schedule={scheduleFor(item.kind === 'movie' ? 'movie' : 'tv_show', item.entityId, item.title, item.date)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+              {upcomingLoading ? <p role="status" className="text-sm text-muted-foreground">Loading upcoming releases…</p> : <UpcomingGrid items={visibleUpcoming} activeWindow={newsWindow} onSelect={openDetail} scheduleFor={(item) => scheduleFor(item.entityType, item.entityId, item.title, item.date)} failed={upcomingFailed} />}
             </div>
-            {weekOpen && (
-              <div className="pt-4">
-                <YourWeek
-                  schedule={schedule}
-                  loading={scheduleLoading || watchlistLoading}
-                  watchlist={watchlist}
-                  declined={declinedReleases}
-                  onDeclineChange={setDeclinedReleases}
-                  removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
-                  updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
-                  addToSchedule={isAdmin ? addToSchedule : undefined}
-                  toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
-                  isEpisodeWatched={isEpisodeWatched}
-                  isSeasonWatched={isSeasonWatched}
-                  getAutoStatus={getAutoStatus}
-                  isInSchedule={isInSchedule}
-                />
-              </div>
-            )}
-          </section>
-          <section className="space-y-3" aria-labelledby="news-out-now">
-            <h2 id="news-out-now" className="news-pane-heading"><DotMatrixText text="OUT NOW" size="sm" /></h2>
-            {outNowLoading && <p role="status" className="text-sm text-muted-foreground">Loading new releases…</p>}
-            {outNowFailed && <SectionFailure>Some new releases could not load.</SectionFailure>}
-            {!outNowLoading && !outNowFailed && visibleOutNow.length === 0 && (
-              <p className="px-2 py-3 text-xs text-muted-foreground">{newsWindow === 'week' ? 'Nothing new this week' : 'Nothing new this month'}</p>
-            )}
-            {visibleOutNow.length > 0 && (
-              <div className="news-card-grid">
-                {visibleOutNow.map((item) => (
-                  <NewsPosterCard
-                    key={item.key}
-                    title={item.title}
-                    poster={item.poster}
-                    platform={item.platform}
-                    sub={`${item.kind === 'premiere' ? `Season ${item.seasonNumber} · ` : ''}Out ${shortDay(item.date)}`}
-                    onClick={() => openDetail({ entityType: item.kind === 'movie' ? 'movie' : 'tv_show', entityId: item.entityId })}
-                    schedule={scheduleFor(item.kind === 'movie' ? 'movie' : 'tv_show', item.entityId, item.title, item.date)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-          {updatesLoading ? <p role="status" className="text-sm text-muted-foreground">Loading updates…</p> : <UpdatesList rows={visibleUpdates} activeWindow={newsWindow} today={today} onSelect={openDetail} failed={updatesFailed} />}
-          {upcomingLoading ? <p role="status" className="text-sm text-muted-foreground">Loading upcoming releases…</p> : <UpcomingGrid items={visibleUpcoming} activeWindow={newsWindow} onSelect={openDetail} scheduleFor={(item) => scheduleFor(item.entityType, item.entityId, item.title, item.date)} failed={upcomingFailed} />}
-        </> : <DiscoverySection type={newsType} />}
+            <div className="space-y-8 min-w-0">
+              <section aria-label="Your week" className="rounded-2xl border border-border/60 bg-card p-4">
+                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                  <button
+                    type="button"
+                    aria-expanded={weekOpen}
+                    onClick={() => setWeekOpen((open) => !open)}
+                    className="flex min-h-11 shrink-0 cursor-pointer items-center text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+                  >
+                    Your week · {weekOpen ? 'hide schedule' : 'view your schedule'}
+                  </button>
+                  {!scheduleLoading && !watchlistLoading && (
+                    <div className="hidden min-w-[18rem] flex-1 sm:flex">
+                      <WeekStrip schedule={schedule} watchlist={watchlist} isEpisodeWatched={isEpisodeWatched} declined={declinedReleases} />
+                    </div>
+                  )}
+                </div>
+                {weekOpen && (
+                  <div className="pt-4">
+                    <YourWeek
+                      schedule={schedule}
+                      loading={scheduleLoading || watchlistLoading}
+                      watchlist={watchlist}
+                      declined={declinedReleases}
+                      onDeclineChange={setDeclinedReleases}
+                      removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
+                      updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
+                      addToSchedule={isAdmin ? addToSchedule : undefined}
+                      toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
+                      isEpisodeWatched={isEpisodeWatched}
+                      isSeasonWatched={isSeasonWatched}
+                      getAutoStatus={getAutoStatus}
+                      isInSchedule={isInSchedule}
+                    />
+                  </div>
+                )}
+              </section>
+              {updatesLoading ? <p role="status" className="text-sm text-muted-foreground">Loading updates…</p> : <UpdatesList rows={visibleUpdates} activeWindow={newsWindow} today={today} onSelect={openDetail} failed={updatesFailed} />}
+            </div>
+          </div>
+        ) : <DiscoverySection type={newsType} />}
       </div>
 
       {selectedItem && (

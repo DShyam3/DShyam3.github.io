@@ -279,8 +279,8 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
   const selectedItem = selected && watchlist.find((i) => i.category === selected.category && i.id === selected.id);
 
   return (
-    <div className="space-y-10">
-      <section className="space-y-4" aria-labelledby="discover-coming-soon">
+    <div className="ultrawide-discover-grid">
+      <section className="space-y-4 min-w-0" aria-labelledby="discover-coming-soon">
         <div className="space-y-1">
           <h2 id="discover-coming-soon"><DotMatrixText text="COMING SOON" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">Outside your library, over the next six months. Dates can change, and a cinema release is not streaming.</p>
@@ -290,7 +290,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {comingSoon.length > 0 && <TileGrid items={comingSoon} onDismiss={discovery.dismiss} />}
       </section>
 
-      <section className="space-y-4" aria-labelledby="discover-already-watched">
+      <section className="space-y-4 min-w-0" aria-labelledby="discover-already-watched">
         <div className="space-y-1">
           <h2 id="discover-already-watched"><DotMatrixText text="HAVE YOU ALREADY WATCHED?" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">
@@ -304,7 +304,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           <p className="text-sm text-muted-foreground">No incomplete series, spin-offs or likely seen titles found in this view.</p>
         )}
         {discovery.franchises.length > 0 && (
-          <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] items-start gap-3">
             {discovery.franchises.map((group) => (
               <DiscoveryFranchiseCard
                 key={group.key}

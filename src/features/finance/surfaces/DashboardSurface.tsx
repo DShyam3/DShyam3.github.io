@@ -362,8 +362,9 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     detail={<>{totalBudget > 0 ? 'Budget' : 'Monthly income'} minus recorded spending and unpaid bills. {freeToSpend < 0 ? 'Spending and bills exceed this allowance.' : `${formatGBP(dailyFreeToSpend)} per day across ${daysRemainingInMonth} remaining days.`}</>}
     aside={<Button variant="outline" onClick={() => setActiveTab('budget')}>Review plan <ArrowUpRight className="h-4 w-4" /></Button>}
   />
-  {/* PRIMARY COCKPIT: Spending Progress & Core Cards */}
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  {/* PRIMARY COCKPIT & LOWER ROW — side-by-side on 32:9 ultrawide */}
+  <div className="ultrawide-finance-home">
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0">
 
     {/* Column 1 & 2: Spending Progress cumulative chart */}
     <Card data-palette="sky" className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors lg:col-span-2 flex flex-col justify-between">
@@ -656,7 +657,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   </div>
 
   {/* LOWER ROW: Interactive Reviews, Top Categories, Upcoming bills */}
-  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-w-0">
 
     {/* Left Side: Unreviewed Transaction Checklist (lg:col-span-8) */}
     <div className="lg:col-span-8 space-y-6">
@@ -730,7 +731,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         <CardContent className="p-0 pt-4">
 
           {/* Unreviewed list with Exit Animation (capped to avoid mounting hundreds of animated rows on Home) */}
-          <div className="space-y-2.5">
+          <div className="ultrawide-finance-queue space-y-2.5">
             <AnimatePresence initial={false}>
               {visibleTransactions.map(tx => (
                 <motion.div
@@ -1019,6 +1020,8 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       </Card>
 
     </div>
+
+  </div>
 
   </div>
 

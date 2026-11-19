@@ -45,11 +45,11 @@
   }
 }
 @media (min-width: 1280px) and (min-height: 600px) {
-  /* The inspector grows with the window: 19.5rem until 1560px, a fifth of
-     the viewport after, capped at 32rem from 2560px. A fixed 19.5rem left it
-     narrower than a single News column on a wide screen. */
+  /* The inspector grows with the window: 22rem until ~1354px, 26% of
+     the viewport after, capped at 44rem (~704px) on ultrawide displays so
+     detail panes do not feel cramped next to a wide middle column. */
   .workspace-shell-grid[data-inspector="open"] {
-    grid-template-columns: 13.25rem minmax(0, 1fr) clamp(19.5rem, 20vw, 32rem);
+    grid-template-columns: 13.25rem minmax(0, 1fr) clamp(22rem, 26vw, 44rem);
   }
   .workspace-shell-grid[data-inspector="open"] > .workspace-right-inspector {
     display: flex;
@@ -318,3 +318,77 @@ html[data-display="larger"] .app-shell[data-section="watchlist"] .card-grid { --
 
 /* A selected value may wrap even when a compact caller requests h-8/h-9. */
 .ui-select-trigger { height: max-content; min-height: 2.5rem; }
+
+/* ─── Ultrawide & Super-Ultrawide (21:9 / 32:9, e.g. 5120×1440) ────────
+   Automatic multi-column cockpits when the viewport is wide enough, with an
+   explicit sidebar toggle (`data-wide-mode="centered"`) to snap back to a
+   calm 1792px centered column whenever preferred. */
+html[data-wide-mode="centered"] {
+  --page-max: 112rem;
+}
+
+.ultrawide-news-grid,
+.ultrawide-discover-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.ultrawide-finance-home {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 2200px) {
+  html:not([data-wide-mode="centered"]) .workspace-shell-grid {
+    grid-template-columns: 14.5rem minmax(0, 1fr);
+  }
+  html:not([data-wide-mode="centered"]) .workspace-shell-grid[data-inspector="open"] {
+    grid-template-columns: 14.5rem minmax(0, 1fr) clamp(24rem, 22vw, 52rem);
+  }
+  html:not([data-wide-mode="centered"]) .ultrawide-toolbar {
+    justify-content: flex-start;
+    gap: 0.75rem 2rem;
+  }
+  html:not([data-wide-mode="centered"]) .ultrawide-news-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 2rem;
+    align-items: start;
+  }
+  html:not([data-wide-mode="centered"]) .ultrawide-discover-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: 2rem;
+    align-items: start;
+  }
+  html:not([data-wide-mode="centered"]) .travel-sidebar-col {
+    flex: 0 0 26rem;
+    max-width: 26rem;
+  }
+}
+
+@media (min-width: 2400px) {
+  html:not([data-wide-mode="centered"]) .ultrawide-finance-home {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.35fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+  /* On 32:9, let the review queue scroll inside its own column beside the
+     chart & metrics so the whole Finance Home cockpit stays above the fold. */
+  html:not([data-wide-mode="centered"]) .ultrawide-finance-queue {
+    max-height: calc(var(--frame-h, 100dvh) - var(--toolbar-h, 0px) - 20rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.25rem;
+  }
+}
+
+@media (min-width: 3000px) {
+  html:not([data-wide-mode="centered"]) .ultrawide-discover-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 2.25rem;
+  }
+}

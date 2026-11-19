@@ -1,15 +1,16 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Terminal, Type } from 'lucide-react';
+import { Columns3, Monitor, Terminal, Type } from 'lucide-react';
 import { useSiteNavLinks } from './navLinks';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 import { useDisplayMode } from '@/contexts/DisplayModeContext';
+import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { cn } from '@/lib/utils';
 
 export function WorkspaceRail() {
   const links = useSiteNavLinks();
   const location = useLocation();
   const { setCommandOpen } = useWorkspaceInspector();
-  const { largerDisplay, toggleDisplaySize } = useDisplayMode();
+  const { largerDisplay, toggleDisplaySize, wideMode, toggleWideMode } = useDisplayMode();
 
   return (
     <aside
@@ -41,17 +42,20 @@ export function WorkspaceRail() {
                 )}
               >
                 <span className="flex items-center gap-2.5 min-w-0">
-                  <span
+                  <DotMatrixText
+                    text={numberBadge}
+                    size="ui"
+                    wrap={false}
                     className={cn(
-                      'tabular-nums text-xs tracking-wider transition-colors shrink-0',
+                      'tabular-nums transition-colors shrink-0',
                       active
-                        ? 'text-primary font-semibold'
+                        ? 'text-primary'
                         : 'text-muted-foreground/75 group-hover:text-foreground',
                     )}
-                  >
-                    {numberBadge}
+                  />
+                  <span className="min-w-0 truncate">
+                    <DotMatrixText text={link.label} size="ui" wrap={false} />
                   </span>
-                  <span className="truncate uppercase tracking-wider">{link.label}</span>
                 </span>
                 {active ? (
                   <span
@@ -77,10 +81,40 @@ export function WorkspaceRail() {
               : 'border-border/60 bg-background/60 text-muted-foreground hover:text-foreground hover:border-primary/40',
           )}
         >
-          <span className="flex items-center gap-1.5 truncate">
+          <span className="flex items-center gap-1.5 min-w-0 truncate">
             <Type className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
             <span className="truncate">
-              {largerDisplay ? 'Display: Larger' : 'Display: Standard'}
+              <DotMatrixText
+                text={largerDisplay ? 'Display: Larger' : 'Display: Standard'}
+                size="ui"
+                wrap={false}
+              />
+            </span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleWideMode}
+          aria-pressed={wideMode === 'centered'}
+          title={wideMode === 'auto' ? 'Using full ultrawide cockpit when screen is wide. Click to center.' : 'Centered at standard wide width. Click for automatic ultrawide cockpit.'}
+          className={cn(
+            'hidden min-[1920px]:flex w-full items-center justify-between gap-2 rounded-xl border px-2.5 py-2 text-xs transition-colors',
+            wideMode === 'centered'
+              ? 'border-primary/40 bg-primary/10 text-foreground font-medium'
+              : 'border-border/60 bg-background/60 text-muted-foreground hover:text-foreground hover:border-primary/40',
+          )}
+        >
+          <span className="flex items-center gap-1.5 min-w-0 truncate">
+            {wideMode === 'centered'
+              ? <Monitor className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
+              : <Columns3 className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />}
+            <span className="truncate">
+              <DotMatrixText
+                text={wideMode === 'centered' ? 'Layout: Centered' : 'Layout: Ultrawide'}
+                size="ui"
+                wrap={false}
+              />
             </span>
           </span>
         </button>
@@ -90,9 +124,9 @@ export function WorkspaceRail() {
           onClick={() => setCommandOpen(true)}
           className="w-full flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-background/60 px-2.5 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
         >
-          <span className="flex items-center gap-1.5 truncate">
+          <span className="flex items-center gap-1.5 min-w-0 truncate">
             <Terminal className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
-            <span className="truncate">Search</span>
+            <DotMatrixText text="Search" size="ui" wrap={false} />
           </span>
           <kbd className="rounded border border-border/70 bg-card/80 px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
             ⌘K
