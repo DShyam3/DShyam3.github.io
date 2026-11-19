@@ -41,6 +41,7 @@ function parseUrl(value: string): URL | null {
 
 export const linksCollection: CollectionConfig<LinkRow> = {
   table: 'links',
+  columns: 'id, name, url, description, category, icon, created_at',
   path: '/links',
   title: 'Links',
   subtitle: 'Useful resources',

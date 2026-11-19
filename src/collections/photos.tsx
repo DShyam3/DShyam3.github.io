@@ -26,6 +26,7 @@ export interface PhotoRow extends CollectionRow {
  */
 export const photosCollection: CollectionConfig<PhotoRow> = {
   table: 'photos',
+  columns: 'id, image_url, caption, location, photographer, description, created_at',
   path: '/photos',
   title: 'Photos',
   subtitle: 'My moments',

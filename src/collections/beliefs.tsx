@@ -14,6 +14,7 @@ export interface BeliefRow extends CollectionRow {
  */
 export const beliefsCollection: CollectionConfig<BeliefRow> = {
   table: 'beliefs',
+  columns: 'id, quote, author, created_at',
   path: '/beliefs',
   adminOnly: true,
   title: 'Beliefs',

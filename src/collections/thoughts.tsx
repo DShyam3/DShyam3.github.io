@@ -27,6 +27,7 @@ const labelFor = (key: string) => CATEGORIES.find((c) => c.key === key)?.label ?
 
 export const thoughtsCollection: CollectionConfig<ThoughtRow> = {
   table: 'thoughts',
+  columns: 'id, title, category, excerpt, body, image_url, created_at',
   path: '/thoughts',
   title: 'Thoughts',
   subtitle: 'Things on my mind',

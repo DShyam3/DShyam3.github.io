@@ -123,6 +123,12 @@ function FinanceView() {
   const activeTab = tabFromPath(surfaceSeg, sectionSeg);
   const activeSurface = surfaceForTab(activeTab);
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
+  // Keep visited surfaces mounted (hidden when inactive) so switching back to
+  // heavy chart/table tabs is a visibility flip instead of a full remount.
+  const [visitedTabs, setVisitedTabs] = useState<TabKey[]>(() => [activeTab]);
+  useEffect(() => {
+    setVisitedTabs((prev) => (prev.includes(activeTab) ? prev : [...prev, activeTab]));
+  }, [activeTab]);
   const figures = useHiddenFigures();
   const activeSections = (SURFACES.find(su => su.key === activeSurface)?.tabs ?? []) as readonly TabKey[];
 
@@ -920,137 +926,101 @@ function FinanceView() {
           ) : <>
           {showsSurfaceHero(activeTab) ? surfaceHero : null}
 
-          <FinanceSectionBoundary key={activeTab}>
-          <Suspense fallback={<FinanceSectionLoading />}>
-          {/* ==========================================
-              TAB 1: DASHBOARD
-              ========================================== */}
-          {activeTab === 'dashboard' && <DashboardSurface toggleRecurringPaid={toggleRecurringPaid}/>}
-
-          {/* ==========================================
-              TAB 2: TAX & INCOME
-              ========================================== */}
-          {activeTab === 'tax-income' && <TaxIncomeSurface
-              setIsSettingsOpen={setIsSettingsOpen}
-              isBenefitsDialogOpen={isBenefitsDialogOpen}
-              setIsBenefitsDialogOpen={setIsBenefitsDialogOpen}
-            />}
-
-          {/* ==========================================
-              TAB 3: BUDGET
-              ========================================== */}
-          {activeTab === 'budget' && <BudgetSurface totalSpent={totalSpent} />}
-
-          {/* ==========================================
-              TAB 4: CASH FLOW
-              ========================================== */}
-          {activeTab === 'cash-flow' && (
-            <CashFlowSurface breakdownRates={breakdownRates} todayDateObj={todayDateObj} />
-          )}
-
-          {activeTab === 'forecast' && <ForecastSurface />}
-
-          {/* ==========================================
-              TAB 5: GOALS
-              ========================================== */}
-          {activeTab === 'goals' && <GoalsSurface />}
-
-          {activeTab === 'scenarios' && <ScenariosSurface />}
-
-          {activeTab === 'retirement' && <RetirementSurface />}
-
-          {activeTab === 'transfers' && <TransfersSurface />}
-
-          {/* ==========================================
-              TAB 6: ACCOUNTS
-              ========================================== */}
-          {activeTab === 'accounts' && <AccountsSurface />}
-
-          {activeTab === 'debts' && <DebtsSurface />}
-
-          {activeTab === 'student-loan' && <StudentLoanSurface />}
-
-          {/* ==========================================
-              TAB 7: RECURRINGS
-              ========================================== */}
-          {activeTab === 'recurrings' && (
-            <RecurringsTab
-              recurrings={recurrings}
-              candidates={recurringCandidates}
-              onReviewCandidate={reviewRecurringCandidate}
-              onDismissCandidate={dismissRecurringCandidate}
-              busy={recurringBusy || !recurringDataReady}
-              paymentEvidence={paymentEvidence}
-              detectionUnavailable={!recurringDataReady || exclusionsUnreliable}
-              currentMonth={currentMonth}
-              formatGBP={formatGBP}
-              onOpenAddModal={() => {
-                setNewRecurring({ name: '', amount: '', frequency: 'monthly', dueDate: 1, dueMonth: 1, isPaid: false, status: 'active' });
-                setIsAddRecurringOpen(true);
-                setAddRecTemplate("scratch");
-              }}
-              onTogglePaid={toggleRecurringPaid}
-              onPayEarly={recordEarlyPayment}
-              onEditRecurring={(bill) => {
-                setActiveRecurring(bill);
-                setIsEditRecurringOpen(true);
-              }}
-              onDeleteRecurring={handleDeleteRecurring}
-              onUndismissRecurring={(id) => { void undismissRecurring(id); }}
-            />
-          )}
-
-          {/* ==========================================
-              TAB: TRANSACTIONS (COPILOT STYLE)
-              ========================================== */}
-          {activeTab === 'transactions' && (
-            <TransactionsTab
-              transactions={mockTransactions}
-              onUpdateTransactions={(updated) => {
-                setMockTransactions(updated);
-                // Coalesced: the review queue runs on held keys, and each
-                // press rewrites the whole array.
-                saveTransactionsSoon({ list: updated, builtAt: currentLoadGenerations() });
-              }}
-              bankAccounts={bankAccounts}
-              goals={goals}
-              budgetCategories={budgetCategories}
-              formatGBP={formatGBP}
-              syncStatus={
-                <BankSyncStatus
-                  status={trueLayerStatus}
-                  isSyncing={isSyncingTrueLayer}
-                  syncAvailableAt={syncAvailableAt}
-                  onSync={syncTrueLayer}
-                />
-              }
-            />
-          )}
-
-          {/* ==========================================
-              TAB: INVESTMENTS
-              ========================================== */}
-          {activeTab === 'investments' && (
-            <InvestmentsTab
-              holdings={investmentHoldings}
-              activities={investmentActivities}
-              onAddHolding={handleAddHolding}
-              onEditHolding={handleEditHolding}
-              onDeleteHolding={handleDeleteHolding}
-              onImportHoldings={handleImportHoldings}
-              formatGBP={formatGBP}
-              bankAccounts={bankAccounts}
-            />
-          )}
-
-          {/* ==========================================
-              TAB 9: TAX CALCULATOR
-              ========================================== */}
-          {activeTab === 'tax-calculator' && <TaxCalculatorSurface figuresHidden={figures.hidden} />}
-          {activeTab === 'money-hub' && <MoneyHubSurface key={profileId} figuresHidden={figures.hidden} />}
-
-          </Suspense>
-          </FinanceSectionBoundary>
+          {visitedTabs.map((tab) => (
+            <div
+              key={tab}
+              hidden={tab !== activeTab}
+              aria-hidden={tab !== activeTab || undefined}
+            >
+              <FinanceSectionBoundary>
+                <Suspense fallback={<FinanceSectionLoading />}>
+                  {tab === 'dashboard' && <DashboardSurface toggleRecurringPaid={toggleRecurringPaid} />}
+                  {tab === 'tax-income' && (
+                    <TaxIncomeSurface
+                      setIsSettingsOpen={setIsSettingsOpen}
+                      isBenefitsDialogOpen={isBenefitsDialogOpen}
+                      setIsBenefitsDialogOpen={setIsBenefitsDialogOpen}
+                    />
+                  )}
+                  {tab === 'budget' && <BudgetSurface totalSpent={totalSpent} />}
+                  {tab === 'cash-flow' && (
+                    <CashFlowSurface breakdownRates={breakdownRates} todayDateObj={todayDateObj} />
+                  )}
+                  {tab === 'forecast' && <ForecastSurface />}
+                  {tab === 'goals' && <GoalsSurface />}
+                  {tab === 'scenarios' && <ScenariosSurface />}
+                  {tab === 'retirement' && <RetirementSurface />}
+                  {tab === 'transfers' && <TransfersSurface />}
+                  {tab === 'accounts' && <AccountsSurface />}
+                  {tab === 'debts' && <DebtsSurface />}
+                  {tab === 'student-loan' && <StudentLoanSurface />}
+                  {tab === 'recurrings' && (
+                    <RecurringsTab
+                      recurrings={recurrings}
+                      candidates={recurringCandidates}
+                      onReviewCandidate={reviewRecurringCandidate}
+                      onDismissCandidate={dismissRecurringCandidate}
+                      busy={recurringBusy || !recurringDataReady}
+                      paymentEvidence={paymentEvidence}
+                      detectionUnavailable={!recurringDataReady || exclusionsUnreliable}
+                      currentMonth={currentMonth}
+                      formatGBP={formatGBP}
+                      onOpenAddModal={() => {
+                        setNewRecurring({ name: '', amount: '', frequency: 'monthly', dueDate: 1, dueMonth: 1, isPaid: false, status: 'active' });
+                        setIsAddRecurringOpen(true);
+                        setAddRecTemplate("scratch");
+                      }}
+                      onTogglePaid={toggleRecurringPaid}
+                      onPayEarly={recordEarlyPayment}
+                      onEditRecurring={(bill) => {
+                        setActiveRecurring(bill);
+                        setIsEditRecurringOpen(true);
+                      }}
+                      onDeleteRecurring={handleDeleteRecurring}
+                      onUndismissRecurring={(id) => { void undismissRecurring(id); }}
+                    />
+                  )}
+                  {tab === 'transactions' && (
+                    <TransactionsTab
+                      transactions={mockTransactions}
+                      onUpdateTransactions={(updated) => {
+                        setMockTransactions(updated);
+                        // Coalesced: the review queue runs on held keys, and each
+                        // press rewrites the whole array.
+                        saveTransactionsSoon({ list: updated, builtAt: currentLoadGenerations() });
+                      }}
+                      bankAccounts={bankAccounts}
+                      goals={goals}
+                      budgetCategories={budgetCategories}
+                      formatGBP={formatGBP}
+                      syncStatus={
+                        <BankSyncStatus
+                          status={trueLayerStatus}
+                          isSyncing={isSyncingTrueLayer}
+                          syncAvailableAt={syncAvailableAt}
+                          onSync={syncTrueLayer}
+                        />
+                      }
+                    />
+                  )}
+                  {tab === 'investments' && (
+                    <InvestmentsTab
+                      holdings={investmentHoldings}
+                      activities={investmentActivities}
+                      onAddHolding={handleAddHolding}
+                      onEditHolding={handleEditHolding}
+                      onDeleteHolding={handleDeleteHolding}
+                      onImportHoldings={handleImportHoldings}
+                      formatGBP={formatGBP}
+                      bankAccounts={bankAccounts}
+                    />
+                  )}
+                  {tab === 'tax-calculator' && <TaxCalculatorSurface figuresHidden={figures.hidden} />}
+                  {tab === 'money-hub' && <MoneyHubSurface key={profileId} figuresHidden={figures.hidden} />}
+                </Suspense>
+              </FinanceSectionBoundary>
+            </div>
+          ))}
           </>}
         </div>
       </AppShell>

@@ -25,6 +25,7 @@ const labelFor = (key: string) => CATEGORIES.find((c) => c.key === key)?.label ?
 
 export const inspirationsCollection: CollectionConfig<InspirationRow> = {
   table: 'inspirations',
+  columns: 'id, name, category, image_url, link, why_i_like, description, created_at',
   path: '/inspiration',
   title: 'Inspiration',
   subtitle: 'My inspirations',

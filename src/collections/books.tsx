@@ -28,6 +28,7 @@ const CATEGORIES = [
 
 export const booksCollection: CollectionConfig<BookRow> = {
   table: 'books',
+  columns: 'id, title, author, cover_url, description, link, category, genre, created_at',
   path: '/books',
   title: 'Books',
   subtitle: 'Reading list',
