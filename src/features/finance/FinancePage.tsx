@@ -1,8 +1,8 @@
 import { toISODate } from '@/lib/finance/dates';
-import { lazy, Suspense, useState, useEffect, useRef, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
-import { Navigate, useLocation, useMatch, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -75,12 +75,40 @@ import {
   type InvestmentImportProvider,
 } from '@/lib/finance';
 
+const TabSlot = memo(
+  function TabSlot({
+    active,
+    children,
+  }: {
+    active: boolean;
+    children: React.ReactNode;
+  }) {
+    return (
+      <div
+        hidden={!active}
+        aria-hidden={!active || undefined}
+      >
+        <FinanceSectionBoundary>
+          <Suspense fallback={<FinanceSectionLoading />}>
+            {children}
+          </Suspense>
+        </FinanceSectionBoundary>
+      </div>
+    );
+  },
+  (prev, next) => {
+    // If the slot was inactive and remains inactive, skip re-rendering completely.
+    if (!prev.active && !next.active) return true;
+    return false;
+  },
+);
+
 /**
  * The finance shell. Data comes from `FinanceDataProvider` below rather than
  * from local state, so the five surfaces can be split out of this file in 7.2c
  * without threading two dozen props through each of them.
  */
-function FinanceView() {
+function FinanceView({ onFinance = true }: { onFinance?: boolean }) {
   const {
     bankAccounts,
     budgetCategories,
@@ -119,7 +147,13 @@ function FinanceView() {
   // works. `setActiveTab` keeps its old signature so the cross-links further
   // down this file did not have to change.
   const navigate = useNavigate();
-  const [, surfaceSeg, sectionSeg] = useLocation().pathname.split('/').slice(1);
+  const location = useLocation();
+  const lastFinancePathRef = useRef(location.pathname);
+  if (location.pathname.startsWith('/finance')) {
+    lastFinancePathRef.current = location.pathname;
+  }
+  const effectivePath = location.pathname.startsWith('/finance') ? location.pathname : lastFinancePathRef.current;
+  const [, surfaceSeg, sectionSeg] = effectivePath.split('/').slice(1);
   const activeTab = tabFromPath(surfaceSeg, sectionSeg);
   const activeSurface = surfaceForTab(activeTab);
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
@@ -136,18 +170,17 @@ function FinanceView() {
   // its rows already loaded. Re-read them behind the ones on screen if they
   // are older than the query cache's staleTime, as the rest of the site does.
   useEffect(() => {
-    refreshIfStale(10 * 60_000);
-    // Mount only: a return visit, not every render.
+    if (onFinance) {
+      refreshIfStale(10 * 60_000);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onFinance]);
 
-  // Once the rows are in, fetch every other section's chunk in the
-  // background, so switching sections is a render rather than a round trip.
-  // Waiting for the load keeps the warm-up from competing with it.
+  // Eagerly prefetch section chunks so internal tab clicks never wait on network.
   useEffect(() => {
-    if (!hasLoaded || prefersSavedData()) return;
-    return whenIdle(warmFinanceSections);
-  }, [hasLoaded]);
+    if (prefersSavedData()) return;
+    warmFinanceSections();
+  }, []);
 
   const [cfCustomStart, setCfCustomStart] = useState<string>(() => {
     const today = new Date();
@@ -217,8 +250,10 @@ function FinanceView() {
   const { ledger, exclusionsUnreliable } = useSpendingLedger();
   const todayISO = format(new Date(), 'yyyy-MM-dd');
   const detectedRecurrings = useMemo(
-    () => recurringDataReady && !exclusionsUnreliable ? detectRecurringPayments(ledger, todayISO) : [],
-    [ledger, todayISO, recurringDataReady, exclusionsUnreliable],
+    () => (visitedTabs.includes('recurrings') && recurringDataReady && !exclusionsUnreliable)
+      ? detectRecurringPayments(ledger, todayISO)
+      : [],
+    [visitedTabs, ledger, todayISO, recurringDataReady, exclusionsUnreliable],
   );
   const recurringCandidates = detectedRecurrings.filter(c => !recurrings.some(b => candidateMatchesBill(c, b)));
   // Scans the whole ledger once per bill, so it runs only for the tab that
@@ -331,7 +366,7 @@ function FinanceView() {
   };
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin || !onFinance) return;
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     if (code) {
@@ -345,30 +380,29 @@ function FinanceView() {
       else void checkTrueLayerConnection();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, [isAdmin, onFinance]);
 
   // Fetch UK Bank Holidays dynamically
 
   // Scroll to current month in holiday tracker when tax-income tab is selected
   useEffect(() => {
-    if (activeTab === 'tax-income') {
-      const timer = setTimeout(() => {
-        const currentMonthIdx = new Date().getMonth();
-        const container = document.getElementById('holiday-months-container');
-        const element = document.getElementById(`holiday-month-${currentMonthIdx}`);
-        if (container && element) {
-          const containerRect = container.getBoundingClientRect();
-          const elementRect = element.getBoundingClientRect();
-          const relativeTop = elementRect.top - containerRect.top + container.scrollTop;
-          container.scrollTo({
-            top: relativeTop,
-            behavior: 'smooth'
-          });
-        }
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, [activeTab]);
+    if (!onFinance || activeTab !== 'tax-income') return;
+    const timer = setTimeout(() => {
+      const currentMonthIdx = new Date().getMonth();
+      const container = document.getElementById('holiday-months-container');
+      const element = document.getElementById(`holiday-month-${currentMonthIdx}`);
+      if (container && element) {
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+        const relativeTop = elementRect.top - containerRect.top + container.scrollTop;
+        container.scrollTo({
+          top: relativeTop,
+          behavior: 'smooth'
+        });
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [onFinance, activeTab]);
 
   // ==========================================
   // GENERAL CLOUD SAVE HELPER
@@ -831,6 +865,7 @@ function FinanceView() {
             <div key={surface.key} className="flex items-center gap-2 md:gap-4">
               <button
                 onClick={() => navigate(pathForSurface(surface.key))}
+                onPointerEnter={() => sectionChunks[surface.tabs[0]]?.()}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'nav-link relative py-1 text-xs whitespace-nowrap flex items-center gap-1.5',
@@ -887,6 +922,7 @@ function FinanceView() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
+            onPointerEnter={() => sectionChunks[tab]?.()}
             aria-current={activeTab === tab ? 'page' : undefined}
             className={cn(
               'text-xs whitespace-nowrap font-sans transition-colors',
@@ -927,99 +963,94 @@ function FinanceView() {
           {showsSurfaceHero(activeTab) ? surfaceHero : null}
 
           {visitedTabs.map((tab) => (
-            <div
+            <TabSlot
               key={tab}
-              hidden={tab !== activeTab}
-              aria-hidden={tab !== activeTab || undefined}
+              active={tab === activeTab}
             >
-              <FinanceSectionBoundary>
-                <Suspense fallback={<FinanceSectionLoading />}>
-                  {tab === 'dashboard' && <DashboardSurface toggleRecurringPaid={toggleRecurringPaid} />}
-                  {tab === 'tax-income' && (
-                    <TaxIncomeSurface
-                      setIsSettingsOpen={setIsSettingsOpen}
-                      isBenefitsDialogOpen={isBenefitsDialogOpen}
-                      setIsBenefitsDialogOpen={setIsBenefitsDialogOpen}
+              {tab === 'dashboard' && <DashboardSurface toggleRecurringPaid={toggleRecurringPaid} />}
+              {tab === 'tax-income' && (
+                <TaxIncomeSurface
+                  setIsSettingsOpen={setIsSettingsOpen}
+                  isBenefitsDialogOpen={isBenefitsDialogOpen}
+                  setIsBenefitsDialogOpen={setIsBenefitsDialogOpen}
+                />
+              )}
+              {tab === 'budget' && <BudgetSurface totalSpent={totalSpent} />}
+              {tab === 'cash-flow' && (
+                <CashFlowSurface breakdownRates={breakdownRates} todayDateObj={todayDateObj} />
+              )}
+              {tab === 'forecast' && <ForecastSurface />}
+              {tab === 'goals' && <GoalsSurface />}
+              {tab === 'scenarios' && <ScenariosSurface />}
+              {tab === 'retirement' && <RetirementSurface />}
+              {tab === 'transfers' && <TransfersSurface />}
+              {tab === 'accounts' && <AccountsSurface />}
+              {tab === 'debts' && <DebtsSurface />}
+              {tab === 'student-loan' && <StudentLoanSurface />}
+              {tab === 'recurrings' && (
+                <RecurringsTab
+                  recurrings={recurrings}
+                  candidates={recurringCandidates}
+                  onReviewCandidate={reviewRecurringCandidate}
+                  onDismissCandidate={dismissRecurringCandidate}
+                  busy={recurringBusy || !recurringDataReady}
+                  paymentEvidence={paymentEvidence}
+                  detectionUnavailable={!recurringDataReady || exclusionsUnreliable}
+                  currentMonth={currentMonth}
+                  formatGBP={formatGBP}
+                  onOpenAddModal={() => {
+                    setNewRecurring({ name: '', amount: '', frequency: 'monthly', dueDate: 1, dueMonth: 1, isPaid: false, status: 'active' });
+                    setIsAddRecurringOpen(true);
+                    setAddRecTemplate("scratch");
+                  }}
+                  onTogglePaid={toggleRecurringPaid}
+                  onPayEarly={recordEarlyPayment}
+                  onEditRecurring={(bill) => {
+                    setActiveRecurring(bill);
+                    setIsEditRecurringOpen(true);
+                  }}
+                  onDeleteRecurring={handleDeleteRecurring}
+                  onUndismissRecurring={(id) => { void undismissRecurring(id); }}
+                />
+              )}
+              {tab === 'transactions' && (
+                <TransactionsTab
+                  transactions={mockTransactions}
+                  onUpdateTransactions={(updated) => {
+                    setMockTransactions(updated);
+                    // Coalesced: the review queue runs on held keys, and each
+                    // press rewrites the whole array.
+                    saveTransactionsSoon({ list: updated, builtAt: currentLoadGenerations() });
+                  }}
+                  bankAccounts={bankAccounts}
+                  goals={goals}
+                  budgetCategories={budgetCategories}
+                  formatGBP={formatGBP}
+                  syncStatus={
+                    <BankSyncStatus
+                      status={trueLayerStatus}
+                      isSyncing={isSyncingTrueLayer}
+                      syncAvailableAt={syncAvailableAt}
+                      onSync={syncTrueLayer}
                     />
-                  )}
-                  {tab === 'budget' && <BudgetSurface totalSpent={totalSpent} />}
-                  {tab === 'cash-flow' && (
-                    <CashFlowSurface breakdownRates={breakdownRates} todayDateObj={todayDateObj} />
-                  )}
-                  {tab === 'forecast' && <ForecastSurface />}
-                  {tab === 'goals' && <GoalsSurface />}
-                  {tab === 'scenarios' && <ScenariosSurface />}
-                  {tab === 'retirement' && <RetirementSurface />}
-                  {tab === 'transfers' && <TransfersSurface />}
-                  {tab === 'accounts' && <AccountsSurface />}
-                  {tab === 'debts' && <DebtsSurface />}
-                  {tab === 'student-loan' && <StudentLoanSurface />}
-                  {tab === 'recurrings' && (
-                    <RecurringsTab
-                      recurrings={recurrings}
-                      candidates={recurringCandidates}
-                      onReviewCandidate={reviewRecurringCandidate}
-                      onDismissCandidate={dismissRecurringCandidate}
-                      busy={recurringBusy || !recurringDataReady}
-                      paymentEvidence={paymentEvidence}
-                      detectionUnavailable={!recurringDataReady || exclusionsUnreliable}
-                      currentMonth={currentMonth}
-                      formatGBP={formatGBP}
-                      onOpenAddModal={() => {
-                        setNewRecurring({ name: '', amount: '', frequency: 'monthly', dueDate: 1, dueMonth: 1, isPaid: false, status: 'active' });
-                        setIsAddRecurringOpen(true);
-                        setAddRecTemplate("scratch");
-                      }}
-                      onTogglePaid={toggleRecurringPaid}
-                      onPayEarly={recordEarlyPayment}
-                      onEditRecurring={(bill) => {
-                        setActiveRecurring(bill);
-                        setIsEditRecurringOpen(true);
-                      }}
-                      onDeleteRecurring={handleDeleteRecurring}
-                      onUndismissRecurring={(id) => { void undismissRecurring(id); }}
-                    />
-                  )}
-                  {tab === 'transactions' && (
-                    <TransactionsTab
-                      transactions={mockTransactions}
-                      onUpdateTransactions={(updated) => {
-                        setMockTransactions(updated);
-                        // Coalesced: the review queue runs on held keys, and each
-                        // press rewrites the whole array.
-                        saveTransactionsSoon({ list: updated, builtAt: currentLoadGenerations() });
-                      }}
-                      bankAccounts={bankAccounts}
-                      goals={goals}
-                      budgetCategories={budgetCategories}
-                      formatGBP={formatGBP}
-                      syncStatus={
-                        <BankSyncStatus
-                          status={trueLayerStatus}
-                          isSyncing={isSyncingTrueLayer}
-                          syncAvailableAt={syncAvailableAt}
-                          onSync={syncTrueLayer}
-                        />
-                      }
-                    />
-                  )}
-                  {tab === 'investments' && (
-                    <InvestmentsTab
-                      holdings={investmentHoldings}
-                      activities={investmentActivities}
-                      onAddHolding={handleAddHolding}
-                      onEditHolding={handleEditHolding}
-                      onDeleteHolding={handleDeleteHolding}
-                      onImportHoldings={handleImportHoldings}
-                      formatGBP={formatGBP}
-                      bankAccounts={bankAccounts}
-                    />
-                  )}
-                  {tab === 'tax-calculator' && <TaxCalculatorSurface figuresHidden={figures.hidden} />}
-                  {tab === 'money-hub' && <MoneyHubSurface key={profileId} figuresHidden={figures.hidden} />}
-                </Suspense>
-              </FinanceSectionBoundary>
-            </div>
+                  }
+                />
+              )}
+              {tab === 'investments' && (
+                <InvestmentsTab
+                  holdings={investmentHoldings}
+                  activities={investmentActivities}
+                  onAddHolding={handleAddHolding}
+                  onEditHolding={handleEditHolding}
+                  onDeleteHolding={handleDeleteHolding}
+                  onImportHoldings={handleImportHoldings}
+                  formatGBP={formatGBP}
+                  bankAccounts={bankAccounts}
+                />
+              )}
+              {tab === 'tax-calculator' && <TaxCalculatorSurface figuresHidden={figures.hidden} />}
+              {tab === 'money-hub' && <MoneyHubSurface key={profileId} figuresHidden={figures.hidden} />}
+            </TabSlot>
           ))}
           </>}
         </div>
@@ -1073,18 +1104,36 @@ function FinanceView() {
 }
 
 /**
- * The provider and, while /finance is open, the view rendered into the
- * route's mount point. Mounted by FinanceSession for the admin's session, so
- * `target` is null on every other page and only the data stays alive.
+ * The provider and view rendered into the route's mount point.
+ *
+ * Keeps FinanceView mounted in a persistent container across route changes
+ * so returning from another section (e.g. Watchlist or Links) is instantaneous
+ * without rebuilding the DOM, un-suspending, or resetting visited tabs.
  */
 export default function FinanceHost({ target }: { target: HTMLElement | null }) {
-  // The route's mount point is cleared a commit after navigation. Without the
-  // match the view would re-render once for the new path in between, falling
-  // back to Dashboard and mounting it in a detached node.
-  const onFinance = useMatch('/finance/*') !== null;
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  if (!containerRef.current && typeof document !== 'undefined') {
+    const el = document.createElement('div');
+    el.className = 'contents';
+    containerRef.current = el;
+  }
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (target) {
+      target.appendChild(el);
+      return () => {
+        el.remove();
+      };
+    } else {
+      el.remove();
+    }
+  }, [target]);
+
   return (
     <FinanceDataProvider>
-      {target && onFinance && createPortal(<FinanceView />, target)}
+      {containerRef.current && createPortal(<FinanceView onFinance={target !== null} />, containerRef.current)}
     </FinanceDataProvider>
   );
 }

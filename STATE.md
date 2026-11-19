@@ -4,6 +4,12 @@ Updated 2026-11-19 · `main` at `332a7ad` (this branch, merging `origin/main` `b
 
 ## Closed 2026-11-19
 
+- **Travel double-load & visual flash elimination (`TravelPage.tsx`):** removed destructive `key={`${session?.user.id ?? 'public'}-${isAdmin}`}` on `<TravelContent />` that was causing React to completely unmount and remount the Three.js globe and page tree once auth state resolved.
+- **Finance internal tab switching & re-entry latency (`FinancePage.tsx`):**
+  1. Kept `FinanceView` mounted in a persistent DOM container in `FinanceHost` across route transitions, eliminating the heavy remount, un-suspending, and tab reset when navigating away from Finance and back.
+  2. Wrapped visited tabs in `TabSlot` comparator so inactive tabs skip re-rendering on tab switches (preventing exponential slowdown as multiple heavy chart/table surfaces are visited).
+  3. Prefetched all 17 finance section chunks eagerly on mount and on tab pointer enter rather than waiting for 4s idle timeout.
+  4. Scoped `detectRecurringPayments` to run only when the recurrings tab is in `visitedTabs`.
 - **Watchlist News card alignment & grid baseline (`WatchlistNews.tsx`, `WatchlistNews.css`):** cards use `flex flex-col h-full` with schedule actions pinned to the bottom (`mt-auto`), `line-clamp-2` with `min-h-[2.5rem]` for titles so 1- and 2-line titles allocate the same height, and `minmax(min(100%, 16.5rem), 1fr)` columns to prevent platform and countdown pill wrapping.
 - **GitHub Pages deploy workflow artifact race & retry failure (`.github/workflows/deploy.yml`):** split single `deploy` job into `build` (test, build, `upload-pages-artifact`) and `deploy` (`needs: build`, `deploy-pages`) jobs, eliminating `Found 0 artifact(s)` race and `Multiple artifacts named "github-pages"` error on re-runs.
 - **Discover "Seen it" stamped today's date.** It now asks when, with the same menu as Mark as watched (just now, on release or each episode's air date, date unknown, or a picked date bounded by release and today). Browser check still open.

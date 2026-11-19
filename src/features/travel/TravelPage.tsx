@@ -774,6 +774,5 @@ const TravelContent = () => {
 };
 
 export default function Travel() {
-    const { session, isAdmin } = useAuth();
-    return <TravelContent key={`${session?.user.id ?? 'public'}-${isAdmin}`} />;
+    return <TravelContent />;
 }
