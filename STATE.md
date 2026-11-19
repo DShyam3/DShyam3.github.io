@@ -1,6 +1,6 @@
 # State
 
-Updated 2026-11-19 · branch `claude/eloquent-johnson-xdjc53` at `049ed65` (merges `origin/main` `565c605`), now on `main`. Pages deploy and browser check not yet confirmed.
+Updated 2026-11-19 · `main` at `332a7ad` (this branch, merging `origin/main` `b04db3e`). Pages run `44479344055` (manual re-run) deployed it; the push run `44478486168` failed twice at the Pages deploy step on a GitHub artifact error (none found, then two found), not on any check. Browser check not done.
 
 ## Closed 2026-11-19
 
@@ -31,7 +31,7 @@ Updated 2026-11-19 · branch `claude/eloquent-johnson-xdjc53` at `049ed65` (merg
 
 ## Next
 
-1. Confirm the GitHub Pages deploy of `main`, then browser-verify: Discover "Seen it" menu and picked-date bounds (signed in as admin); Watchlist ↔ Finance switching and internal tabs (single `check_connection`, IndexedDB public cache hydration on reload, no Finance keys in IndexedDB); `TitleScores`/TMDB scores; Discover; `/watchlist/franchises`.
+1. Browser-verify: Discover "Seen it" menu and picked-date bounds (signed in as admin); Watchlist ↔ Finance switching and internal tabs (single `check_connection`, IndexedDB public cache hydration on reload, no Finance keys in IndexedDB); `TitleScores`/TMDB scores; Discover; `/watchlist/franchises`.
 2. First weekly OMDb refresh (~2026-11-25): it re-asks ~900 titles at up to 300 a part (~100 s, close to the 120 s timeout). Check that day's `sync_log`.
 
 ## Still unverified & blockers
