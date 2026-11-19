@@ -1,12 +1,12 @@
 # State
 
-Updated 2026-11-19 · `main` at `22998cc7` (About wide-screen layout edits remain local and uncommitted). Payslip code `d5120557` and row-logo change `234eeba2` were pushed. Migration `20261119150000_payslip_reimbursement_links.sql` is recorded as applied on the site’s linked Supabase project `yvtiybyuifkiwyrnjebe` (local and remote history match). Pages run `44587364754` for `27ea7450` succeeded and includes the payslip changes; signed-in browser behavior remains unverified.
+Updated 2026-11-19 · `main` (About wide-screen layout fix pushed on top of `22998cc7`). Payslip code `d5120557` and row-logo change `234eeba2` were pushed. Migration `20261119150000_payslip_reimbursement_links.sql` is recorded as applied on the site’s linked Supabase project `yvtiybyuifkiwyrnjebe` (local and remote history match). Pages run `44587364754` for `27ea7450` succeeded and includes the payslip changes; signed-in browser behavior and live Pages deployment of the About layout fix remain unverified.
 
-## About wide-screen layout fix (local, uncommitted)
+## About wide-screen layout fix
 
-- Decoupled `.home-constellation-canvas` from layout height (`position: absolute; inset: 0` inside `.home-constellation-stage` with `flex: 1 0 clamp(13.5rem, 30vh, 22rem)`) and added a `ResizeObserver` in `SemanticConstellation.tsx`, stopping the canvas's 2:1 intrinsic ratio from inflating the hero row on wide screens while keeping the hero generously proportioned.
-- Kept `.about-workspace` full-width inside `.app-frame` to match the rest of the site, changed `.home-hero-card` to `justify-content: center`, capped `.home-hero-lead` at `max-width: 60ch`, and added an `@container (min-width: 115rem)` rule on `.home-overview-scroll` so `.fact-grid` lays out 6 cards in one row on ultrawide displays and drops back to 3×2 when the right inspector opens.
-- Browser-verified locally at `2560×1080` (full-width `2222px` workspace, hero `431.6px` tall, all 6 fact cards in one row above the fold; drops cleanly to 3×2 with inspector open) and `1440×900` (signed-out; pre-existing minor mobile truncation/clipping in the constellation header/label, footer clock, and horizontal tab bar noted earlier). Not committed or pushed yet.
+- Pushed: decoupled `.home-constellation-canvas` from layout height (`position: absolute; inset: 0` inside `.home-constellation-stage` with `flex: 1 0 clamp(13.5rem, 30vh, 22rem)`) and added a `ResizeObserver` in `SemanticConstellation.tsx`, stopping the canvas's 2:1 intrinsic ratio from inflating the hero row on wide screens while keeping the hero generously proportioned.
+- Pushed: kept `.about-workspace` full-width inside `.app-frame` to match the rest of the site, changed `.home-hero-card` to `justify-content: center`, capped `.home-hero-lead` at `max-width: 60ch`, and added an `@container (min-width: 115rem)` rule on `.home-overview-scroll` so `.fact-grid` lays out 6 cards in one row on ultrawide displays and drops back to 3×2 when the right inspector opens.
+- Browser-verified locally at `2560×1080` (full-width `2222px` workspace, hero `431.6px` tall, all 6 fact cards in one row above the fold; drops cleanly to 3×2 with inspector open) and `1440×900` (signed-out; pre-existing minor mobile truncation/clipping in the constellation header/label, footer clock, and horizontal tab bar noted earlier). Live Pages deployment unverified.
 
 ## Payslip work
 

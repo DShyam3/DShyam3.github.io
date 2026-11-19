@@ -450,9 +450,16 @@ export function SemanticConstellation({
 
     const handleResize = () => renderFrame();
     window.addEventListener('resize', handleResize);
+    const canvas = canvasRef.current;
+    const observer =
+      typeof ResizeObserver !== 'undefined' && canvas
+        ? new ResizeObserver(handleResize)
+        : null;
+    if (observer && canvas) observer.observe(canvas);
     return () => {
       window.cancelAnimationFrame(rafId);
       window.removeEventListener('resize', handleResize);
+      observer?.disconnect();
     };
   }, [isPaused, reducedMotion, renderFrame]);
 
