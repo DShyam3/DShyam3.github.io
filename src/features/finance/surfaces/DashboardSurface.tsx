@@ -69,7 +69,8 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
   const getSpendingProgressData = () => {
     const prefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}-`;
-    const monthTx = ledger.filter(tx => tx.date.startsWith(prefix));
+    // Ledger uses positive amounts for spending and negative for income/credits.
+    const monthTx = ledger.filter(tx => tx.date.startsWith(prefix) && tx.amount > 0);
 
     const dailyAmounts: Record<number, number> = {};
     monthTx.forEach(tx => {
@@ -230,9 +231,9 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       let periodBudgetTotal = 0;
 
       for (let yr = startYear; yr <= currentYear; yr++) {
-        // Transactions in this year
+        // Transactions in this year (outflows only; negative amounts are income)
         const yearSpend = ledger
-          .filter(tx => tx.date.startsWith(`${yr}-`))
+          .filter(tx => tx.date.startsWith(`${yr}-`) && tx.amount > 0)
           .reduce((sum, tx) => sum + tx.amount, 0);
 
         // Recurrings in this year (summed across 12 months)
@@ -296,7 +297,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       
       const prefix = `${yr}-${String(mo + 1).padStart(2, '0')}-`;
       const monthSpend = ledger
-        .filter(tx => tx.date.startsWith(prefix))
+        .filter(tx => tx.date.startsWith(prefix) && tx.amount > 0)
         .reduce((sum, tx) => sum + tx.amount, 0);
 
       const monthRecurringSpend = recurrings
@@ -405,9 +406,9 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               })}
             </div>
 
-            <div className="text-right hidden sm:block">
+            <div className="text-right hidden sm:block shrink-0">
               <span className={cn(
-                "text-xs font-bold font-mono px-2 py-0.5 rounded-md inline-block tabular-nums",
+                "text-xs font-bold font-mono px-2 py-0.5 rounded-md inline-block tabular-nums whitespace-nowrap",
                 // "No budget set" is neither good nor bad news, so it must not
                 // borrow the reassuring colour of being under pace.
                 totalBudget <= 0
@@ -451,7 +452,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       </div>
 
       {/* Recharts Cumulative spending chart */}
-      <div className="h-[200px] w-full mt-4 min-w-0">
+      <div className="flex-1 min-h-[240px] w-full mt-4 min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={dashboardSpendChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
@@ -471,7 +472,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               width={56}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(v) => `£${v}`}
+              tickFormatter={(v) => (Number(v) < 0 ? `-£${Math.abs(Number(v))}` : `£${v}`)}
               tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
             />
             <RechartsTooltip
