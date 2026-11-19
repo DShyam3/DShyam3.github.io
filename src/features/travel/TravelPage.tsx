@@ -33,6 +33,10 @@ interface RestCountry {
     name: { common: string };
 }
 
+// Module-level cache so returning to /travel does not re-fetch /countries.json
+// and trigger a second full render after the first paint.
+let cachedAllCountries: { code: string; name: string }[] | null = null;
+
 type ViewMode = 'countries' | 'cities';
 
 /** The query responsive.css and Index.css use for the side-by-side travel layout. */
@@ -78,7 +82,10 @@ const TravelContent = () => {
             }),
         [askDelete, removeCountry],
     );
-    const visitedCodes = visitedCountries.map(c => c.country_code);
+    const visitedCodes = useMemo(
+        () => visitedCountries.map(c => c.country_code),
+        [visitedCountries],
+    );
     const { byCode: continentByCode, totals: continentTotals, sovereignCodes, loading: continentLoading } = useContinentMap();
 
     // City tracking
@@ -118,27 +125,30 @@ const TravelContent = () => {
 
     // Admin Country Search
     const [countrySearch, setCountrySearch] = useState('');
-    const [allCountries, setAllCountries] = useState<{ code: string, name: string }[]>([]);
+    const [allCountries, setAllCountries] = useState<{ code: string, name: string }[]>(() => cachedAllCountries ?? []);
     const [showCountryResults, setShowCountryResults] = useState(false);
 
     useEffect(() => {
-        if (allCountries.length === 0) {
-            const fetchAll = async () => {
-                try {
-                    const res = await fetch('/countries.json');
-                    if (!res.ok) return;
-                    const data: RestCountry[] = await res.json();
-                    setAllCountries(data.map((c) => ({
-                        code: c.cca2,
-                        name: c.name.common
-                    })).sort((a, b) => a.name.localeCompare(b.name)));
-                } catch (e) {
-                    console.error('[Travel] Failed to fetch countries list:', e);
-                }
-            };
-            fetchAll();
-        }
-    }, [allCountries.length]);
+        if (cachedAllCountries) return;
+        let active = true;
+        const fetchAll = async () => {
+            try {
+                const res = await fetch('/countries.json');
+                if (!res.ok) return;
+                const data: RestCountry[] = await res.json();
+                const sorted = data.map((c) => ({
+                    code: c.cca2,
+                    name: c.name.common
+                })).sort((a, b) => a.name.localeCompare(b.name));
+                cachedAllCountries = sorted;
+                if (active) setAllCountries(sorted);
+            } catch (e) {
+                console.error('[Travel] Failed to fetch countries list:', e);
+            }
+        };
+        void fetchAll();
+        return () => { active = false; };
+    }, []);
 
     const filteredSearchCountries = useMemo(() => {
         if (!countrySearch.trim()) return [];

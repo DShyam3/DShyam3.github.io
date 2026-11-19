@@ -96,36 +96,123 @@ const DOT_PALETTE = {
     },
 } as const;
 
-// Cache the loaded data globally so it's only fetched once
+interface OptimizedDot {
+    code: string;
+    dotKey: string;
+    col: number;
+    stride: number;
+    cosLat: number;
+    fx: number;
+    fy: number;
+    hScale: number;
+    vScale: number;
+    ux: number;
+    uy: number;
+    uz: number;
+}
+
+// Cache the loaded data and derived projections globally so re-entering /travel
+// renders the globe on frame 1 without re-fetching or re-projecting ~15k dots.
 let cachedDotData: DotData | null = null;
+let cachedOptimizedDots: OptimizedDot[] | null = null;
+let cachedDotCodes: Map<string, string> | null = null;
+let dotDataPromise: Promise<DotData> | null = null;
 
 // Country name lookup - loaded from REST Countries API
 let cachedCountryNames: Record<string, string> = {};
+let countryNamesPromise: Promise<Record<string, string>> | null = null;
+
+function buildOptimizedDots(data: DotData): { optimizedDots: OptimizedDot[]; dotCodes: Map<string, string> } {
+    if (cachedDotData === data && cachedOptimizedDots && cachedDotCodes) {
+        return { optimizedDots: cachedOptimizedDots, dotCodes: cachedDotCodes };
+    }
+    const { cols, rows, dots } = data;
+    const dotCodes = new Map<string, string>();
+    const optimizedDots = dots.map(([col, row, code]) => {
+        const dotKey = `${col},${row}`;
+        dotCodes.set(dotKey, code);
+        const lon = ((col + 0.5) / cols) * 2 * Math.PI - Math.PI;
+        const lat = Math.PI / 2 - ((row + 0.5) / rows) * Math.PI;
+        // Only the flat position comes from the projection -- the grid is
+        // still lon/lat, so the globe below reads the very same dots.
+        const flat = projectEqualEarth(lon, lat);
+        const { hScale, vScale } = equalEarthRowScale(lat);
+        // Longitudes converge at the poles, so an evenly-spaced lat/lon
+        // grid piles every column onto nearly the same screen position
+        // there -- which is what made Antarctica render as a bright ring
+        // with a hot spot at the pole.
+        //
+        // Only the extreme polar caps need thinning. Beyond 78 degrees there
+        // is almost no populated land, so the correction is invisible except
+        // where it is needed.
+        const cosLat = Math.cos(lat);
+        const stride = cosLat < 0.12
+            ? Math.min(8, Math.max(1, Math.round(1 / Math.max(0.05, cosLat))))
+            : 1;
+
+        return {
+            code,
+            dotKey,
+            col,
+            stride,
+            cosLat,
+            fx: flat.nx,
+            fy: flat.ny,
+            hScale,
+            vScale,
+            ux: Math.cos(lat) * Math.sin(lon),
+            uy: -Math.sin(lat),
+            uz: Math.cos(lat) * Math.cos(lon),
+        };
+    });
+    cachedOptimizedDots = optimizedDots;
+    cachedDotCodes = dotCodes;
+    return { optimizedDots, dotCodes };
+}
 
 async function loadDotData(): Promise<DotData> {
     if (cachedDotData) return cachedDotData;
-    const res = await fetch(`${ASSETS_URL}/dot-world-map.json`);
-    if (!res.ok) throw new Error('Map unavailable');
-    const data = await res.json();
-    if (!Array.isArray(data.dots) || !Number.isFinite(data.cols) || !Number.isFinite(data.rows) || data.cols <= 0 || data.rows <= 0) throw new Error('Invalid map data');
-    cachedDotData = data;
-    return cachedDotData!;
+    if (!dotDataPromise) {
+        dotDataPromise = (async () => {
+            const res = await fetch(`${ASSETS_URL}/dot-world-map.json`);
+            if (!res.ok) throw new Error('Map unavailable');
+            const data = await res.json();
+            if (!Array.isArray(data.dots) || !Number.isFinite(data.cols) || !Number.isFinite(data.rows) || data.cols <= 0 || data.rows <= 0) throw new Error('Invalid map data');
+            cachedDotData = data;
+            buildOptimizedDots(data);
+            return cachedDotData!;
+        })().catch((err) => {
+            dotDataPromise = null;
+            throw err;
+        });
+    }
+    return dotDataPromise;
 }
 
 async function loadCountryNames(): Promise<Record<string, string>> {
     if (Object.keys(cachedCountryNames).length > 0) return cachedCountryNames;
-    try {
-        const res = await fetch('/countries.json');
-        const data = await res.json();
-        const names: Record<string, string> = {};
-        for (const c of data) {
-            names[c.cca2] = c.name.common;
-        }
-        cachedCountryNames = names;
-    } catch {
-        // fallback: empty, codes will be shown instead
+    if (!countryNamesPromise) {
+        countryNamesPromise = (async () => {
+            try {
+                const res = await fetch('/countries.json');
+                const data = await res.json();
+                const names: Record<string, string> = {};
+                for (const c of data) {
+                    names[c.cca2] = c.name.common;
+                }
+                cachedCountryNames = names;
+            } catch {
+                // fallback: empty, codes will be shown instead
+            }
+            return cachedCountryNames;
+        })();
     }
-    return cachedCountryNames;
+    return countryNamesPromise;
+}
+
+/** Prefetches globe dots + country names in the background so Travel paints on frame 1. */
+export function warmGlobeData(): void {
+    void Promise.all([loadDotData(), loadCountryNames()]).catch(() => {});
 }
 
 /**
@@ -193,10 +280,10 @@ export function DotMatrixGlobe({
     const countryPointLat = focusedCountryPoint?.lat;
     const countryPointLon = focusedCountryPoint?.lon;
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [dotData, setDotData] = useState<DotData | null>(null);
+    const [dotData, setDotData] = useState<DotData | null>(() => cachedDotData);
     const { resolvedTheme } = useTheme();
     const [mapError, setMapError] = useState(false);
-    const [countryNames, setCountryNames] = useState<Record<string, string>>({});
+    const [countryNames, setCountryNames] = useState<Record<string, string>>(() => cachedCountryNames);
     const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
     const visitedSet = useMemo(() => new Set(visitedCountryCodes), [visitedCountryCodes]);
     const [mode, setMode] = useState<'2d' | '3d'>('3d');
@@ -295,60 +382,24 @@ export function DotMatrixGlobe({
 
     const shootingStarRef = useRef({ active: false, x: 0, y: 0, length: 0, speed: 0, angle: 0, progress: 0 });
 
-    // Load data
+    // Load data (skipped if module cache is already populated)
     useEffect(() => {
+        if (cachedDotData && Object.keys(cachedCountryNames).length > 0) return;
+        let active = true;
         Promise.all([loadDotData(), loadCountryNames()]).then(([dots, names]) => {
+            if (!active) return;
             setDotData(dots);
             setCountryNames(names);
-        }).catch(() => setMapError(true));
+        }).catch(() => {
+            if (active) setMapError(true);
+        });
+        return () => { active = false; };
     }, []);
 
-    const optimizedDots = useMemo(() => {
-        if (!dotData) return [];
-        const { cols, rows, dots } = dotData;
-        return dots.map(([col, row, code]) => {
-            const lon = ((col + 0.5) / cols) * 2 * Math.PI - Math.PI;
-            const lat = Math.PI / 2 - ((row + 0.5) / rows) * Math.PI;
-            // Only the flat position comes from the projection -- the grid is
-            // still lon/lat, so the globe below reads the very same dots.
-            const flat = projectEqualEarth(lon, lat);
-            const { hScale, vScale } = equalEarthRowScale(lat);
-            // Longitudes converge at the poles, so an evenly-spaced lat/lon
-            // grid piles every column onto nearly the same screen position
-            // there -- which is what made Antarctica render as a bright ring
-            // with a hot spot at the pole.
-            //
-            // Only the extreme polar caps need thinning. An earlier version
-            // started at roughly 60 degrees and stripped Russia and northern
-            // Canada, leaving them visibly grey and streaked. Beyond 78
-            // degrees there is almost no populated land, so the correction is
-            // invisible except where it is needed.
-            const cosLat = Math.cos(lat);
-            // Only the last few degrees need dropping outright; everything
-            // else is handled by shrinking the dots (see the draw loop).
-            const stride = cosLat < 0.12
-                ? Math.min(8, Math.max(1, Math.round(1 / Math.max(0.05, cosLat))))
-                : 1;
-
-            return {
-                code,
-                dotKey: `${col},${row}`,  // for city-level dot lookup
-                col,
-                stride,
-                cosLat,
-                fx: flat.nx,
-                fy: flat.ny,
-                hScale,
-                vScale,
-                ux: Math.cos(lat) * Math.sin(lon),
-                uy: -Math.sin(lat),
-                uz: Math.cos(lat) * Math.cos(lon),
-            };
-        });
+    const { optimizedDots, dotCodes } = useMemo(() => {
+        if (!dotData) return { optimizedDots: [] as OptimizedDot[], dotCodes: new Map<string, string>() };
+        return buildOptimizedDots(dotData);
     }, [dotData]);
-
-    /** Which country owns each "col,row" cell. */
-    const dotCodes = useMemo(() => new Map(dotData?.dots.map(([col, row, code]) => [`${col},${row}`, code])), [dotData]);
 
     // The selected country's centre, in radians: the mean of its dots or, for a
     // country too small for the grid (Cyprus, Luxembourg), the caller's point.

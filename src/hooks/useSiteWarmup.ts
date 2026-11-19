@@ -138,6 +138,7 @@ export function useSiteWarmup() {
     // Stage 2: warm the other major sections and split route chunks.
     scheduleStage(1_500, () => {
       warmChunk(() => import('@/features/travel/TravelPage'));
+      warmChunk(() => import('@/components/dot-matrix/DotMatrixGlobe').then((m) => { m.warmGlobeData(); }));
       warmChunk(() => import('@/features/watchlist/WatchlistPage'));
       warmFinanceCode();
       prefetchAll([
