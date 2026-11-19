@@ -344,8 +344,9 @@ export function TaxCurveChart({ input, chartMax, step, xTicks, highlighted, chil
         {hasIncome && taken.length > 0 && (
           <>At your {formatWholeGBP(input.income)} the rest goes to {taken.map(d => `${d.inSentence} ${percent(yours[d.key])}`).join(', ')}. </>
         )}
-        Hover the chart for take-home in pounds at any income. Child benefit itself and childcare support are not pay,
-        so the share kept leaves them out.
+        Hover the chart for take-home in pounds at any income. Marginal rate is the share of your next £1 earned
+        taken by income tax, NI, student loans and any child benefit charge, whereas the share kept is your average
+        across all pay. Child benefit itself and childcare support are not pay, so the share kept leaves them out.
         {taken.some(d => d.key === 'childBenefitCharge') && (
           <> The child benefit charge is paid through Self Assessment rather than from your payslip.</>
         )}
