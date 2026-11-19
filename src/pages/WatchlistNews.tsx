@@ -3,7 +3,6 @@ import { Calendar, Tv } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
-import { CARD_GRID } from '@/theme/layout';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
 import { PlatformBadge } from '@/features/watchlist/components/PlatformLogo';
@@ -86,22 +85,71 @@ function NewsPosterCard({
   const [failedPoster, setFailedPoster] = useState<string | null>(null);
   return (
     <>
-      <article className="item-card min-w-0">
-        <button type="button" onClick={onClick} aria-label={srLabel || `${title} — open details`} className="flex w-full items-start gap-3 rounded-t-2xl p-3 text-left">
-          <span className="aspect-[2/3] w-14 shrink-0 overflow-hidden rounded bg-muted">
-            {poster && poster !== failedPoster ? <img src={poster} alt="" loading="lazy" onError={() => setFailedPoster(poster)} className="h-full w-full object-contain" /> : <span className="flex h-full items-center justify-center"><Tv className="h-5 w-5" /></span>}
+      <article className="item-card flex h-full min-w-0 flex-col">
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={srLabel || `${title} — open details`}
+          className="flex flex-1 w-full items-start gap-3 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        >
+          <span className="aspect-[2/3] w-14 shrink-0 overflow-hidden rounded bg-muted self-start">
+            {poster && poster !== failedPoster ? (
+              <img
+                src={poster}
+                alt=""
+                loading="lazy"
+                onError={() => setFailedPoster(poster)}
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <span className="flex h-full items-center justify-center">
+                <Tv className="h-5 w-5" />
+              </span>
+            )}
           </span>
-          <span className="min-w-0 space-y-2">
-            <span className="block break-words text-sm font-medium leading-snug">{title}</span>
-            <span className="block text-xs text-muted-foreground">{sub}</span>
-            <span className="flex flex-wrap items-center gap-2"><PlatformBadge platform={platform ?? undefined} size={18} />{pill}</span>
+          <span className="flex flex-1 flex-col min-w-0 self-stretch justify-between">
+            <span className="min-w-0">
+              <span
+                className="line-clamp-2 min-h-[2.5rem] block break-words text-sm font-medium leading-snug"
+                title={title}
+              >
+                {title}
+              </span>
+              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                {sub}
+              </span>
+            </span>
+            <span className="mt-2 flex flex-wrap items-center gap-1.5">
+              <PlatformBadge platform={platform ?? undefined} size={18} />
+              {pill}
+            </span>
           </span>
         </button>
-        {schedule && <Button variant="ghost" aria-label={schedule.scheduled ? `Remove ${title} from schedule` : `Add ${title} to schedule`} className="h-auto min-h-11 w-full justify-start whitespace-normal rounded-t-none border-t px-3 py-2 text-left text-xs text-primary" onClick={() => { if (schedule.scheduled) schedule.onRemove(); else setScheduleOpen(true); }}>
-          <Calendar className="h-4 w-4 shrink-0" />{schedule.scheduled ? 'Scheduled · remove' : 'Add to schedule'}
-        </Button>}
+        {schedule && (
+          <Button
+            variant="ghost"
+            aria-label={schedule.scheduled ? `Remove ${title} from schedule` : `Add ${title} to schedule`}
+            className="mt-auto h-auto min-h-11 w-full justify-start whitespace-normal rounded-t-none rounded-b-[inherit] border-t px-3 py-2 text-left text-xs text-primary shrink-0"
+            onClick={() => {
+              if (schedule.scheduled) schedule.onRemove();
+              else setScheduleOpen(true);
+            }}
+          >
+            <Calendar className="h-4 w-4 shrink-0" />
+            <span>{schedule.scheduled ? 'Scheduled · remove' : 'Add to schedule'}</span>
+          </Button>
+        )}
       </article>
-      {schedule && <SmartScheduleDialog open={scheduleOpen} onOpenChange={setScheduleOpen} title={title} releaseDate={schedule.releaseDate} defaultMode={schedule.defaultMode} onAdd={schedule.onAdd} />}
+      {schedule && (
+        <SmartScheduleDialog
+          open={scheduleOpen}
+          onOpenChange={setScheduleOpen}
+          title={title}
+          releaseDate={schedule.releaseDate}
+          defaultMode={schedule.defaultMode}
+          onAdd={schedule.onAdd}
+        />
+      )}
     </>
   );
 }
@@ -411,7 +459,7 @@ function UpcomingGrid({
         </p>
         )
       ) : (
-        <div className={cn(CARD_GRID, 'news-card-grid')}>
+        <div className="news-card-grid">
           {items.map((item) => (
             <NewsPosterCard
               key={item.key}

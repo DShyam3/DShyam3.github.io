@@ -1,8 +1,9 @@
 /* News is one page scroller: no pane scrolls on its own. */
 .curated-news .news-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16.5rem), 1fr));
   gap: .75rem;
+  align-items: stretch;
 }
 .curated-news .news-pane-heading { margin-bottom: .75rem; }
 .curated-news button { touch-action: manipulation; }
