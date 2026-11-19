@@ -535,7 +535,7 @@ const TravelContent = () => {
                     </div>
                     {section === 'trips' ? <TravelJournalWorkspace journal={journal} isAdmin={isAdmin} cities={journalCities} onSelectCity={selectCity} selectedItemId={selectedItem ? selectedItem.id : null} onSelectItem={selectItem} /> : <>
                     {/* WHERE I'VE BEEN */}
-                    <div className="w-full flex-1 min-h-0 flex flex-col animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
+                    <div className="w-full flex-1 min-h-0 flex flex-col">
                         <div className="travel-layout">
 
                             {/* LEFT — title above, country list in card below */}
