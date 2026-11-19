@@ -379,9 +379,14 @@ function useProvideFinanceData() {
   const [paydayWeekday, setPaydayWeekday] = useState<number>(() => settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
   const [paydayBiweeklyAnchor, setPaydayBiweeklyAnchor] = useState<string>(() => settings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
 
-  // UK bank holidays, fetched once from gov.uk. Shared because payday, leave
-  // and the tax view all need the same list (7.2c-i).
+  // UK bank holidays, cached in Supabase from gov.uk. Shared because payday,
+  // leave and the tax view all need the same list (7.2c-i). We load every
+  // cached year for the active region once so browsing future years or
+  // crossing New Year in leave ranges uses official gov.uk dates whenever
+  // available, while `bankHolidaysList` remains scoped to `settings.taxYear`.
   const [fetchingHolidays, setFetchingHolidays] = useState(false);
+  const [fetchedBankHolidays, setFetchedBankHolidays] = useState<string[]>([]);
+  const [fetchedBankHolidaysMap, setFetchedBankHolidaysMap] = useState<Record<string, string>>({});
   const [bankHolidaysList, setBankHolidaysList] = useState<string[]>([]);
   const [bankHolidaysMap, setBankHolidaysMap] = useState<Record<string, string>>({});
   const [breakdownRateMode, setBreakdownRateMode] = useState<BreakdownRateMode>('normal');
@@ -391,57 +396,67 @@ function useProvideFinanceData() {
     setBreakdownRateMode(nextVal ? 'including_leave' : 'excluding_leave');
   };
   useEffect(() => {
+    let cancelled = false;
     const fetchHolidays = async () => {
       setFetchingHolidays(true);
       const region = settings.ukRegion || 'england-and-wales';
-      let fetchedHolsInYear: string[] = [];
-      const fetchedHolsMap: Record<string, string> = {};
+      let dates: string[] = [];
+      const map: Record<string, string> = {};
       try {
-        const yearStr = settings.taxYear.toString();
         const { data, error } = await supabase
           .from('uk_bank_holidays')
           .select('date, title')
           .eq('region', region)
-          .gte('date', `${yearStr}-01-01`)
-          .lte('date', `${yearStr}-12-31`);
+          .order('date', { ascending: true });
         if (error) throw error;
 
         const events = data ?? [];
-        fetchedHolsInYear = events.map((e) => e.date);
+        dates = events.map((e) => e.date);
         events.forEach((e) => {
-          fetchedHolsMap[e.date] = e.title;
+          map[e.date] = e.title;
         });
       } catch (err) {
         console.error('Error fetching bank holidays:', err);
       } finally {
-        const resolved = resolveBankHolidaysForYear(
-          settings.taxYear,
-          region,
-          fetchedHolsInYear,
-          fetchedHolsMap,
-        );
-        setBankHolidaysList(resolved.dates);
-        setBankHolidaysMap(resolved.map);
-
-        const calculatedWeekends = calculateWeekends(settings.taxYear);
-        const calculatedHolidays = resolved.dates.length;
-
-        setSettings(prev => {
-          if (prev.bankHolidays === calculatedHolidays && prev.weekends === calculatedWeekends) {
-            return prev;
-          }
-          return {
-            ...prev,
-            bankHolidays: calculatedHolidays,
-            weekends: calculatedWeekends
-          };
-        });
-        setFetchingHolidays(false);
+        if (!cancelled) {
+          setFetchedBankHolidays(dates);
+          setFetchedBankHolidaysMap(map);
+          setFetchingHolidays(false);
+        }
       }
     };
 
-    fetchHolidays();
-  }, [settings.taxYear, settings.ukRegion]);
+    void fetchHolidays();
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.ukRegion]);
+
+  useEffect(() => {
+    const region = settings.ukRegion || 'england-and-wales';
+    const resolved = resolveBankHolidaysForYear(
+      settings.taxYear,
+      region,
+      fetchedBankHolidays,
+      fetchedBankHolidaysMap,
+    );
+    setBankHolidaysList(resolved.dates);
+    setBankHolidaysMap(resolved.map);
+
+    const calculatedWeekends = calculateWeekends(settings.taxYear);
+    const calculatedHolidays = resolved.dates.length;
+
+    setSettings(prev => {
+      if (prev.bankHolidays === calculatedHolidays && prev.weekends === calculatedWeekends) {
+        return prev;
+      }
+      return {
+        ...prev,
+        bankHolidays: calculatedHolidays,
+        weekends: calculatedWeekends
+      };
+    });
+  }, [settings.taxYear, settings.ukRegion, fetchedBankHolidays, fetchedBankHolidaysMap]);
 
   const [loadingDb, setLoadingDb] = useState(false);
   // Per profile: collections whose rows on screen are not that profile's
@@ -3202,6 +3217,8 @@ function useProvideFinanceData() {
     setProfiles,
     fetchingHolidays,
     setFetchingHolidays,
+    fetchedBankHolidays,
+    fetchedBankHolidaysMap,
     bankHolidaysList,
     setBankHolidaysList,
     bankHolidaysMap,

@@ -154,8 +154,9 @@ export default function TaxIncomeSurface({
     saveDataToSupabase,
     setSettings,
     settings,
-    bankHolidaysList: settingsYearBankHolidays,
-    bankHolidaysMap: settingsYearBankHolidaysMap,
+    fetchingHolidays,
+    fetchedBankHolidays,
+    fetchedBankHolidaysMap,
     profileId,
     breakdownRateMode,
     setBreakdownRateMode,
@@ -357,24 +358,28 @@ export default function TaxIncomeSurface({
   const yearAnchor = `${profileId ?? ''}:${settingsYear}`;
   const [browsedYear, setBrowsedYear] = useState<{ anchor: string; year: number } | null>(null);
   const currentTaxYear = browsedYear?.anchor === yearAnchor ? browsedYear.year : settingsYear;
-  // gov.uk's dates for the saved year when they have landed; every other year,
+  // gov.uk's cached dates for any year present in Supabase; every other year,
   // and the moment before they land, is the computed list for the user's region.
+  const hasFetchedHolidaysForYear = useMemo(
+    () => fetchedBankHolidays.some(d => d.startsWith(`${currentTaxYear}-`)),
+    [fetchedBankHolidays, currentTaxYear],
+  );
   const { dates: bankHolidaysList, map: bankHolidaysMap } = useMemo(
     () =>
       resolveBankHolidaysForYear(
         currentTaxYear,
         settings.ukRegion || 'england-and-wales',
-        settingsYearBankHolidays,
-        settingsYearBankHolidaysMap,
+        fetchedBankHolidays,
+        fetchedBankHolidaysMap,
       ),
-    [currentTaxYear, settings.ukRegion, settingsYearBankHolidays, settingsYearBankHolidaysMap],
+    [currentTaxYear, settings.ukRegion, fetchedBankHolidays, fetchedBankHolidaysMap],
   );
   // A range can cross New Year, so it skips the bank holidays of every year it
   // touches, not only the year on screen. One that is not leave (a half-typed
   // year, more than two years long) counts nothing, and saving it is refused.
   const bankHolidaysForLeave = (start: string, end: string): string[] | null =>
     isCountableLeaveRange(start, end)
-      ? resolveBankHolidaysForRange(start, end, settings.ukRegion || 'england-and-wales', settingsYearBankHolidays)
+      ? resolveBankHolidaysForRange(start, end, settings.ukRegion || 'england-and-wales', fetchedBankHolidays)
       : null;
   const workingDaysIn = (start: string, end: string) => {
     const bankHolidays = bankHolidaysForLeave(start, end);
@@ -463,9 +468,9 @@ export default function TaxIncomeSurface({
         `${pickerYear - 1}-12-01`,
         `${pickerYear + 1}-01-31`,
         settings.ukRegion || 'england-and-wales',
-        settingsYearBankHolidays,
+        fetchedBankHolidays,
       ).flatMap(iso => isoToLocalDate(iso) ?? []),
-    [pickerYear, settings.ukRegion, settingsYearBankHolidays],
+    [pickerYear, settings.ukRegion, fetchedBankHolidays],
   );
 
   const chooseInlineLength = (half: HalfDay | null) => {
@@ -1422,7 +1427,7 @@ export default function TaxIncomeSurface({
           </div>
         </div>
 
-        {currentTaxYear > realCurrentYear && (
+        {!fetchingHolidays && currentTaxYear > realCurrentYear && !hasFetchedHolidaysForYear && (
           <p className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
             Future bank holidays are calculated from the usual UK rules. One-off holidays or rule changes may alter these dates.
           </p>
