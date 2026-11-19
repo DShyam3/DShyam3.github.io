@@ -350,14 +350,14 @@ export default function TaxIncomeSurface({
   // by the birthday toggle.
   const [inlineBirthdayIntent, setInlineBirthdayIntent] = useState(false);
 
-  // The leave year the tracker is showing. Browsing is local: settings.taxYear
-  // also sets the bank-holiday and weekend counts behind the pay rates, so only
-  // the Settings dialog writes it. The pick lapses when the profile or that
-  // setting changes, which sends the tracker back to the saved year.
-  const settingsYear = settings.taxYear || new Date().getFullYear();
-  const yearAnchor = `${profileId ?? ''}:${settingsYear}`;
+  // The leave year the tracker is showing. It always opens on the calendar
+  // year of today, whatever settings.taxYear holds: that setting drives the
+  // bank-holiday and weekend counts behind the pay rates, not this view.
+  // Browsing is local and lapses when the profile changes.
+  const openingYear = new Date().getFullYear();
+  const yearAnchor = `${profileId ?? ''}:${openingYear}`;
   const [browsedYear, setBrowsedYear] = useState<{ anchor: string; year: number } | null>(null);
-  const currentTaxYear = browsedYear?.anchor === yearAnchor ? browsedYear.year : settingsYear;
+  const currentTaxYear = browsedYear?.anchor === yearAnchor ? browsedYear.year : openingYear;
   // gov.uk's cached dates for any year present in Supabase; every other year,
   // and the moment before they land, is the computed list for the user's region.
   const hasFetchedHolidaysForYear = useMemo(
@@ -1621,11 +1621,26 @@ export default function TaxIncomeSurface({
                 <span>Optimal Leave Maximiser ({currentTaxYear})</span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                Turn {optimalPlan.recommendedLeaveDays}d leave
-                {optimalPlan.recommendedUsesBirthday ? (
-                  <> + 1d <span aria-hidden="true">🎂</span><span className="sr-only">birthday day off</span></>
-                ) : ''} into{' '}
-                <span className="text-positive font-semibold">{optimalPlan.recommendedTotalDaysOff}d off</span>
+                {optimalPlan.recommendedLeaveDays === 0 && !optimalPlan.recommendedUsesBirthday ? (
+                  optimalPlan.remainingAllowanceAfterPlan > 0 ? (
+                    <>
+                      No bridges left ·{' '}
+                      <span className="text-positive font-semibold">
+                        use your {optimalPlan.remainingAllowanceAfterPlan}d anytime
+                      </span>
+                    </>
+                  ) : (
+                    'All leave planned'
+                  )
+                ) : (
+                  <>
+                    Turn {optimalPlan.recommendedLeaveDays}d leave
+                    {optimalPlan.recommendedUsesBirthday ? (
+                      <> + 1d <span aria-hidden="true">🎂</span><span className="sr-only">birthday day off</span></>
+                    ) : ''} into{' '}
+                    <span className="text-positive font-semibold">{optimalPlan.recommendedTotalDaysOff}d off</span>
+                  </>
+                )}
               </p>
             </div>
             <ChevronDown
@@ -1701,7 +1716,10 @@ export default function TaxIncomeSurface({
                       <> + 1d <span aria-hidden="true">🎂</span><span className="sr-only">birthday day off</span></>
                     ) : ''} → {optimalPlan.recommendedTotalDaysOff}d total off
                   </span>
-                  <span className="text-muted-foreground"> ({optimalPlan.remainingAllowanceAfterPlan}d left)</span>
+                  <span className="text-muted-foreground">
+                    {' '}({optimalPlan.remainingAllowanceAfterPlan}d left
+                    {optimalPlan.remainingAllowanceAfterPlan > 0 ? ' · no better bridge, use it anytime' : ''})
+                  </span>
                 </div>
                 <Button
                   type="button"
@@ -1786,6 +1804,8 @@ export default function TaxIncomeSurface({
                 ) : (
                   <p className="text-xs text-muted-foreground text-center py-2">
                     All bank-holiday bridges for {currentTaxYear} are already booked.
+                    {optimalPlan.remainingAllowanceAfterPlan > 0 &&
+                      ` Your ${optimalPlan.remainingAllowanceAfterPlan}d left has no better bridge, so use it anytime.`}
                   </p>
                 )}
                 {hiddenBridgeCount > 0 && (

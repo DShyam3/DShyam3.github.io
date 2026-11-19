@@ -1679,6 +1679,110 @@ export function planOptimalHolidays(options: PlanOptimalHolidaysOptions): Optima
     }
   }
 
+  // Allowance no bridge can use goes on the working days that lengthen a break
+  // already in the diary -- booked leave, a recommended bridge, or a bank
+  // holiday -- so a spare day extends Christmas rather than floating. One day
+  // at a time, each on the day that leaves the longest break; a break that is
+  // only a weekend is not extended, so what cannot fit stays spare.
+  let spareAllowance = availableAllowance - recommendedLeaveDays;
+  if (spareAllowance > 0) {
+    const planned = new Set<string>();
+    const selectedBreakDates = new Set<string>();
+    for (const key of selectedKeys) {
+      const cand = candidateMap.get(key);
+      if (!cand) continue;
+      for (const d of cand.workDays) planned.add(d);
+      for (const d of calendarDays(cand.breakStartDate, cand.breakEndDate)) selectedBreakDates.add(d.iso);
+    }
+    const isLeaveOrHoliday = (iso: string): boolean =>
+      allBhSet.has(iso) || planned.has(iso) || (bookedDatesSet.has(iso) && !sickDatesSet.has(iso));
+    const blockAround = (epoch: number): { start: number; end: number } => {
+      let start = epoch;
+      while (isNonWorkingOrBooked(isoOfEpochDay(start - 1), planned)) start--;
+      let end = epoch;
+      while (isNonWorkingOrBooked(isoOfEpochDay(end + 1), planned)) end++;
+      return { start, end };
+    };
+
+    const extensionDays: string[] = [];
+    const scanStart = activeAsOfIso ?? `${year}-01-01`;
+    while (spareAllowance > 0) {
+      let best: { iso: string; length: number } | null = null;
+      for (const day of calendarDays(scanStart, `${year}-12-31`)) {
+        if (day.weekend || allBhSet.has(day.iso) || bookedDatesSet.has(day.iso) || planned.has(day.iso)) continue;
+        const parts = calendarParts(day.iso);
+        if (!parts) continue;
+        planned.add(day.iso);
+        const { start, end } = blockAround(parts.epoch);
+        planned.delete(day.iso);
+        let anchored = false;
+        for (let ep = start; ep <= end && !anchored; ep++) {
+          if (ep !== parts.epoch && isLeaveOrHoliday(isoOfEpochDay(ep))) anchored = true;
+        }
+        const length = end - start + 1;
+        if (anchored && (!best || length > best.length)) best = { iso: day.iso, length };
+      }
+      if (!best) break;
+      extensionDays.push(best.iso);
+      planned.add(best.iso);
+      spareAllowance--;
+    }
+
+    // Days that ended up in the same break are booked as one extension.
+    const groups = new Map<number, string[]>();
+    for (const iso of extensionDays) {
+      const parts = calendarParts(iso);
+      if (!parts) continue;
+      const { start } = blockAround(parts.epoch);
+      groups.set(start, [...(groups.get(start) ?? []), iso]);
+    }
+    for (const days of groups.values()) {
+      const workDays = [...days].sort();
+      const startDate = workDays[0];
+      const endDate = workDays[workDays.length - 1];
+      const startParts = calendarParts(startDate);
+      if (!startParts) continue;
+      const { start, end } = blockAround(startParts.epoch);
+      const breakStartDate = isoOfEpochDay(start);
+      const breakEndDate = isoOfEpochDay(end);
+      const bhDatesInBreak: string[] = [];
+      for (let ep = start; ep <= end; ep++) {
+        const iso = isoOfEpochDay(ep);
+        if (allBhSet.has(iso)) bhDatesInBreak.push(iso);
+      }
+      const bankHolidayNames = [...new Set(bhDatesInBreak.map(d => allBhMap[d] || 'Bank Holiday'))];
+      const baseLabel = deriveBridgeLabel(startDate, breakStartDate, breakEndDate, bhDatesInBreak);
+      const label =
+        baseLabel === 'Holiday Bridge'
+          ? `Extend Break from ${formatUkDate(breakStartDate)}`
+          : `Extend ${baseLabel.replace(/ Bridge$/, ' Break')}`;
+      const totalDaysOff = end - start + 1;
+      // A break around a recommended bridge is already in the total; only the
+      // days this adds are new. A break around booked leave counts whole.
+      const overlapsSelected = [...selectedBreakDates].some(d => d >= breakStartDate && d <= breakEndDate);
+
+      const key = `${startDate}:${endDate}`;
+      selectedKeys.add(key);
+      recommendedLeaveDays += workDays.length;
+      recommendedTotalDaysOff += overlapsSelected ? workDays.length : totalDaysOff;
+      candidateMap.set(key, {
+        customId: `extend_break_${startDate}`,
+        startDate,
+        endDate,
+        workDays,
+        breakStartDate,
+        breakEndDate,
+        returnToWorkDate: isoOfEpochDay(end + 1),
+        totalDaysOff,
+        bankHolidayNames,
+        label,
+        tierLabel: 'Spare Allowance Extension',
+        usesBirthdayDay: false,
+        leaveDaysRequired: workDays.length,
+      });
+    }
+  }
+
   const bridges: OptimalHolidayBridge[] = [...candidateMap.values()]
     .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.workDays.length - b.workDays.length)
     .map((cand, idx) => {

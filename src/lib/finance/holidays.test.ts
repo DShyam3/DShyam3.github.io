@@ -1377,6 +1377,38 @@ describe('remaining birthday recommendations', () => {
     expect(plan.bridges.find(bridge => bridge.label === 'Birthday Day Off Break')).toBeUndefined();
   });
 
+  it('spends a day no bridge can use on lengthening a break already booked', () => {
+    const plan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 25,
+      asOfDate: '2026-11-19',
+      existingHolidays: [
+        { id: 'twixmas', startDate: '2026-12-29', endDate: '2026-12-31', occasion: 'Christmas', count: 24, type: 'holiday' },
+      ],
+    });
+    const extension = plan.bridges.find(bridge => bridge.id.startsWith('extend_break_'));
+    expect(extension).toBeDefined();
+    expect(extension?.recommended).toBe(true);
+    expect(extension?.datesToBook).toEqual(['2026-12-24']);
+    expect(extension?.breakStartDate).toBe('2026-12-24');
+    expect(extension?.breakEndDate).toBe('2027-01-03');
+    expect(extension?.totalDaysOff).toBe(11);
+    expect(extension?.label).toContain('Christmas');
+    expect(plan.remainingAllowanceAfterPlan).toBe(0);
+  });
+
+  it('extends a bank holiday break when nothing is booked to extend', () => {
+    const plan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 1,
+      asOfDate: '2026-12-31',
+    });
+    const extension = plan.bridges.find(bridge => bridge.id.startsWith('extend_break_'));
+    expect(extension?.datesToBook).toEqual(['2026-12-31']);
+    expect(extension?.breakEndDate).toBe('2027-01-03');
+    expect(plan.remainingAllowanceAfterPlan).toBe(0);
+  });
+
   it('excludes sick days from dates to book without consuming annual allowance', () => {
     const plan = planOptimalHolidays({ year: 2026, annualAllowance: 4, existingHolidays: [
       { id: 'sick', startDate: '2026-05-05', endDate: '2026-05-05', occasion: 'Sick', count: 10, type: 'sick' },
