@@ -746,7 +746,9 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   gives take-home prominence in the headline cards. Each group has a heading
   with its earned and take-home totals, followed by full-width payslip rows
   showing the date, employer, gross and take-home without clipping the gross.
-  Rows label bank matches and archived PDFs beside the figures.
+  In tax-year and calendar-year groups, a matched employer logo appears beside
+  the employer name; employer groups show it in their heading. Rows label bank
+  matches and archived PDFs beside the figures.
 - **Tax calculator** — a what-if calculator for 2026/27 UK rules. Type any salary
   or self-employed profit in the box, or drag the slider up to £250,000, and it
   shows take-home, effective rate, marginal rate and how many pence of the next

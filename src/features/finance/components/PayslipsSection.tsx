@@ -640,6 +640,7 @@ export function PayslipsSection() {
                       const captured = p.gross > 0 || p.net > 0;
                       const reconciliation = reconciliationsByPayslip.get(p.id);
                       const candidateCount = candidatesByPayslip.get(p.id)?.length ?? 0;
+                      const logo = groupBy === 'employer' ? null : employerLogo(p.employer, orgs);
                       return (
                         <button
                           key={p.id}
@@ -648,20 +649,27 @@ export function PayslipsSection() {
                           className="group grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[8.5rem_minmax(0,1fr)_auto] sm:px-5"
                         >
                           <span className="font-mono text-xs font-semibold tabular-nums text-foreground">{formatDate(p.payDate)}</span>
-                          <div className="col-start-1 row-start-2 min-w-0 sm:col-start-2 sm:row-start-1">
-                            <div className="text-xs font-medium text-foreground [overflow-wrap:anywhere]">
-                              {groupBy === 'employer' ? (captured ? 'Payslip' : 'Figures not captured yet') : p.employer || 'No employer'}
-                            </div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                              {captured && <span className="font-mono tabular-nums">{formatGBP(p.gross)} gross</span>}
-                              {!captured && groupBy !== 'employer' && <span>Figures not captured yet</span>}
-                              {captured && !check.reconciles && <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Does not add up</span>}
-                              {reconciliation ? (
-                                <span className="inline-flex items-center gap-1 text-positive"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Bank matched</span>
-                              ) : candidateCount > 0 ? (
-                                <span className="inline-flex items-center gap-1"><Link2 className="h-3.5 w-3.5" aria-hidden="true" /> Bank match available</span>
-                              ) : null}
-                              {p.storagePath && <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" aria-hidden="true" /> PDF</span>}
+                          <div className="col-start-1 row-start-2 flex min-w-0 items-center gap-3 sm:col-start-2 sm:row-start-1">
+                            {logo && (
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white p-1.5 ring-1 ring-black/10">
+                                <img src={logo} alt="" className="h-full w-full object-contain" />
+                              </span>
+                            )}
+                            <div className="min-w-0">
+                              <div className="text-xs font-medium text-foreground [overflow-wrap:anywhere]">
+                                {groupBy === 'employer' ? (captured ? 'Payslip' : 'Figures not captured yet') : p.employer || 'No employer'}
+                              </div>
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                {captured && <span className="font-mono tabular-nums">{formatGBP(p.gross)} gross</span>}
+                                {!captured && groupBy !== 'employer' && <span>Figures not captured yet</span>}
+                                {captured && !check.reconciles && <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Does not add up</span>}
+                                {reconciliation ? (
+                                  <span className="inline-flex items-center gap-1 text-positive"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Bank matched</span>
+                                ) : candidateCount > 0 ? (
+                                  <span className="inline-flex items-center gap-1"><Link2 className="h-3.5 w-3.5" aria-hidden="true" /> Bank match available</span>
+                                ) : null}
+                                {p.storagePath && <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" aria-hidden="true" /> PDF</span>}
+                              </div>
                             </div>
                           </div>
                           <div className="col-start-2 row-span-2 text-right sm:col-start-3 sm:row-span-1">
