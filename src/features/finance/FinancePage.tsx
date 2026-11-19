@@ -1,8 +1,8 @@
 import { toISODate } from '@/lib/finance/dates';
-import { lazy, Suspense, useState, useEffect, useRef, useMemo, memo } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -75,47 +75,12 @@ import {
   type InvestmentImportProvider,
 } from '@/lib/finance';
 
-const FrozenBody = memo(
-  function FrozenBody({ children }: { active: boolean; children: React.ReactNode }) {
-    return (
-      <FinanceSectionBoundary>
-        <Suspense fallback={<FinanceSectionLoading />}>
-          {children}
-        </Suspense>
-      </FinanceSectionBoundary>
-    );
-  },
-  (_prev, next) => !next.active,
-);
-
-const TabSlot = memo(
-  function TabSlot({
-    active,
-    children,
-  }: {
-    active: boolean;
-    children: React.ReactNode;
-  }) {
-    return (
-      <div
-        hidden={!active}
-        aria-hidden={!active || undefined}
-      >
-        <FrozenBody active={active}>
-          {children}
-        </FrozenBody>
-      </div>
-    );
-  },
-  (prev, next) => !prev.active && !next.active,
-);
-
 /**
  * The finance shell. Data comes from `FinanceDataProvider` below rather than
  * from local state, so the five surfaces can be split out of this file in 7.2c
  * without threading two dozen props through each of them.
  */
-function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance?: boolean; financePath?: string }) {
+function FinanceView() {
   const {
     bankAccounts,
     budgetCategories,
@@ -151,19 +116,22 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
 
   // The visible section comes from the URL, not from state: a surface is a
   // route (REHAUL_PLAN.md 7.C), so a view is linkable and the back button
-  // works. `setActiveTab` keeps its old signature so the cross-links further
-  // down this file did not have to change.
+  // works. `optimisticTab` flips the nav highlight immediately on click so
+  // React Router's startTransition never leaves the button looking dead.
   const navigate = useNavigate();
-  const [, surfaceSeg, sectionSeg] = financePath.split('/').slice(1);
-  const activeTab = tabFromPath(surfaceSeg, sectionSeg);
-  const activeSurface = surfaceForTab(activeTab);
-  const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
-  // Keep visited surfaces mounted (hidden when inactive) so switching back to
-  // heavy chart/table tabs is a visibility flip instead of a full remount.
-  const [visitedTabs, setVisitedTabs] = useState<TabKey[]>(() => [activeTab]);
+  const [, surfaceSeg, sectionSeg] = useLocation().pathname.split('/').slice(1);
+  const urlTab = tabFromPath(surfaceSeg, sectionSeg);
+  const [pendingTab, setPendingTab] = useState<TabKey | null>(null);
   useEffect(() => {
-    setVisitedTabs((prev) => (prev.includes(activeTab) ? prev : [...prev, activeTab]));
-  }, [activeTab]);
+    setPendingTab(null);
+  }, [urlTab]);
+  const activeTab = urlTab;
+  const navTab = pendingTab ?? urlTab;
+  const activeSurface = surfaceForTab(navTab);
+  const setActiveTab = (tab: TabKey) => {
+    setPendingTab(tab);
+    navigate(pathForTab(tab));
+  };
   const figures = useHiddenFigures();
   const activeSections = (SURFACES.find(su => su.key === activeSurface)?.tabs ?? []) as readonly TabKey[];
 
@@ -171,11 +139,10 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
   // its rows already loaded. Re-read them behind the ones on screen if they
   // are older than the query cache's staleTime, as the rest of the site does.
   useEffect(() => {
-    if (onFinance) {
-      refreshIfStale(10 * 60_000);
-    }
+    refreshIfStale(10 * 60_000);
+    // Mount only: a return visit, not every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onFinance]);
+  }, []);
 
   // Once the rows are in, prefetch every other section's chunk on idle so
   // switching sections never waits on network without saturating the initial paint.
@@ -252,10 +219,10 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
   const { ledger, exclusionsUnreliable } = useSpendingLedger();
   const todayISO = format(new Date(), 'yyyy-MM-dd');
   const detectedRecurrings = useMemo(
-    () => (visitedTabs.includes('recurrings') && recurringDataReady && !exclusionsUnreliable)
+    () => (activeTab === 'recurrings' && recurringDataReady && !exclusionsUnreliable)
       ? detectRecurringPayments(ledger, todayISO)
       : [],
-    [visitedTabs, ledger, todayISO, recurringDataReady, exclusionsUnreliable],
+    [activeTab, ledger, todayISO, recurringDataReady, exclusionsUnreliable],
   );
   const recurringCandidates = detectedRecurrings.filter(c => !recurrings.some(b => candidateMatchesBill(c, b)));
   // Scans the whole ledger once per bill, so it runs only for the tab that
@@ -368,7 +335,7 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
   };
 
   useEffect(() => {
-    if (!isAdmin || !onFinance) return;
+    if (!isAdmin) return;
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     if (code) {
@@ -382,13 +349,13 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
       else void checkTrueLayerConnection();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, onFinance]);
+  }, [isAdmin]);
 
   // Fetch UK Bank Holidays dynamically
 
   // Scroll to current month in holiday tracker when tax-income tab is selected
   useEffect(() => {
-    if (!onFinance || activeTab !== 'tax-income') return;
+    if (activeTab !== 'tax-income') return;
     const timer = setTimeout(() => {
       const currentMonthIdx = new Date().getMonth();
       const container = document.getElementById('holiday-months-container');
@@ -404,7 +371,7 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
       }
     }, 150);
     return () => clearTimeout(timer);
-  }, [onFinance, activeTab]);
+  }, [activeTab]);
 
   // ==========================================
   // GENERAL CLOUD SAVE HELPER
@@ -866,7 +833,10 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
           return (
             <div key={surface.key} className="flex items-center gap-2 md:gap-4">
               <button
-                onClick={() => navigate(pathForSurface(surface.key))}
+                onClick={() => {
+                  setPendingTab(surface.tabs[0]);
+                  navigate(pathForSurface(surface.key));
+                }}
                 onPointerEnter={() => sectionChunks[surface.tabs[0]]?.()}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
@@ -925,10 +895,10 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
             key={tab}
             onClick={() => setActiveTab(tab)}
             onPointerEnter={() => sectionChunks[tab]?.()}
-            aria-current={activeTab === tab ? 'page' : undefined}
+            aria-current={navTab === tab ? 'page' : undefined}
             className={cn(
               'text-xs whitespace-nowrap font-sans transition-colors',
-              activeTab === tab
+              navTab === tab
                 ? 'text-foreground font-semibold'
                 : 'text-muted-foreground hover:text-foreground'
             )}
@@ -964,32 +934,29 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
           ) : <>
           {showsSurfaceHero(activeTab) ? surfaceHero : null}
 
-          {visitedTabs.map((tab) => (
-            <TabSlot
-              key={tab}
-              active={tab === activeTab}
-            >
-              {tab === 'dashboard' && <DashboardSurface toggleRecurringPaid={toggleRecurringPaid} />}
-              {tab === 'tax-income' && (
+          <FinanceSectionBoundary>
+            <Suspense fallback={<FinanceSectionLoading />}>
+              {activeTab === 'dashboard' && <DashboardSurface toggleRecurringPaid={toggleRecurringPaid} />}
+              {activeTab === 'tax-income' && (
                 <TaxIncomeSurface
                   setIsSettingsOpen={setIsSettingsOpen}
                   isBenefitsDialogOpen={isBenefitsDialogOpen}
                   setIsBenefitsDialogOpen={setIsBenefitsDialogOpen}
                 />
               )}
-              {tab === 'budget' && <BudgetSurface totalSpent={totalSpent} />}
-              {tab === 'cash-flow' && (
+              {activeTab === 'budget' && <BudgetSurface totalSpent={totalSpent} />}
+              {activeTab === 'cash-flow' && (
                 <CashFlowSurface breakdownRates={breakdownRates} todayDateObj={todayDateObj} />
               )}
-              {tab === 'forecast' && <ForecastSurface />}
-              {tab === 'goals' && <GoalsSurface />}
-              {tab === 'scenarios' && <ScenariosSurface />}
-              {tab === 'retirement' && <RetirementSurface />}
-              {tab === 'transfers' && <TransfersSurface />}
-              {tab === 'accounts' && <AccountsSurface />}
-              {tab === 'debts' && <DebtsSurface />}
-              {tab === 'student-loan' && <StudentLoanSurface />}
-              {tab === 'recurrings' && (
+              {activeTab === 'forecast' && <ForecastSurface />}
+              {activeTab === 'goals' && <GoalsSurface />}
+              {activeTab === 'scenarios' && <ScenariosSurface />}
+              {activeTab === 'retirement' && <RetirementSurface />}
+              {activeTab === 'transfers' && <TransfersSurface />}
+              {activeTab === 'accounts' && <AccountsSurface />}
+              {activeTab === 'debts' && <DebtsSurface />}
+              {activeTab === 'student-loan' && <StudentLoanSurface />}
+              {activeTab === 'recurrings' && (
                 <RecurringsTab
                   recurrings={recurrings}
                   candidates={recurringCandidates}
@@ -1015,7 +982,7 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
                   onUndismissRecurring={(id) => { void undismissRecurring(id); }}
                 />
               )}
-              {tab === 'transactions' && (
+              {activeTab === 'transactions' && (
                 <TransactionsTab
                   transactions={mockTransactions}
                   onUpdateTransactions={(updated) => {
@@ -1038,7 +1005,7 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
                   }
                 />
               )}
-              {tab === 'investments' && (
+              {activeTab === 'investments' && (
                 <InvestmentsTab
                   holdings={investmentHoldings}
                   activities={investmentActivities}
@@ -1050,10 +1017,10 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
                   bankAccounts={bankAccounts}
                 />
               )}
-              {tab === 'tax-calculator' && <TaxCalculatorSurface figuresHidden={figures.hidden} />}
-              {tab === 'money-hub' && <MoneyHubSurface key={profileId} figuresHidden={figures.hidden} />}
-            </TabSlot>
-          ))}
+              {activeTab === 'tax-calculator' && <TaxCalculatorSurface figuresHidden={figures.hidden} />}
+              {activeTab === 'money-hub' && <MoneyHubSurface key={profileId} figuresHidden={figures.hidden} />}
+            </Suspense>
+          </FinanceSectionBoundary>
           </>}
         </div>
       </AppShell>
@@ -1105,54 +1072,19 @@ function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance
   );
 }
 
-const MemoizedFinanceView = memo(FinanceView);
-
 /**
- * The provider and view rendered into the route's mount point.
- *
- * Defers mounting FinanceView until the user first visits /finance, then keeps
- * it mounted in a persistent container across route changes so returning from
- * another section is instantaneous without re-rendering Finance while browsing
- * other pages (e.g. Books, Inventory, Watchlist).
+ * The provider and, while /finance is open, the view rendered into the
+ * route's mount point. Mounted by FinanceSession for the admin's session, so
+ * `target` is null on every other page and only the data stays alive.
  */
 export default function FinanceHost({ target }: { target: HTMLElement | null }) {
-  const { pathname } = useLocation();
-  const onFinance = pathname.startsWith('/finance');
-  const lastFinancePathRef = useRef(onFinance ? pathname : '/finance');
-  if (onFinance) {
-    lastFinancePathRef.current = pathname;
-  }
-  const hasVisitedRef = useRef(false);
-  if (target !== null) {
-    hasVisitedRef.current = true;
-  }
-
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  if (!containerRef.current && typeof document !== 'undefined') {
-    const el = document.createElement('div');
-    el.className = 'contents';
-    containerRef.current = el;
-  }
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (target) {
-      target.appendChild(el);
-      return () => {
-        el.remove();
-      };
-    } else {
-      el.remove();
-    }
-  }, [target]);
-
+  // The route's mount point is cleared a commit after navigation. Without the
+  // match the view would re-render once for the new path in between, falling
+  // back to Dashboard and mounting it in a detached node.
+  const onFinance = useMatch('/finance/*') !== null;
   return (
     <FinanceDataProvider>
-      {hasVisitedRef.current && containerRef.current && createPortal(
-        <MemoizedFinanceView onFinance={onFinance && target !== null} financePath={lastFinancePathRef.current} />,
-        containerRef.current,
-      )}
+      {target && onFinance && createPortal(<FinanceView />, target)}
     </FinanceDataProvider>
   );
 }
