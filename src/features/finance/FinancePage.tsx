@@ -75,6 +75,19 @@ import {
   type InvestmentImportProvider,
 } from '@/lib/finance';
 
+const FrozenBody = memo(
+  function FrozenBody({ children }: { active: boolean; children: React.ReactNode }) {
+    return (
+      <FinanceSectionBoundary>
+        <Suspense fallback={<FinanceSectionLoading />}>
+          {children}
+        </Suspense>
+      </FinanceSectionBoundary>
+    );
+  },
+  (_prev, next) => !next.active,
+);
+
 const TabSlot = memo(
   function TabSlot({
     active,
@@ -88,19 +101,13 @@ const TabSlot = memo(
         hidden={!active}
         aria-hidden={!active || undefined}
       >
-        <FinanceSectionBoundary>
-          <Suspense fallback={<FinanceSectionLoading />}>
-            {children}
-          </Suspense>
-        </FinanceSectionBoundary>
+        <FrozenBody active={active}>
+          {children}
+        </FrozenBody>
       </div>
     );
   },
-  (prev, next) => {
-    // If the slot was inactive and remains inactive, skip re-rendering completely.
-    if (!prev.active && !next.active) return true;
-    return false;
-  },
+  (prev, next) => !prev.active && !next.active,
 );
 
 /**
@@ -108,7 +115,7 @@ const TabSlot = memo(
  * from local state, so the five surfaces can be split out of this file in 7.2c
  * without threading two dozen props through each of them.
  */
-function FinanceView({ onFinance = true }: { onFinance?: boolean }) {
+function FinanceView({ onFinance = true, financePath = '/finance' }: { onFinance?: boolean; financePath?: string }) {
   const {
     bankAccounts,
     budgetCategories,
@@ -147,13 +154,7 @@ function FinanceView({ onFinance = true }: { onFinance?: boolean }) {
   // works. `setActiveTab` keeps its old signature so the cross-links further
   // down this file did not have to change.
   const navigate = useNavigate();
-  const location = useLocation();
-  const lastFinancePathRef = useRef(location.pathname);
-  if (location.pathname.startsWith('/finance')) {
-    lastFinancePathRef.current = location.pathname;
-  }
-  const effectivePath = location.pathname.startsWith('/finance') ? location.pathname : lastFinancePathRef.current;
-  const [, surfaceSeg, sectionSeg] = effectivePath.split('/').slice(1);
+  const [, surfaceSeg, sectionSeg] = financePath.split('/').slice(1);
   const activeTab = tabFromPath(surfaceSeg, sectionSeg);
   const activeSurface = surfaceForTab(activeTab);
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
@@ -176,11 +177,12 @@ function FinanceView({ onFinance = true }: { onFinance?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onFinance]);
 
-  // Eagerly prefetch section chunks so internal tab clicks never wait on network.
+  // Once the rows are in, prefetch every other section's chunk on idle so
+  // switching sections never waits on network without saturating the initial paint.
   useEffect(() => {
-    if (prefersSavedData()) return;
-    warmFinanceSections();
-  }, []);
+    if (!hasLoaded || prefersSavedData()) return;
+    return whenIdle(warmFinanceSections, 1500);
+  }, [hasLoaded]);
 
   const [cfCustomStart, setCfCustomStart] = useState<string>(() => {
     const today = new Date();
@@ -1103,14 +1105,28 @@ function FinanceView({ onFinance = true }: { onFinance?: boolean }) {
   );
 }
 
+const MemoizedFinanceView = memo(FinanceView);
+
 /**
  * The provider and view rendered into the route's mount point.
  *
- * Keeps FinanceView mounted in a persistent container across route changes
- * so returning from another section (e.g. Watchlist or Links) is instantaneous
- * without rebuilding the DOM, un-suspending, or resetting visited tabs.
+ * Defers mounting FinanceView until the user first visits /finance, then keeps
+ * it mounted in a persistent container across route changes so returning from
+ * another section is instantaneous without re-rendering Finance while browsing
+ * other pages (e.g. Books, Inventory, Watchlist).
  */
 export default function FinanceHost({ target }: { target: HTMLElement | null }) {
+  const { pathname } = useLocation();
+  const onFinance = pathname.startsWith('/finance');
+  const lastFinancePathRef = useRef(onFinance ? pathname : '/finance');
+  if (onFinance) {
+    lastFinancePathRef.current = pathname;
+  }
+  const hasVisitedRef = useRef(false);
+  if (target !== null) {
+    hasVisitedRef.current = true;
+  }
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   if (!containerRef.current && typeof document !== 'undefined') {
     const el = document.createElement('div');
@@ -1133,7 +1149,10 @@ export default function FinanceHost({ target }: { target: HTMLElement | null }) 
 
   return (
     <FinanceDataProvider>
-      {containerRef.current && createPortal(<FinanceView onFinance={target !== null} />, containerRef.current)}
+      {hasVisitedRef.current && containerRef.current && createPortal(
+        <MemoizedFinanceView onFinance={onFinance && target !== null} financePath={lastFinancePathRef.current} />,
+        containerRef.current,
+      )}
     </FinanceDataProvider>
   );
 }
