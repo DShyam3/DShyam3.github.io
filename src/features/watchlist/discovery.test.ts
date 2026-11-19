@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { curateDiscovery, discoverySeeds, interleaveBySeed, interleaveUpcoming, type DiscoveryItem } from './discovery';
+import { curateDiscovery, discoverySeeds, interleaveBySeed, interleaveUpcoming, likelySeenConsensus, type DiscoveryItem } from './discovery';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -64,6 +64,21 @@ describe('discoverySeeds', () => {
       'Because you’re waiting for Later Film',
       'Based on Unrated Movie in your library',
     ]);
+  });
+
+  it('waits only for new titles, not a caught-up series with a dated return', () => {
+    const episodes = (next?: string) => [
+      { title: 'Aired', episode_number: 1, watched: true, release_date: '2026-01-01' },
+      ...(next ? [{ title: 'Next', episode_number: 2, release_date: next }] : []),
+    ];
+    const watchlist: WatchlistItem[] = [
+      makeWatchlistItem({ id: '1', title: 'Returning Show', category: 'TV Shows', tmdb_id: 80, series_status: 'Returning Series', seasons: [{ season_number: 1, episodes: episodes('2026-12-01') }] }),
+      makeWatchlistItem({ id: '2', title: 'Quiet Show', category: 'TV Shows', tmdb_id: 90, series_status: 'Returning Series', seasons: [{ season_number: 1, episodes: episodes() }] }),
+    ];
+    const reasons = discoverySeeds(watchlist, [], new Date(2026, 10, 18, 12)).map((seed) => seed.reason);
+    expect(reasons).not.toContain('Because you’re waiting for Returning Show');
+    expect(reasons).toContain('Based on Returning Show in your library');
+    expect(reasons).not.toContain('Because you’re waiting for Quiet Show');
   });
 
   it('no longer starts from the alphabetically first favourite', () => {
@@ -163,6 +178,10 @@ describe('curateDiscovery', () => {
       'tv:700',
       'movie:800',
     ]);
+    expect(curateDiscovery(items, watchlist, favourites, dismissed, new Set(['movie:800'])).map((item) => `${item.media}:${item.id}`)).toEqual([
+      'tv:500',
+      'tv:700',
+    ]);
   });
 });
 
@@ -187,5 +206,28 @@ describe('interleaveUpcoming', () => {
     expect(interleaveUpcoming(films)).toEqual(films);
     expect(interleaveUpcoming(series)).toEqual(series);
     expect(interleaveUpcoming([])).toEqual([]);
+  });
+});
+
+describe('likelySeenConsensus', () => {
+  it('surfaces released titles recommended by 2+ independent library seeds and ignores future or single-seed items', () => {
+    const today = new Date(2026, 10, 18);
+    const items: DiscoveryItem[] = [
+      makeDiscoveryItem({ id: 10, media: 'tv', name: 'The Sopranos', title: undefined, first_air_date: '1999-01-10', kind: 'recommendation', seedKey: 'tv:1', vote_count: 2500 }),
+      makeDiscoveryItem({ id: 10, media: 'tv', name: 'The Sopranos', title: undefined, first_air_date: '1999-01-10', kind: 'recommendation', seedKey: 'tv:2', vote_count: 2500 }),
+      makeDiscoveryItem({ id: 10, media: 'tv', name: 'The Sopranos', title: undefined, first_air_date: '1999-01-10', kind: 'recommendation', seedKey: 'tv:2', vote_count: 2500 }),
+      makeDiscoveryItem({ id: 11, media: 'movie', title: 'Single Seed', release_date: '2020-01-01', kind: 'recommendation', seedKey: 'movie:1' }),
+      makeDiscoveryItem({ id: 12, media: 'movie', title: 'Future Hit', release_date: '2027-01-01', kind: 'recommendation', seedKey: 'movie:1' }),
+      makeDiscoveryItem({ id: 12, media: 'movie', title: 'Future Hit', release_date: '2027-01-01', kind: 'recommendation', seedKey: 'movie:2' }),
+    ];
+
+    const out = likelySeenConsensus(items, today, 2);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      id: 10,
+      media: 'tv',
+      shortReason: 'In 2 of your lists',
+      reason: 'Recommended across 2 titles in your library',
+    });
   });
 });

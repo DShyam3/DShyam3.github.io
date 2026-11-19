@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { queryOptions, useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -9,27 +10,22 @@ import { supabase } from '@/integrations/supabase/client';
  * `merchant-logos` bucket; this reads the index of what landed there and hands
  * back public URLs on our own origin.
  *
- * The index is read rather than the object path guessed, because most
- * merchants in a real ledger have no logo at all -- guessing would mean a 404
- * per unknown merchant, per render, which is both slow and a rather loud way
- * to announce a spending history to the network tab.
- *
  * Reading the index is admin-only: its slugs are the brands the owner pays, so
- * it is spend history, not public data. The images themselves are fetched by
- * public URL, which needs no read of either the table or the bucket listing.
- *
- * One shared request: the table is small and the same for every admin read, so
- * it is fetched once per page load and every caller waits on the same promise.
+ * it is spend history, not public data. Stored in React Query (in-memory only,
+ * never persisted to IndexedDB) so sign-out clears it automatically and bank
+ * syncs can invalidate it without a page reload.
  */
 
-type LogoIndex = ReadonlyMap<string, string>;
+export type LogoIndex = ReadonlyMap<string, string>;
 
 const EMPTY: LogoIndex = new Map();
 
-let inflight: Promise<LogoIndex> | null = null;
+export const MERCHANT_LOGOS_QUERY_KEY = ['finance', 'merchant-logos'] as const;
 
-const loadIndex = (): Promise<LogoIndex> => {
-  inflight ??= (async () => {
+export const merchantLogosQuery = queryOptions<LogoIndex>({
+  queryKey: MERCHANT_LOGOS_QUERY_KEY,
+  staleTime: 30 * 60_000,
+  queryFn: async () => {
     const { data, error } = await supabase
       .from('finance_merchant_logos')
       .select('slug, storage_path')
@@ -45,23 +41,15 @@ const loadIndex = (): Promise<LogoIndex> => {
         supabase.storage.from('merchant-logos').getPublicUrl(row.storage_path!).data.publicUrl,
       ]),
     );
-  })();
-  return inflight;
-};
+  },
+});
 
 /** Cached merchant logos by canonical slug. Empty until the index arrives. */
 export const useMerchantLogos = (): LogoIndex => {
-  const [index, setIndex] = useState<LogoIndex>(EMPTY);
-
-  useEffect(() => {
-    let alive = true;
-    loadIndex().then(loaded => {
-      if (alive) setIndex(loaded);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  return index;
+  const { isAdmin } = useAuth();
+  const { data } = useQuery({
+    ...merchantLogosQuery,
+    enabled: isAdmin,
+  });
+  return data ?? EMPTY;
 };

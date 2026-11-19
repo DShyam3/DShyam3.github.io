@@ -19,6 +19,7 @@ import { useTMDB } from '@/features/watchlist/useTMDB';
 import type { TMDBResult } from '@/features/watchlist/useTMDB';
 import { newItemFromDetails } from '@/features/watchlist/new-item';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
+import { LIBRARY_CATEGORIES, libraryCategories, type LibraryCategory } from '@/features/watchlist/library-categories';
 import {
   FAVOURITE_CATEGORIES,
   resolveFavouriteCategory,
@@ -124,12 +125,12 @@ type Shelf = LibraryShelf | 'Favourites';
 const MAIN_SHELVES: Shelf[] = [...LIBRARY_SHELVES, 'Favourites'];
 const SHELVES: Shelf[] = [...MAIN_SHELVES, ...MORE_SHELVES];
 
-/** Each shelf's own orders, default first. Upcoming and Up to date run by date. */
+/** Each shelf's own orders, default first. Upcoming runs by date. */
 const SHELF_SORTS: Record<Shelf, LibrarySort[]> = {
   Watching: ['alphabetical', 'recent', 'finish'],
   'To watch': ['alphabetical', 'recent', 'finish'],
   Upcoming: [],
-  'Up to date': [],
+  'Up to date': ['alphabetical', 'recent'],
   Finished: ['watched', 'rating', 'alphabetical'],
   Favourites: [],
   'Stopped watching': ['alphabetical', 'rating'],
@@ -140,8 +141,8 @@ const SHELF_SORTS: Record<Shelf, LibrarySort[]> = {
 const SHELF_HINTS: Record<Shelf, string> = {
   Watching: 'Series you have started, with aired episodes still to watch. Films go straight from To watch to Finished.',
   'To watch': 'Out now, and not started yet.',
-  Upcoming: 'Saved, with nothing released yet.',
-  'Up to date': 'Series you are caught up on. Each moves back to Watching when its next episode airs.',
+  Upcoming: 'Nothing to watch until a dated release: new titles, and the next season or episode of a series you are up to date on. Soonest first.',
+  'Up to date': 'Running series with every aired episode watched and no next date known. A series moves to Upcoming once its next episode or season has a date.',
   Finished: 'Films you have watched, and ended series watched to the last episode.',
   Favourites: 'Titles you have hearted. A favourite also stays on its own shelf.',
   'Stopped watching': 'Set aside, with your progress and ratings kept.',
@@ -174,6 +175,10 @@ const ALL_PLATFORMS = [
   'Apple TV+',
   'BBC iPlayer',
   'ITVX',
+  'NOW',
+  'Paramount+',
+  'Channel 4',
+  'Crunchyroll',
   'Online',
 ];
 
@@ -200,8 +205,13 @@ const ALL_GENRES = [
   'Western',
 ];
 
+const favouriteAutoCategories = (favourite: FavouriteItem) => libraryCategories({
+  category: favourite.media_type === 'tv' ? 'TV Shows' : 'Movies',
+  ...favourite.facts,
+});
+
 const Watchlist = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isAuthLoading } = useAuth();
   const {
     watchlist,
     favourites,
@@ -266,18 +276,32 @@ const Watchlist = () => {
     }
   };
   const [searchQuery, setSearchQuery] = useState('');
-  // A search looks across every shelf, so a finished title is still found
-  // from Watching.
+  const [searchAllShelves, setSearchAllShelves] = useState(true);
+  // A search looks across every shelf by default, so a finished title is
+  // still found from Watching; picking a shelf narrows the search without
+  // clearing what was typed.
   const searching = searchQuery.trim() !== '';
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [selectedAutoCategory, setSelectedAutoCategory] = useState<LibraryCategory | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  // A visitor's link to one of the owner's own shelves opens Watching, so
+  // the shelf, its count and its hint never show, and it resets filters and
+  // search as the shelf picker does. Only once auth has settled: isAdmin is
+  // false while it loads, and the owner's own link must hold.
+  if (!isAuthLoading && !isAdmin && (MORE_SHELVES as readonly string[]).includes(selectedCategory)) {
+    setSelectedCategory('Watching');
+    setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null); setSearchQuery('');
+  }
   // Visitors never order by a rating they cannot see.
   const sortOptions = searching
     ? []
     : SHELF_SORTS[selectedCategory].filter((option) => option !== 'rating' || isAdmin);
-  const [sortOrder, setSortOrder] = useState<LibrarySort>(() => SHELF_SORTS[selectedCategory][0] ?? 'alphabetical');
+  const [chosenSort, setSortOrder] = useState<LibrarySort>(() => SHELF_SORTS[selectedCategory][0] ?? 'alphabetical');
+  // A choice the shelf no longer offers -- Your rating after signing out --
+  // falls back to the shelf's default rather than a blank picker.
+  const sortOrder = sortOptions.includes(chosenSort) ? chosenSort : sortOptions[0] ?? 'alphabetical';
   const sortable = sortOptions.length > 1;
   const byTimeLeft = sortable && sortOrder === 'finish';
   const [title, setTitle] = useState('');
@@ -352,7 +376,10 @@ const Watchlist = () => {
         const details = await getMovieDetails(result.id, result.media_type);
         if (!details) return;
         // The result's own type: with All selected the search spans both.
-        await addWatchlistItem(newItemFromDetails(details, result.media_type === 'tv' ? 'TV Shows' : 'Movies'));
+        await addWatchlistItem(
+          newItemFromDetails(details, result.media_type === 'tv' ? 'TV Shows' : 'Movies'),
+          { seasons: details.seasons },
+        );
         setAddedItems((prev) => new Set(prev).add(resultKey));
       } catch {
         // addWatchlistItem has already shown the failure.
@@ -386,7 +413,23 @@ const Watchlist = () => {
         void removeFavourite(existing.id);
         return;
       }
-      void addFavourite({ title: item.title, poster: item.image_url, media_type: item.category === 'TV Shows' ? 'tv' : 'movie', tmdb_id: item.tmdb_id }).catch(() => {
+      const hasFacts =
+        item.genre_ids !== undefined ||
+        item.original_language !== undefined ||
+        item.origin_country !== undefined;
+      void addFavourite({
+        title: item.title,
+        poster: item.image_url,
+        media_type: item.category === 'TV Shows' ? 'tv' : 'movie',
+        tmdb_id: item.tmdb_id,
+        facts: hasFacts
+          ? {
+              genre_ids: item.genre_ids ?? null,
+              original_language: item.original_language ?? null,
+              origin_country: item.origin_country ?? null,
+            }
+          : undefined,
+      }).catch(() => {
         // addFavourite has already shown the failure.
       });
     },
@@ -458,17 +501,17 @@ const Watchlist = () => {
     const typed = watchlist.filter((item) => matchesLibraryType(item, libraryType));
     // Hidden and Stopped watching are the owner's own shelves.
     const isPrivate = (item: WatchlistItem) => (MORE_SHELVES as readonly string[]).includes(shelfByItem.get(titleKey(item)) ?? '');
+    if (searching && searchAllShelves) return isAdmin ? typed : typed.filter((item) => !isPrivate(item));
     if (!isAdmin && (MORE_SHELVES as readonly string[]).includes(selectedCategory)) return [];
-    if (searching) return isAdmin ? typed : typed.filter((item) => !isPrivate(item));
     const onShelf = typed.filter((item) => gridShelfOf(item) === selectedCategory);
-    if (selectedCategory !== 'Upcoming' && selectedCategory !== 'Up to date') return onShelf;
+    if (selectedCategory !== 'Upcoming') return onShelf;
     // Soonest first; a title with no known date goes last.
     const today = new Date();
     return onShelf
       .map((item) => ({ item, date: nextAirDate(item, today) }))
       .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999') || a.item.title.localeCompare(b.item.title))
       .map(({ item }) => item);
-  }, [watchlist, libraryType, searching, shelfByItem, gridShelfOf, selectedCategory, isAdmin]);
+  }, [watchlist, libraryType, searching, searchAllShelves, shelfByItem, gridShelfOf, selectedCategory, isAdmin]);
 
   const platformCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -494,6 +537,12 @@ const Watchlist = () => {
         }
       });
     });
+    return counts;
+  }, [categoryItems]);
+
+  const autoCategoryCounts = useMemo(() => {
+    const counts = Object.fromEntries(LIBRARY_CATEGORIES.map((category) => [category, 0])) as Record<LibraryCategory, number>;
+    categoryItems.forEach((item) => libraryCategories(item).forEach((category) => { counts[category]++; }));
     return counts;
   }, [categoryItems]);
 
@@ -574,6 +623,8 @@ const Watchlist = () => {
       );
     if (selectedGenre)
       result = result.filter((item) => item.genres?.includes(selectedGenre));
+    if (selectedAutoCategory)
+      result = result.filter((item) => libraryCategories(item).includes(selectedAutoCategory));
     if (selectedStatus) {
       if (selectedStatus === 'Ended / Cancelled') {
         result = result.filter(
@@ -636,6 +687,7 @@ const Watchlist = () => {
     categoryItems,
     selectedPlatform,
     selectedGenre,
+    selectedAutoCategory,
     selectedStatus,
     searchQuery,
     searching,
@@ -668,20 +720,47 @@ const Watchlist = () => {
     }
   };
 
+  const favouriteCategoryCounts = useMemo(() => {
+    const counts = Object.fromEntries(LIBRARY_CATEGORIES.map((category) => [category, 0])) as Record<LibraryCategory, number>;
+    favourites.filter((favourite) => libraryType === 'all' || favourite.media_type === libraryType)
+      .forEach((favourite) => favouriteAutoCategories(favourite).forEach((category) => { counts[category]++; }));
+    return counts;
+  }, [favourites, libraryType]);
+
   const typedFavourites = useMemo(
-    () => favourites.filter((favourite) => libraryType === 'all' || favourite.media_type === libraryType),
-    [favourites, libraryType],
+    () => favourites.filter((favourite) =>
+      (libraryType === 'all' || favourite.media_type === libraryType) &&
+      (!selectedAutoCategory || favouriteAutoCategories(favourite).includes(selectedAutoCategory))),
+    [favourites, libraryType, selectedAutoCategory],
   );
 
   const categoryCounts = useMemo(() => {
     const counts = Object.fromEntries(SHELVES.map((shelf) => [shelf, 0])) as Record<Shelf, number>;
-    counts.Favourites = typedFavourites.length;
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    counts.Favourites = favourites.filter((favourite) =>
+      (libraryType === 'all' || favourite.media_type === libraryType) &&
+      (!normalizedQuery || favourite.title.toLowerCase().includes(normalizedQuery)),
+    ).length;
     watchlist.forEach((item) => {
       const shelf = shelfByItem.get(titleKey(item));
-      if (shelf && matchesLibraryType(item, libraryType)) counts[shelf]++;
+      if (
+        shelf &&
+        matchesLibraryType(item, libraryType) &&
+        (!normalizedQuery || item.title.toLowerCase().includes(normalizedQuery))
+      ) {
+        counts[shelf]++;
+      }
     });
     return counts;
-  }, [watchlist, typedFavourites, shelfByItem, libraryType]);
+  }, [watchlist, favourites, shelfByItem, libraryType, searchQuery]);
+
+  const totalSearchMatches = useMemo(() => {
+    if (!searching) return 0;
+    const visibleShelves = isAdmin
+      ? SHELVES.filter((s) => s !== 'Favourites')
+      : MAIN_SHELVES.filter((s) => s !== 'Favourites');
+    return visibleShelves.reduce((sum, shelf) => sum + categoryCounts[shelf], 0);
+  }, [searching, isAdmin, categoryCounts]);
 
   // Reset visible count when filters change
   useEffect(() => {
@@ -692,6 +771,7 @@ const Watchlist = () => {
     searchQuery,
     selectedPlatform,
     selectedGenre,
+    selectedAutoCategory,
     selectedStatus,
     sortOrder,
   ]);
@@ -733,7 +813,7 @@ const Watchlist = () => {
     return item.runtime ? formatRuntime(item.runtime) : undefined;
   };
 
-  const activeFilterCount = [selectedPlatform, selectedGenre, selectedStatus].filter(Boolean).length;
+  const activeFilterCount = [selectedPlatform, selectedGenre, selectedAutoCategory, selectedStatus].filter(Boolean).length;
 
   const renderCard = (item: WatchlistItem) => (
     <WatchlistCard
@@ -1017,22 +1097,45 @@ const Watchlist = () => {
         </div>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Select value={selectedCategory} onValueChange={(value) => {
-          const shelf = value as Shelf;
-          setSelectedCategory(shelf);
-          setSortOrder(SHELF_SORTS[shelf][0] ?? 'alphabetical');
-          setSelectedPlatform(null); setSelectedGenre(null); setSelectedStatus(null); setSearchQuery('');
-        }}>
-          {/* A search covers every shelf, so the picker says so; picking a
-              shelf clears the search and opens that shelf. */}
+        <Select
+          value={searching && searchAllShelves ? '__all__' : selectedCategory}
+          onValueChange={(value) => {
+            if (value === '__all__') {
+              setSearchAllShelves(true);
+              return;
+            }
+            const shelf = value as Shelf;
+            setSelectedCategory(shelf);
+            setSortOrder(SHELF_SORTS[shelf][0] ?? 'alphabetical');
+            setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null);
+            if (searching && shelf !== 'Favourites') {
+              setSearchAllShelves(false);
+            } else {
+              setSearchQuery('');
+              setSearchAllShelves(true);
+            }
+          }}
+        >
+          {/* A search covers every shelf by default; picking a shelf narrows
+              an active search to that shelf instead of clearing it. */}
           <SelectTrigger aria-label="Library shelf" className="h-11 w-[210px] shrink-0 text-sm">
             {/* Always given children: Radix portals the picked item's text in
                 otherwise, and switching between the two crashes the tree. */}
             <SelectValue>
-              {searching ? 'All shelves' : <span className="flex items-center gap-2">{getCategoryIcon(selectedCategory)}{selectedCategory} ({categoryCounts[selectedCategory]})</span>}
+              {searching && searchAllShelves
+                ? `All shelves (${totalSearchMatches})`
+                : <span className="flex items-center gap-2">{getCategoryIcon(selectedCategory)}{selectedCategory} ({categoryCounts[selectedCategory]})</span>}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
+            {searching && (
+              <>
+                <SelectItem value="__all__">
+                  <span className="flex items-center gap-2 font-medium">All shelves ({totalSearchMatches})</span>
+                </SelectItem>
+                <SelectSeparator />
+              </>
+            )}
             {MAIN_SHELVES.map((shelf) => (
               <SelectItem key={shelf} value={shelf}>
                 <span className="flex items-center gap-2">{getCategoryIcon(shelf)}{shelf} ({categoryCounts[shelf]})</span>
@@ -1047,17 +1150,36 @@ const Watchlist = () => {
           </SelectContent>
         </Select>
         <SegmentedControl label="Show films, series or both" options={LIBRARY_TYPE_OPTIONS} value={libraryType} onChange={setLibraryType} />
+        {selectedCategory === 'Favourites' && <Select value={selectedAutoCategory ?? 'all'} onValueChange={(value) => setSelectedAutoCategory(value === 'all' ? null : value as LibraryCategory)}>
+          <SelectTrigger aria-label="Automatic category" className="h-11 w-[180px] shrink-0 text-sm"><SelectValue placeholder="Category" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {LIBRARY_CATEGORIES.filter((category) => favouriteCategoryCounts[category] > 0 || selectedAutoCategory === category).map((category) => (
+              <SelectItem key={category} value={category}>{category} ({favouriteCategoryCounts[category]})</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>}
         {selectedCategory !== 'Favourites' && <>
           {/* 12rem holds the whole placeholder; narrower, the box drops below the category picker. */}
           <div className="relative min-w-[12rem] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input aria-label="Search your whole library" placeholder="Search library…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className={cn('h-11 w-full pl-9', searchQuery && 'pr-10')} />
-            {searchQuery && <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-11 w-11" aria-label="Clear search" onClick={() => setSearchQuery('')}><X className="h-4 w-4" /></Button>}
+            <Input
+              aria-label="Search your whole library"
+              placeholder="Search library…"
+              value={searchQuery}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (!searchQuery && next) setSearchAllShelves(true);
+                setSearchQuery(next);
+              }}
+              className={cn('h-11 w-full pl-9', searchQuery && 'pr-10')}
+            />
+            {searchQuery && <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-11 w-11" aria-label="Clear search" onClick={() => { setSearchQuery(''); setSearchAllShelves(true); }}><X className="h-4 w-4" /></Button>}
           </div>
           <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
             <PopoverTrigger asChild><Button variant="outline" className="h-11 gap-2"><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}</Button></PopoverTrigger>
             <PopoverContent align="end" collisionPadding={12} className="w-80 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain space-y-3" style={{ maxHeight: 'min(480px, var(--radix-popover-content-available-height))' }} aria-label="Library filters">
-              <div className="flex items-center justify-between"><h3 className="font-medium">Filter library</h3><Button variant="ghost" size="sm" onClick={() => { setSelectedPlatform(null); setSelectedGenre(null); setSelectedStatus(null); }}>Reset</Button></div>
+              <div className="flex items-center justify-between"><h3 className="font-medium">Filter library</h3><Button variant="ghost" size="sm" onClick={() => { setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null); }}>Reset</Button></div>
               <Select
                 value={selectedPlatform || 'all'}
                 onValueChange={(v) =>
@@ -1105,6 +1227,16 @@ const Watchlist = () => {
                       </SelectItem>
                     ),
                   )}
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedAutoCategory ?? 'all'} onValueChange={(value) => setSelectedAutoCategory(value === 'all' ? null : value as LibraryCategory)}>
+                <SelectTrigger aria-label="Automatic category" className="w-full h-11 text-sm"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {LIBRARY_CATEGORIES.filter((category) => autoCategoryCounts[category] > 0 || selectedAutoCategory === category).map((category) => (
+                    <SelectItem key={category} value={category}>{category} ({autoCategoryCounts[category]})</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
@@ -1190,8 +1322,8 @@ const Watchlist = () => {
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2 py-3">
           <div className="space-y-1">
-            <CountLabel count={loading ? undefined : selectedCategory === 'Favourites' ? typedFavourites.length : filteredWatchlist.length} noun={searching ? `${filteredWatchlist.length === 1 ? 'result' : 'results'} across your library` : selectedCategory.toLowerCase()} />
-            <p className="text-sm text-muted-foreground">{searching ? 'Search looks on every shelf; each result sits under the shelf it is on.' : SHELF_HINTS[selectedCategory]}</p>
+            <CountLabel count={loading ? undefined : selectedCategory === 'Favourites' ? typedFavourites.length : filteredWatchlist.length} noun={searching ? `${filteredWatchlist.length === 1 ? 'result' : 'results'} ${searchAllShelves ? 'across your library' : `on ${selectedCategory}`}` : selectedCategory.toLowerCase()} />
+            <p className="text-sm text-muted-foreground">{searching ? (searchAllShelves ? 'Search looks on every shelf; each result sits under the shelf it is on.' : `Searching on ${selectedCategory} only.`) : SHELF_HINTS[selectedCategory]}</p>
           </div>
           {isAdmin && selectedCategory === 'Favourites' && <Button variant="outline" size="sm" onClick={syncFavouriteFacts} disabled={syncing}><RefreshCcw className="mr-2 h-4 w-4" />Refresh favourite details</Button>}
         </div>
@@ -1205,7 +1337,7 @@ const Watchlist = () => {
               </CardGrid>
             ) : typedFavourites.length === 0 ? (
               <p className="text-center py-16 text-muted-foreground">
-                No favourites yet
+                {selectedAutoCategory ? `No favourites in ${selectedAutoCategory}` : 'No favourites yet'}
               </p>
             ) : (
               <>
@@ -1366,9 +1498,9 @@ const Watchlist = () => {
               </CardGrid>
             ) : filteredWatchlist.length === 0 ? (
               <p className="text-center py-16 text-muted-foreground">
-                {searching ? `Nothing in your library matches “${searchQuery.trim()}”` : `Nothing on ${selectedCategory} yet`}
+                {searching ? `Nothing ${searchAllShelves ? 'in your library' : `on ${selectedCategory}`} matches “${searchQuery.trim()}”` : `Nothing on ${selectedCategory} yet`}
               </p>
-            ) : searching ? (
+            ) : searching && searchAllShelves ? (
               <div className="space-y-8">
                 {SHELVES.filter((shelf) => shelf !== 'Favourites').map((shelf) => {
                   // The held shelf, as on a single shelf: a title marked watched

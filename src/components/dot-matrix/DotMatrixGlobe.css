@@ -60,7 +60,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: rgba(218, 165, 32, 0.6);
+    background: hsl(var(--brass) / 0.7);
     animation: dot-pulse 1.2s ease-in-out infinite;
 }
 
@@ -242,20 +242,20 @@
     align-items: center;
     gap: 4px;
     padding: 3px 8px;
-    border-radius: 4px;
+    border-radius: 3px;
     font-size: 0.75rem;
     font-weight: 500;
-    background: rgba(218, 165, 32, 0.15);
-    color: rgb(180, 135, 25);
-    border: 1px solid rgba(218, 165, 32, 0.3);
+    background: hsl(var(--brass) / 0.14);
+    color: hsl(var(--brass));
+    border: 1px solid hsl(var(--brass) / 0.38);
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     font-family: var(--font-sans);
 }
 
 .dark .globe-visited-tag {
-    background: rgba(218, 165, 32, 0.12);
-    color: rgb(228, 190, 80);
-    border-color: rgba(218, 165, 32, 0.25);
+    background: hsl(var(--brass) / 0.14);
+    color: hsl(var(--brass));
+    border-color: hsl(var(--brass) / 0.34);
 }
 
 .globe-visited-tag button {
@@ -291,10 +291,9 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.35rem 0.7rem;
-    border-radius: 999px;
-    border: 1px solid hsl(var(--border) / 0.5);
-    background: hsl(var(--background) / 0.8);
-    backdrop-filter: blur(12px);
+    border-radius: 0.25rem;
+    border: 1px solid hsl(var(--brass) / 0.4);
+    background: hsl(var(--card));
     font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.04em;

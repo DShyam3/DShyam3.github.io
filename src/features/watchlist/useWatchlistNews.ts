@@ -636,3 +636,28 @@ export function usePremiereSeasonEpisodes(seasons: PremiereSeasonKey[]) {
   // nothing to check is not a load in progress.
   return { episodesBySeason: data ?? NO_SEASON_EPISODES, loading: isLoading, failed: isError };
 }
+
+export interface FeaturedExtras {
+  backdrop: string | null;
+  overview: string | null;
+}
+
+/** The featured title's landscape art and plot summary -- two columns the
+ *  library query skips for size, read here for the one title on show. */
+export function useFeaturedExtras(entityType: 'tv_show' | 'movie' | null, entityId: number | null) {
+  const { data } = useQuery({
+    queryKey: ['watchlist', 'news', 'featured-extras', entityType, entityId],
+    enabled: !!entityType && entityId !== null,
+    staleTime: 60 * 60 * 1000,
+    queryFn: async (): Promise<FeaturedExtras> => {
+      const { data: row, error } = await supabase
+        .from(entityType === 'movie' ? 'movies' : 'tv_shows')
+        .select('backdrop, overview')
+        .eq('id', entityId as number)
+        .maybeSingle();
+      if (error) throw error;
+      return { backdrop: row?.backdrop ?? null, overview: row?.overview ?? null };
+    },
+  });
+  return data ?? { backdrop: null, overview: null };
+}

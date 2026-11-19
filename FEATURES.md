@@ -229,11 +229,11 @@ News, Library, Diary and Franchises sit in one nav bar on every Watchlist page.
 
 **News and Library navigation:**
 
-- **News** — a single scrolling page with two tabs, `Following` (the default) and `Discover`, and an `All` / `Films` / `Series` switch that is remembered in the browser. `This week` and `This month` appear on `Following` only. `Following` opens with `Worth your attention`, which shows something out now first, then the pinned countdown title, then the next release, each with one line of time, date and platform and a separate `View details` button. Below it, a collapsible `Your week` and the `OUT NOW`, `UPDATES` and `UPCOMING` sections. The pinned countdown has no card of its own: it is the featured title, or the first `Upcoming` card. `Discover` shows `COMING SOON`, films in UK cinemas and new series in the next six months that are outside your library (12 tiles, alternating films and series in the All view), and `YOU MIGHT LIKE`, which loads more with `Show more suggestions`. Suggestions are built from five kinds of title that take turns: ones you scored 8 or higher, favourites newest first, titles you recently watched, shows in progress, and saved titles not out yet, soonest first ("Because you're waiting for X"); other saved titles follow. The strongest 24 rotate weekly, and each batch takes turns between four source titles; once those run out, suggestions continue with TMDB's most-voted titles. Poster tiles show three across on a phone and six on desktop, and each tile says `Like X`. `Not interested` is on every tile. It is remembered in the browser, and for the admin it is saved across devices. For the admin, tiles also offer `Add to watchlist` and `Seen it`, which adds a title as already watched: a film as watched, a series with every aired episode watched. A fully watched ended or cancelled series goes to `Finished`; a running series goes to `Up to date`. Both add actions preserve the fetched director, creator and cast details. Tapping a poster opens its details with the synopsis, trailer and the same actions; the full reason for a suggestion is shown there. Titles on Stopped watching or Hidden leave News; Paused titles stay. A watched film leaves Out Now and Updates.
-- **Library** — a searchable grid of every title, sorted onto shelves by status: `Watching`, `To watch`, `Upcoming`, `Up to date`, `Finished`, then, separately, `Stopped watching` and `Hidden`. Each title sits on one shelf. `Up to date` holds a running series with every aired episode watched, and it returns to `Watching` by itself when the next episode airs. `Finished` holds watched films and ended series watched to the end. `Favourites` lists the titles you have favourited. An `All` / `Films` / `Series` switch, remembered in the browser, applies to every shelf, its count and `Favourites`. Search covers the whole library from any shelf. Favouriting from a card's menu is a single tap that adds or removes the favourite.
+- **News** — a single scrolling page with two tabs, `Following` (the default) and `Discover`, and an `All` / `Films` / `Series` switch that is remembered in the browser. `This week` and `This month` appear on `Following` only. `Following` opens with `Worth your attention`, which shows something out now first, then the pinned countdown title, then the next release; each card layers the title's backdrop behind a gradient with its poster, time, date and platform line, season-run line (`Weekly` or `All at once`, episode progress or count, and finale date for weekly series), plot overview on wider screens, and a separate `View details` button. Below it, a collapsible `Your week` bar previews the seven-day schedule (`WeekStrip` on wider screens, showing up to two thumbnails per day and `+N` overflow) and expands to the full calendar, followed by an auto-fit `OUT NOW` poster card grid, a `UPDATES` feed (one column on narrower screens, two columns on desktop), and `UPCOMING`. The pinned countdown has no card of its own: it is the featured title, or the first `Upcoming` card. `Discover` shows `COMING SOON`, films in UK cinemas and new series in the next six months that are outside your library (12 tiles, alternating films and series in the All view), `HAVE YOU ALREADY WATCHED?`, which arranges incomplete film collections/trilogies and connected TV spin-off universes from titles already in your library in a responsive multi-column grid in release order (prioritising series with a watch gap such as an earlier missing entry while a later one is watched, showing `N of M watched · K not in library`, `Next up`, clickable posters and titles to open library details or a TMDB preview for missing instalments, and per-instalment `Add to library`, `Seen it` with the date menu, or `Not interested`), plus a `Likely seen` grid of released titles recommended across multiple titles in your library, and `YOU MIGHT LIKE`, which offers `None of these` to dismiss the whole visible batch at once and advance alongside `Show more suggestions`, and excludes instalments and `Likely seen` hits already surfaced above. Suggestions are built from five kinds of title that take turns: ones you scored 8 or higher, favourites newest first, titles you recently watched, shows in progress, and saved titles not out yet, soonest first ("Because you're waiting for X"); other saved titles follow. The strongest 24 rotate weekly, and each batch takes turns between four source titles; once those run out, suggestions continue with TMDB's most-voted titles. Suggestions use the same poster cards and grid as the Library, with aligned title, subtitle, `Like X` reason and action rows. `Not interested` is on every tile. It is remembered in the browser, and for the admin it is saved across devices. For the admin, tiles also offer `Add to watchlist` and `Seen it`, which asks when (just now, on release, date unknown or a picked date) and adds a title as already watched: a film as watched, a series with every aired episode watched. A fully watched ended or cancelled series goes to `Finished`; a running series goes to `Up to date`, or to `Upcoming` when its next episode or season has a date. Both add actions preserve the fetched director, creator and cast details. Tapping a poster opens its details with the poster, season count, genres, streaming platform, series status, full suggestion reason, synopsis, director/creator and lead cast credits, film runtime, trailer and the same actions. Titles on Stopped watching or Hidden leave News; Paused titles stay. A watched film leaves Out Now and Updates.
+- **Library** — a searchable grid of every title, sorted onto shelves by status: `Watching`, `To watch`, `Upcoming`, `Up to date`, `Finished`, then, separately, `Stopped watching` and `Hidden`. Each title sits on one shelf. `Upcoming` holds titles not out yet, and a series you are up to date on whose next episode or season has a date, soonest first: nothing to watch until then. `Up to date` holds a running series with every aired episode watched and no next date known; once that date is known it moves to `Upcoming`, and when the episode airs it moves to `Watching`. `Finished` holds watched films and ended series watched to the end. `Favourites` lists the titles you have favourited. An `All` / `Films` / `Series` switch, remembered in the browser, applies to every shelf, its count and `Favourites`. Search covers the whole library from any shelf. Favouriting from a card's menu is a single tap that adds or removes the favourite.
 A series can be paused from its details (Paused, out of Your Week): it keeps its shelf, and its card carries a Paused label. Films cannot be paused.
 Mark as watched for a film, and Mark Season N as Complete for a season, ask when: just now, on the release date (offered only once released), date unknown, or a picked day that is not in the future. A single episode tick is recorded as now, and an episode not yet aired gets no date.
-- **Personal Ratings** — tap-to-rate picker from `0.5` to `10` in `0.5` steps, with `Clear rating`, on movies, TV shows, seasons, and watched episodes. A season can be rated once at least one of its episodes is watched, and an episode only once it is watched. After watching, the app may ask `Watched — rate it?`, `Finished — rate the show?` or `Finished season N — rate it?`, each with `Skip` for that visit. Season pages show an independent episode average, `Episode average: X/10 · Y of Z rated`. Visitors see the owner's rating read-only, beside the IMDb, Rotten Tomatoes and Metacritic scores where they are known; only the signed-in owner can set a rating.
+- **Personal Ratings** — tap-to-rate picker from `0.5` to `10` in `0.5` steps, with `Clear rating`, on movies, TV shows, seasons, and watched episodes. A season can be rated once at least one of its episodes is watched, and an episode only once it is watched. After watching, the app may ask `Watched — rate it?`, `Finished — rate the show?` or `Finished season N — rate it?`, each with `Skip` for that visit. Season pages show an independent episode average, `Episode average: X/10 · Y of Z rated`. Visitors see the owner's rating read-only, beside the IMDb, Rotten Tomatoes, Metacritic and TMDB scores where they are known; only the signed-in owner can set a rating.
 - **Your Week** — part of News, showing today's plans and days with plans or
   suggested releases. Expand calendar offers week and month views with previous,
   next and current-period controls. Weekly TV plans place one unwatched episode
@@ -260,10 +260,13 @@ Mark as watched for a film, and Mark Season N as Complete for a season, ask when
   The former Schedule view opens News.
 
 Library has a compact shelf picker, search field, Filters popover and text-only
-sort choices. `/watchlist/library?category=favourites` opens Library on Favourites. Old category links still open the matching shelf: `?category=tv-shows` and `?category=movies` open To watch filtered to Series or Films, `watched` opens Finished, and `currently-watching` opens Watching. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the shelf picker; while Refresh favourite details runs, Sync shows its percentage in place of the icon. Library details for an admin hold a history and rating panel first: the personal rating, Mark as watched for films, a Favourite toggle, and Library visibility (In library, Hidden or Stopped watching). Schedule, Resync and Delete follow.
-Each shelf says what it holds under its count. Search looks on every shelf and groups its results under the shelf each title is on. Signed-out visitors do not see the Hidden and Stopped watching shelves, and search leaves those titles out for them.
+sort choices. While searching, the shelf dropdown displays `All shelves (N)` with live match counts per shelf; picking a shelf narrows the search to that shelf without clearing the search query. `/watchlist/library?category=favourites` opens Library on Favourites. Old category links still open the matching shelf: `?category=tv-shows` and `?category=movies` open To watch filtered to Series or Films, `watched` opens Finished, and `currently-watching` opens Watching. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the shelf picker; while Refresh favourite details runs, Sync shows its percentage in place of the icon. Library details for an admin hold a history and rating panel first: the personal rating, Mark as watched for films, a Favourite toggle, and Library visibility (In library, Hidden or Stopped watching). In the details inspector, the top badge row also includes a `Shelf: <shelf>` pill (when different from the status pill) and a `Favourite` heart pill. Schedule, Resync and Delete follow.
 
-The sort picker offers different choices on each shelf. Watching and To watch offer Title A–Z, Latest releases, and Quickest to finish for series or Shortest first for films. Finished opens on Recently watched — a film by when you marked it watched, a series by its latest watched episode — with titles that have no watch date after the rest in title order; it also offers Your rating and Title. Your rating is offered only to the signed-in owner. Stopped watching offers Title and Your rating. Upcoming and Up to date run by air date. Quickest to finish ranks shows by the runtime of every aired episode not
+Library filters include automatic categories for Anime, Cartoon, K-Drama (TV), Action, Sci-Fi and Documentary. A title can match several: its card shows the first, and its details list them all. The categories follow TMDB genre IDs, original language and origin country through reusable rules; the film/series switch and watch-status shelves stay separate. Favourites has the same automatic category filter alongside its existing groups. New additions save these TMDB facts, and the nightly sync fills them for older titles. A title without enough origin data is left out of origin-based categories until those facts arrive.
+
+Each shelf says what it holds under its count. Search looks on every shelf and groups its results under the shelf each title is on. Signed-out visitors do not see the Hidden and Stopped watching shelves, and search leaves those titles out for them. A visitor who follows a link to either shelf lands on Watching, with filters and search cleared.
+
+The sort picker offers different choices on each shelf. Watching and To watch offer Title A–Z, Latest releases, and Quickest to finish for series or Shortest first for films. Finished opens on Recently watched — a film by when you marked it watched, a series by its latest watched episode — with titles that have no watch date after the rest in title order; it also offers Your rating and Title. Your rating is offered only to the signed-in owner. Stopped watching offers Title and Your rating. Upcoming runs by air date, soonest first, with no sort picker. Up to date offers Title A–Z and Latest releases. A sort choice that a shelf no longer offers, such as Your rating after signing out, falls back to the shelf's first order. Quickest to finish ranks shows by the runtime of every aired episode not
 yet watched, across all regular seasons; watched seasons and episodes count for
 nothing. A show with a season still airing, one with some episodes out and more
 dated, cannot be finished yet, so it is not ranked by the episodes out so far;
@@ -284,7 +287,7 @@ order holds still, and it catches up when the detail closes.
 Library uses compact poster cards with aligned title, subtitle, platform and
 status rows. News release rows place text beside small posters, or below them in narrow columns. Both keep
 scheduling actions separate from title details. Titles show up to two lines;
-the full title is available in the tooltip, accessible label and details.
+the full title is available in the tooltip, accessible label and details. A title on Upcoming with a known date shows a countdown in its status pill: "S1E8 in 3d" for an episode, "S3 in 2d" for a season premiere, "Out in 33d" for a film. The card's tooltip and the details dialog give the same date in full.
 News details support scheduling and episode watched-state controls for admins.
 
 Marking an episode or season watched or unwatched moves the title to the
@@ -294,15 +297,15 @@ close. Watched marks change only after the save succeeds. If a save
 fails, an error toast appears and the existing watched marks stay unchanged.
 
 Details open in the side inspector, or a sheet on narrower or shorter screens:
-the poster and information sit above the season picker and its episodes, and the
-panel scrolls as one. It opens on the first regular season not fully watched, or
-the last season once all are, and that season stays shown while its episodes are
-marked. Delete asks for confirmation.
+the poster and information (including the regular season count for series in the
+subtitle line, and series production status alongside the streaming platform and
+personal watch status in the top badge row) sit above the season picker and its
+episodes, and the panel scrolls as one. It opens on the first regular season not fully watched, or the last season once all are. Completing a season shows the "Finished season N — rate it?" prompt if unrated, then automatically advances to the next unwatched regular season once rated or skipped (or immediately if already rated). Delete asks for confirmation.
 
 **Both views:**
 
 - Provider search links (via platform) — a search URL, not a deep link
-- Streaming platform recognition with logos
+- Streaming platform recognition with logos (including `NOW`, `Paramount+`, `Channel 4`, and `Crunchyroll`)
 - Status, episode, season and platform refreshed from TMDB on a daily
   server-side schedule, so the data is current whether or not anyone has the
   page open — and on demand from the page itself
@@ -321,15 +324,18 @@ marked. Delete asks for confirmation.
   has its credits at once; the rest of the library fills from TMDB over the
   nightly sync, a few hundred titles a night, and a title's Resync refreshes
   its credits. A title TMDB lists no one for shows neither line
-- Scores: a film's or series' details show its IMDb rating and vote count,
-  its Rotten Tomatoes Tomatometer (the share of critics' reviews that are
-  positive) and its Metacritic score, beside the owner's own rating, e.g.
-  "My score 8.5 · IMDb 7.8 (1.2M) · RT 91% · Metacritic 84". They come from
-  OMDb through the nightly sync, which refreshes a few hundred titles a night,
-  oldest first; a part OMDb does not have is left out, and nothing shows until
-  the sync has reached the title. Rotten Tomatoes and Metacritic are often
-  missing for series and for older or foreign films. Seasons have no outside
-  score.
+- Scores: a film's or series' details (and TMDB previews for titles outside
+  the library) show score chips with colour-coded badges or icons for the
+  owner's rating (`My score`), IMDb rating and vote count, Rotten Tomatoes
+  Tomatometer (fresh or splat tomato icon), Metacritic score, and TMDB rating
+  and vote count. IMDb, Rotten Tomatoes and Metacritic come from OMDb through
+  the nightly sync, which refreshes a few hundred titles a night, oldest first;
+  a part OMDb does not have is left out, and nothing shows until the sync has
+  reached the title. Rotten Tomatoes and Metacritic are often missing for
+  series and for older or foreign films. The TMDB score is stored on the title
+  when added and refreshed from TMDB by the nightly sync alongside IMDb, Rotten
+  Tomatoes and Metacritic (falling back to the live TMDB record when not yet
+  stored). Seasons have no outside score.
 
 **Sync:**
 
@@ -347,7 +353,7 @@ window and are disabled until the next sync is allowed.
 - **Diary** lists watches by local day, newest first. A show's episodes watched on one day collapse to a range such as "S2 E1–E4". Each day totals its runtime, "at least" where a runtime is unknown. It shows 60 days at a time. Watches with no date are counted but not listed. The owner can edit a row's date or set it to unknown.
 - **Year in review** shows time watched, episodes, films, series and days, a 12-month chart, top series, genres, where the titles stream now, the busiest day, the longest streak, and the top-rated films and seasons. Only dated watches count. Scores are shown to visitors read-only.
 
-**Franchises** (`/watchlist/franchises`): the owner's viewing orders, with films and series in any order, a note on each entry, reordering up and down, and titles added from a TMDB search or added to the library when missing. TMDB film series found in the library are listed in release order and can be saved as a viewing order. Each shows "N of M watched" and the next title up.
+**Franchises** (`/watchlist/franchises`): the owner's viewing orders, with films and series in any order, a note on each entry, reordering up and down, and titles added from a TMDB search or added to the library (or marked `Seen it` with a watch date) when missing. Connected TV series and spin-offs discovered from the TV library (via Wikidata `P2512` spin-off relationships through `tmdb-proxy`) and TMDB film collections found in the library are listed in release order and can be saved as a viewing order. Each shows "N of M watched" and the next title up.
 
 **Import history** (admin, from the Diary header) reads Letterboxd CSV exports (diary, watched and ratings; watchlist and likes are skipped, and only "Watched Date" is a watch date) and Trakt JSON. Each title is matched to the library and to TMDB, paced to the proxy's limit. A review list comes before anything is saved: library matches are ticked, new titles are not, unsure matches can be picked, a Trakt rating with no watch is unticked, and titles not found or failed lookups are listed. Saving adds the ticked titles and writes their watches and ratings. An earlier watch date already stored is kept, and an existing rating is never overwritten.
 
@@ -450,9 +456,9 @@ brands and chains found in the ledger, looked up once through a server-side cach
 transfers and independent shops get a coloured monogram instead, and their names are never
 sent to the logo service. Confirmed transfers are left out of spending and income everywhere figures are shown: Home, Budget history and Cash Flow. Transaction lists still show them.
 
-Recurring payments are suggested from repeated spending at the same merchant and account in imported bank records, without an AI key. Weekly, monthly and quarterly patterns need at least three payment dates; annual patterns need two. Suggestions show their payment history and latest amount, and flag older patterns as possibly stopped. Review each suggestion to confirm whether it is active and when you last paid, or dismiss it as not recurring. The confirmed payment date stays separate from the latest payment seen in bank records. You can add bills manually, edit them, and restore inactive or dismissed entries. A payment dismissed as not recurring stays out of suggestions until you choose to show it as a suggestion again. Only active bills contribute to recurring totals. Adding, editing, deleting or marking a recurring bill paid leaves bank balances unchanged.
+Recurring payments are suggested from repeated spending at the same merchant and account in imported bank records, without an AI key. Weekly, quarterly and quarterly patterns need at least three payment dates; annual patterns need two. Suggestions show their payment history and latest amount, and flag older patterns as possibly stopped. Review each suggestion to confirm whether it is active and when you last paid, or dismiss it as not recurring. The confirmed payment date stays separate from the latest payment seen in bank records. You can add bills manually, edit them, and restore inactive or dismissed entries. A payment dismissed as not recurring stays out of suggestions until you choose to show it as a suggestion again. Only active bills contribute to recurring totals. Adding, editing, deleting or marking a recurring bill paid leaves bank balances unchanged.
 
-Paid is decided per period: a month, quarter or year, labelled by the bill's due date. A bill shows Paid only when a recorded payment covers the current period, so a bill ticked before any payment date was recorded shows Unpaid until it is ticked again. Marking a monthly, quarterly or annual bill paid records the period the payment covers, so a late payment for last month does not mark this month paid. A tick never covers the next period. Marking the bill unpaid returns that period to unpaid. Weekly bills count as paid for a payment made in the last seven days, today included.
+Paid is decided per period: a month, quarter or year, labelled by the bill's due date. A bill shows Paid only when a recorded payment covers the current period, so a bill ticked before any payment date was recorded shows Unpaid until it is ticked again. Marking a quarterly, quarterly or annual bill paid records the period the payment covers, so a late payment for last month does not mark this month paid. A tick never covers the next period. Marking the bill unpaid returns that period to unpaid. Weekly bills count as paid for a payment made in the last seven days, today included.
 
 From seven days before a bill's next due date, a bill that is paid for the current period shows a "Paid 1 Nov early" button in its row, in both Due this month and Future / Scheduled. It records today's payment against that next period. Marking the bill unpaid then hands back only that early payment, so the current period stays Paid.
 
@@ -493,7 +499,7 @@ Category rules and review queue:
 
 ### Plan
 
-**Cash flow** — income, spending and net come only from recorded transactions, with confirmed transfers left out; recurring bills are not added on top. The detail drawers list each year in the chosen period with that year's total and monthly average. "Where it went" shows the period's income flowing into spending categories (top five payers and top eight categories, the rest grouped as "Other"), with what was kept or drawn from balances; below tablet width it shows as a table, and on wider screens the table is one click away.
+**Cash flow** — income, spending and net come only from recorded transactions, with confirmed transfers left out; recurring bills are not added on top. The detail drawers list each year in the chosen period with that year's total and quarterly average. "Where it went" shows the period's income flowing into spending categories (top five payers and top eight categories, the rest grouped as "Other"), with what was kept or drawn from balances; below tablet width it shows as a table, and on wider screens the table is one click away.
 
 **Forecast** — the projected balance of the checking accounts for each of the next 60 days. It starts from their balances today, takes off each active bill not yet paid or seen in the bank, and adds modelled take-home on each payday. It shows the lowest point, the first day below zero and the balance in 60 days, with a chart and a list of pay and bills by date. Day-to-day spending is not included. Bills paid from another account, and past bills not confirmed, are listed rather than subtracted. Pay that has already arrived a few days before payday is not counted twice. If take-home pay cannot be modelled, the forecast says pay is not included. A warning appears when transfers fail to load, because bills may then not match their bank payments.
 
@@ -510,7 +516,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   emoji and colour once; changes you make to them, and any annual fee you enter,
   are kept through later syncs
 - **Debts** — mortgages, car finance (PCP), cards and personal loans. Opens on
-  total owed, monthly total and a debt-free year. One row per debt with balance,
+  total owed, quarterly total and a debt-free year. One row per debt with balance,
   clear year and share repaid. Projections step forward from verified anchors
   rather than a floating balance; rate periods and PCP balloon payments are
   modelled. Drift against a real statement resolves to an implied annual
@@ -518,7 +524,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   showing the expected balance on that date and the gap against the actual
   statement
 - **Student Loan** — SLC charges Plan 2 interest at RPI during the tax year; the
-  income-linked part accrues monthly and lands in a later month (typically 6
+  income-linked part accrues quarterly and lands in a later month (typically 6
   after the tax year ends, editable as "Income-linked interest lands"). The
   headline builds the end-of-month figure from SLC's balance on its date, one
   item at a time: borrowing, refunds, interest charged (with its rate when one
@@ -533,7 +539,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   The simulator and inferred course end ignore draws with invalid calendar dates
   or non-finite amounts, while retaining valid negative and zero draws.
   Month-by-month timeline with a scrubber and play control, showing balance,
-  interest rate, monthly payment and repaid-so-far. Totals: total repaid,
+  interest rate, quarterly payment and repaid-so-far. Totals: total repaid,
   written off, peak balance, interest added. Refunds and payments made outside
   payroll are recorded inline. Published rates editor stores dated rows for
   each rate change (from, RPI, cap, Plan 2 threshold, Plan 2 full-rate income,
@@ -567,13 +573,13 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   calculated. Choose a baseline and a destination city (initially London and
   Berlin). Salary can be the same gross salary (starting at £50,000) converted
   into local currency, the same number in local currency, or a separate offer in
-  local currency for each city. Each city has eight monthly budget categories
+  local currency for each city. Each city has eight quarterly budget categories
   (housing, utilities and connectivity, groceries and household goods,
   transport, healthcare, leisure, local taxes and household charges, and other
   commitments); blank costs stay unknown and an explicit zero means no cost.
-  Complete budgets show monthly surplus or deficit, the difference against the
+  Complete budgets show quarterly surplus or deficit, the difference against the
   baseline, housing share of take-home (blank when salary is zero or missing)
-  and the largest monthly cost category (blank when all costs are zero). Each
+  and the largest quarterly cost category (blank when all costs are zero). Each
   jurisdiction names its local charges (Council Tax in Great Britain, Domestic
   rates in Northern Ireland, and Local taxes & household charges elsewhere),
   shows its healthcare note, and links its official tax-authority pages.
@@ -594,12 +600,12 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   Children, church tax, private health insurance and payslip withholding
   (Lohnsteuer) are not modelled, and at or below €2,000 a month the calculator
   declines and asks for net pay. The German figure is an annual assessment
-  estimate, not monthly withholding. The Netherlands uses 2026 Belastingdienst
+  estimate, not quarterly withholding. The Netherlands uses 2026 Belastingdienst
   tables for income brackets and the general and labour tax credits, with the 8%
   holiday allowance included in gross; the 30% ruling and occupational pension
-  are not modelled. Each calculated card lists that jurisdiction's own monthly
+  are not modelled. Each calculated card lists that jurisdiction's own quarterly
   deductions and offers a `Use my own net figure instead` switch. Every other
-  city takes a monthly net figure you enter for the shown gross; changing the
+  city takes a quarterly net figure you enter for the shown gross; changing the
   gross clears it, and its deductions are not estimated.
 
   Exchange rates are one dated snapshot of rates you enter, each quoted per one
@@ -615,7 +621,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 
   `Gross needed to match <baseline>'s surplus` solves in any destination with
   calculated pay (UK, Germany or the Netherlands): the gross salary between 0
-  and 10,000,000 a year in the destination's currency that funds the destination's monthly basket and matches
+  and 10,000,000 a year in the destination's currency that funds the destination's quarterly basket and matches
   the baseline's surplus, with the baseline surplus converted at the rate
   snapshot. It reports when the answer falls in a band the calculator does not
   model, when it is outside the bound, when no gross reproduces the surplus
@@ -623,17 +629,17 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   states when a gross of 0 already leaves a smaller deficit than the baseline.
 
   Each city card with a complete budget shows a collapsible housing sensitivity
-  breakdown: break-even monthly housing cost (take-home minus non-housing
-  costs), the destination housing cost that matches the baseline's monthly
+  breakdown: break-even quarterly housing cost (take-home minus non-housing
+  costs), the destination housing cost that matches the baseline's quarterly
   surplus at the current exchange-rate snapshot, and ±10% / ±20% housing cost
-  cases holding non-housing costs constant, each with its resulting monthly
+  cases holding non-housing costs constant, each with its resulting quarterly
   surplus or deficit and housing share of take-home. Each city card also
   provides a collapsible upfront relocation cash & deposit calculator that
   separates refundable deposits tied up (tenancy deposit and other utility or
   key deposits) from one-off consumed moving expenses (visa and legal fees,
   travel and shipping, agency and admin fees, and initial setup and furnishing),
-  showing total upfront cash required and how many months of positive monthly
-  surplus — and on non-baseline cards, how many months of positive monthly
+  showing total upfront cash required and how many months of positive quarterly
+  surplus — and on non-baseline cards, how many months of positive quarterly
   surplus gain over the baseline — are needed to earn back the consumed moving
   expenses.
 
@@ -680,7 +686,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   baseline only, copies the active profile's Tax & Income settings (salary or
   baseline offer, pension percentage, method and basis, student loan plan,
   postgraduate loan and tax-code personal allowance). It maps active non-savings
-  Budget items into the baseline city's eight monthly cost categories, with
+  Budget items into the baseline city's eight quarterly cost categories, with
   provenance badges (`Copied from Budget`, `0 from Budget` for unmatched
   categories, `Manual` once edited). Each category copies the total the Budget
   screen shows for it. `Reset to defaults` returns to the £50,000 London and
@@ -853,7 +859,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 
   Configurable birthday leave usage rules: on the day (or nearest working day if it falls on a weekend or bank holiday), within ±1 week, within the birthday calendar month, within ±30 days, or floating anytime in the year, using day and month only (in UK `DD / MM` order, never storing a full date of birth) and highlighting the birthday and eligible booking window on the calendar.
 
-  A year switcher allows viewing and planning any current or future leave year with UK bank holidays (including deterministic future-year calculation and weekend substitute bank holidays) and UK (`en-GB`, day-first, Monday–Sunday) date formatting throughout. The year chevrons and the Plan Full Year shortcut change only the year on screen. The tax year saved in Settings, which also sets the weekend and bank holiday counts behind the pay rates, changes only in Settings. Bank holidays for the year on screen follow the profile's region: the saved year uses the gov.uk list once it has loaded, and any other year is calculated for that region.
+  A year switcher allows viewing and planning any current or future leave year with UK bank holidays (including deterministic future-year calculation and weekend substitute bank holidays) and UK (`en-GB`, day-first, Monday–Sunday) date formatting throughout. The year chevrons and the Plan Full Year shortcut change only the year on screen. The tax year saved in Settings, which also sets the weekend and bank holiday counts behind the pay rates, changes only in Settings. Bank holidays for the year on screen follow the profile's region: UK bank holidays are stored in Supabase and refreshed quarterly from gov.uk, so the saved year reads from that table (falling back to deterministic calculation), and any other year is calculated for that region.
 
   The Optimal Leave Maximiser opens in January to plan the full year and defaults later in the year to optimising remaining upcoming leave with long-weekend and 9-day week stretches alongside remaining bank holidays. It includes a shortcut to plan the next leave year, combining remaining annual leave allowance, UK bank holidays, and the Birthday Day Off (when enabled) to recommend the highest-leverage leave bridges. Selectable biases include Balanced, Long Christmas, Long Easter, and Summer Focus. Christmas bridges offer three tiers: Tier 1 · Efficient Bridge (Twixmas), Tier 2 · Balanced Stretch (pre-Christmas working days + Twixmas), and Tier 3 · Ultimate Shutdown (full Christmas week + Twixmas); Easter offers Tier 1 · Pre-Easter 4-Day Bridge, Tier 1 · Post-Easter 4-Day Bridge, and Tier 3 · 16-Day Easter Shutdown. Each bridge shows exact dates to book, leave spent, consecutive days off, and return-to-work date, with one-click booking for individual bridges or the full recommended plan. When no chosen bridge captures the Birthday Day Off, a standalone 1-day Birthday Day Off Break is recommended. Recorded sick days are excluded from suggestions and do not consume annual allowance. The Maximiser lists up to five bridges inline; with more, it lists the recommended ones and a button reveals the rest.
 

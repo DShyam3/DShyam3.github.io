@@ -1,8 +1,10 @@
 import { useState, useEffect, useId, useRef, useMemo, useCallback } from 'react';
-import { ExternalLink, Trash2, CalendarDays, Calendar, RefreshCcw } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { ExternalLink, Trash2, CalendarDays, Calendar, RefreshCcw, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useWatchlist, type WatchlistItem, type Season } from '@/features/watchlist/useWatchlist';
+import { libraryShelf } from '@/features/watchlist/library-state';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
 import { TrailerButton } from './TrailerButton';
 import { LibraryActions } from './LibraryActions';
@@ -10,11 +12,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CreditsList, DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
 import { currentSeasonNumber, displayTitle, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 import { detailTrailer } from '@/features/watchlist/trailer';
+import { countdownRelease, releaseDay } from '@/features/watchlist/library-state';
 import { PlatformBadge } from './PlatformLogo';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { TitleScores } from './TitleScores';
+import { libraryCategories } from '../library-categories';
+import { useTMDB } from '../useTMDB';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -30,8 +35,8 @@ interface WatchlistDetailDialogProps {
     showId: string,
     seasonNumber: number,
     episodeNumber: number,
-  ) => void;
-  toggleSeasonWatched?: (showId: string, seasonNumber: number, when?: WatchedWhen) => void;
+  ) => void | Promise<void>;
+  toggleSeasonWatched?: (showId: string, seasonNumber: number, when?: WatchedWhen) => void | Promise<void>;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -73,8 +78,15 @@ export function WatchlistDetailDialog({
     [item.id],
   );
   const { askDelete, deleteDialog } = useDeleteConfirm();
-  const { loadShowEpisodes, loadItemDescription, setPersonalRating, ratingsStatus } = useWatchlist();
+  const { loadShowEpisodes, loadItemDescription, setPersonalRating, ratingsStatus, favourites } = useWatchlist();
+  const { getMovieDetails } = useTMDB();
   const { isAdmin } = useAuth();
+  const shelf = libraryShelf(item);
+  const isFavourite = favourites.some(
+    (candidate) =>
+      candidate.media_type === (item.category === 'TV Shows' ? 'tv' : 'movie') &&
+      (item.tmdb_id ? candidate.tmdb_id === item.tmdb_id : candidate.title === item.title),
+  );
 
   // The grid only loads episode numbers and watched flags; episode titles,
   // air dates and runtimes are fetched here, for this show only, the first
@@ -102,7 +114,18 @@ export function WatchlistDetailDialog({
   }, [open]);
 
   const isTVShow = item.category === 'TV Shows';
+  const { data: tmdbDetail } = useQuery({
+    queryKey: ['watchlist', 'tmdb-details', isTVShow ? 'tv' : 'movie', item.tmdb_id],
+    enabled: open && !!item.tmdb_id,
+    staleTime: 30 * 60 * 1000,
+    queryFn: async () => {
+      const details = await getMovieDetails(item.tmdb_id!, isTVShow ? 'tv' : 'movie');
+      if (!details) throw new Error('TMDB details unavailable');
+      return details;
+    },
+  });
   const hasSeasons = Boolean(isTVShow && item.seasons && item.seasons.length > 0);
+  const regularSeasonCount = isTVShow ? (item.seasons?.filter((season) => season.season_number > 0).length ?? 0) : 0;
 
   // Read every render, not memoised: isSeasonWatched keeps one identity while
   // the watched flags behind it change.
@@ -116,44 +139,12 @@ export function WatchlistDetailDialog({
     seasons.find((season) => season.season_number === selectedSeason),
   );
 
+  // The date the status pill counts down to, from the same pure source as
+  // the card.
   const upcomingReleaseDate = useMemo(() => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    if (item.category === 'Movies') {
-      if (item.release_date) {
-        const releaseDate = new Date(item.release_date);
-        releaseDate.setHours(0, 0, 0, 0);
-        if (releaseDate > now) {
-          return releaseDate;
-        }
-      }
-      return null;
-    }
-
-    if (!item.seasons || item.seasons.length === 0) return null;
-
-    const futureSeasons = item.seasons.filter(
-      (s) => s.release_date && new Date(s.release_date) > now,
-    );
-    if (futureSeasons.length > 0) {
-      const earliestSeason = futureSeasons.reduce((earliest, current) => {
-        if (!earliest.release_date) return current;
-        if (!current.release_date) return earliest;
-        return new Date(current.release_date) <
-          new Date(earliest.release_date)
-          ? current
-          : earliest;
-      });
-
-      if (earliestSeason.release_date) {
-        const releaseDate = new Date(earliestSeason.release_date);
-        releaseDate.setHours(0, 0, 0, 0);
-        return releaseDate;
-      }
-    }
-    return null;
-  }, [item.category, item.release_date, item.seasons]);
+    const next = countdownRelease(item);
+    return next ? releaseDay(next) : null;
+  }, [item]);
 
   useEffect(() => {
     if (!open) {
@@ -212,9 +203,13 @@ export function WatchlistDetailDialog({
                 {isTVShow ? 'TV Show' : 'Movie'}
               </span>
               {item.year ? <span>• {item.year}</span> : null}
+              {regularSeasonCount > 0 ? (
+                <span>• {regularSeasonCount} season{regularSeasonCount === 1 ? '' : 's'}</span>
+              ) : null}
               {item.genres && item.genres.length > 0 ? (
                 <span>• {item.genres.join(', ')}</span>
               ) : null}
+              {libraryCategories(item).length > 0 && <span>• Categories: {libraryCategories(item).join(', ')}</span>}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -248,6 +243,20 @@ export function WatchlistDetailDialog({
                   </span>
                 )
               ) : null}
+              {isTVShow && item.series_status && status !== item.series_status ? (
+                <SeriesStatusPill status={item.series_status} className="px-2.5 py-1" />
+              ) : null}
+              {shelf && shelf.toLowerCase() !== status?.toLowerCase() ? (
+                <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  Shelf: {shelf}
+                </span>
+              ) : null}
+              {isFavourite ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
+                  <Heart className="h-3 w-3 fill-current" aria-hidden="true" />
+                  Favourite
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -275,6 +284,8 @@ export function WatchlistDetailDialog({
             imdbVotes={item.imdb_votes}
             rtScore={item.rt_score}
             metascore={item.metascore}
+            tmdbRating={item.tmdb_rating ?? tmdbDetail?.tmdb_rating ?? undefined}
+            tmdbVotes={item.tmdb_votes ?? tmdbDetail?.tmdb_votes ?? undefined}
           />
 
           {!isTVShow && item.runtime ? (
@@ -283,12 +294,6 @@ export function WatchlistDetailDialog({
               className="text-muted-foreground"
               iconClassName="text-muted-foreground"
             />
-          ) : null}
-
-          {isTVShow && item.series_status ? (
-            <div>
-              <SeriesStatusPill status={item.series_status} className="px-2.5 py-1" />
-            </div>
           ) : null}
 
           <LibraryActions key={`${item.category}:${item.id}`} item={item} />
@@ -398,12 +403,17 @@ export function WatchlistDetailDialog({
     instanceId,
     isTVShow,
     hasSeasons,
+    regularSeasonCount,
     item,
     selectedSeason,
     trailer.key,
+    tmdbDetail?.tmdb_rating,
+    tmdbDetail?.tmdb_votes,
     trailer.title,
     trailer.label,
     status,
+    shelf,
+    isFavourite,
     upcomingReleaseDate,
     isScheduled,
     syncing,

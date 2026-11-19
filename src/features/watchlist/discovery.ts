@@ -1,5 +1,5 @@
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
-import { libraryShelf, nextAirDate, type LibraryType } from './library-state';
+import { libraryShelf, libraryStatus, nextAirDate, type LibraryType } from './library-state';
 import type { TMDBSearchItem } from './tmdb-types';
 
 export type DiscoveryMedia = 'movie' | 'tv';
@@ -70,7 +70,9 @@ export function discoverySeeds(
     .sort((a, b) => a.title.localeCompare(b.title))
     .map((item) => seed(item, `Because you’re watching ${item.title}`));
   const awaited = usable
-    .filter((item) => libraryShelf(item, today) === 'Upcoming')
+    // New titles only: a caught-up series' dated return also sits on
+    // Upcoming, but it is not what "waiting for" means here.
+    .filter((item) => libraryShelf(item, today) === 'Upcoming' && libraryStatus(item, today) !== 'Caught up')
     .map((item) => ({ item, date: nextAirDate(item, today) ?? '9999' }))
     .sort((a, b) => a.date.localeCompare(b.date) || a.item.title.localeCompare(b.item.title))
     .map(({ item }) => seed(item, `Because you’re waiting for ${item.title}`));
@@ -108,7 +110,9 @@ export function interleaveBySeed(items: DiscoveryItem[]): DiscoveryItem[] {
   const groups = new Map<string, DiscoveryItem[]>();
   for (const item of items) {
     const key = item.seedKey ?? '';
-    groups.set(key, [...(groups.get(key) ?? []), item]);
+    const existing = groups.get(key);
+    if (existing) existing.push(item);
+    else groups.set(key, [item]);
   }
   const queues = [...groups.values()];
   const result: DiscoveryItem[] = [];
@@ -119,8 +123,19 @@ export function interleaveBySeed(items: DiscoveryItem[]): DiscoveryItem[] {
 }
 
 /** Identity always includes media type: TMDB film/show IDs can collide. */
-export function curateDiscovery(items: DiscoveryItem[], watchlist: WatchlistItem[], favourites: FavouriteItem[], dismissed: ReadonlySet<string>): DiscoveryItem[] {
-  const seen = new Set([...dismissed, ...watchlist.filter((item) => item.tmdb_id).map((item) => discoveryKey(mediaOf(item), item.tmdb_id!)), ...favourites.filter((item) => item.tmdb_id).map((item) => discoveryKey(item.media_type, item.tmdb_id!))]);
+export function curateDiscovery(
+  items: DiscoveryItem[],
+  watchlist: WatchlistItem[],
+  favourites: FavouriteItem[],
+  dismissed: ReadonlySet<string>,
+  excludedKeys?: ReadonlySet<string>,
+): DiscoveryItem[] {
+  const seen = new Set([
+    ...dismissed,
+    ...(excludedKeys ?? []),
+    ...watchlist.filter((item) => item.tmdb_id).map((item) => discoveryKey(mediaOf(item), item.tmdb_id!)),
+    ...favourites.filter((item) => item.tmdb_id).map((item) => discoveryKey(item.media_type, item.tmdb_id!)),
+  ]);
   return items.filter((item) => {
     const key = discoveryKey(item.media, item.id);
     if (!Number.isInteger(item.id) || item.id <= 0 || !(item.title || item.name) || seen.has(key)) return false;
@@ -135,4 +150,46 @@ export function interleaveUpcoming(items: DiscoveryItem[]): DiscoveryItem[] {
     items.filter((item) => item.media === 'movie'),
     items.filter((item) => item.media === 'tv'),
   ]);
+}
+
+/**
+ * Finds released titles recommended independently by `minSeeds` or more
+ * distinct titles in the library (multi-seed consensus) so obvious
+ * "Likely seen" classics can be surfaced in HAVE YOU ALREADY WATCHED?
+ * rather than cluttering YOU MIGHT LIKE.
+ */
+export function likelySeenConsensus(
+  items: DiscoveryItem[],
+  today = new Date(),
+  minSeeds = 2,
+): DiscoveryItem[] {
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const groups = new Map<string, { item: DiscoveryItem; seeds: Set<string> }>();
+
+  for (const item of items) {
+    if (item.kind !== 'recommendation' || !item.seedKey || item.seedKey.startsWith('filler:')) continue;
+    const date = discoveryDate(item).slice(0, 10);
+    if (!date || date > todayIso) continue;
+    const key = discoveryKey(item.media, item.id);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.seeds.add(item.seedKey);
+    } else {
+      groups.set(key, { item, seeds: new Set([item.seedKey]) });
+    }
+  }
+
+  return [...groups.values()]
+    .filter((entry) => entry.seeds.size >= minSeeds)
+    .sort(
+      (a, b) =>
+        b.seeds.size - a.seeds.size ||
+        (b.item.vote_count ?? 0) - (a.item.vote_count ?? 0) ||
+        (a.item.title || a.item.name || '').localeCompare(b.item.title || b.item.name || ''),
+    )
+    .map(({ item, seeds }) => ({
+      ...item,
+      reason: `Recommended across ${seeds.size} titles in your library`,
+      shortReason: `In ${seeds.size} of your lists`,
+    }));
 }

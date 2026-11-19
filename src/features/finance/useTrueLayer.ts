@@ -3,7 +3,9 @@
  *
  * Both the Home and Wealth surfaces offer a "Sync Bank" control, so this was
  * the last thing keeping them tied to FinancePage (REHAUL_PLAN.md 7.2c-i). As
- * a hook, either can hold its own without either owning the other.
+ * a hook backed by a shared React Query entry, every mounted surface reads the
+ * same cached connection status without firing duplicate `check_connection`
+ * Edge Function calls on route or tab switches.
  *
  * `onSynced` is how a caller refreshes the ledger afterwards -- the provider's
  * fetch, in practice -- rather than this hook reaching back into it. The
@@ -13,7 +15,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useCooldown } from '@/hooks/useCooldown';
@@ -25,6 +28,7 @@ import {
   TRUE_LAYER_CONNECT_PARAM,
 } from './truelayer-oauth';
 import { BANK_SYNC_LOG_QUERY_KEY } from './useBankSyncLog';
+import { MERCHANT_LOGOS_QUERY_KEY } from './useMerchantLogos';
 
 /**
  * Set when this tab sends a bank link off to a tab of its own, so the ledger
@@ -46,14 +50,63 @@ class TrueLayerCallError extends Error {
   }
 }
 
+async function callTrueLayerEdgeFunction(action: string, payload: Record<string, unknown> = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    throw new Error("User session not found. Please log in again.");
+  }
+
+  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/truelayer-sync`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    },
+    body: JSON.stringify({
+      action,
+      ...payload,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new TrueLayerCallError(
+      data.error || `Server returned status ${response.status}`,
+      response.status,
+      typeof data.retry_after === 'number' ? data.retry_after : undefined,
+    );
+  }
+  return data;
+}
+
+export const TRUELAYER_CONNECTION_QUERY_KEY = ['finance', 'truelayer-connection'] as const;
+
+export const trueLayerConnectionQuery = queryOptions<TrueLayerStatus | null>({
+  queryKey: TRUELAYER_CONNECTION_QUERY_KEY,
+  staleTime: 10 * 60_000,
+  queryFn: async () => {
+    try {
+      const data = await callTrueLayerEdgeFunction('check_connection');
+      return (data ?? null) as TrueLayerStatus | null;
+    } catch (err) {
+      console.error('Error checking TrueLayer connection:', err);
+      return null;
+    }
+  },
+});
+
 export function useTrueLayer(onSynced: () => void | Promise<void>) {
+  const { isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const onSyncedRef = useRef(onSynced);
   onSyncedRef.current = onSynced;
 
-  // TrueLayer state
-  const [trueLayerStatus, setTrueLayerStatus] = useState<TrueLayerStatus | null>(null);
+  const { data: trueLayerStatus = null } = useQuery({
+    ...trueLayerConnectionQuery,
+    enabled: isAdmin,
+  });
 
   const [isSyncingTrueLayer, setIsSyncingTrueLayer] = useState(false);
   // The server holds a cooldown between manual syncs; this is only so the
@@ -62,48 +115,9 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
 
   const [isConnectingTrueLayer, setIsConnectingTrueLayer] = useState(false);
 
-  const callTrueLayerEdgeFunction = async (action: string, payload: Record<string, unknown> = {}) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      throw new Error("User session not found. Please log in again.");
-    }
-    
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/truelayer-sync`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-      },
-      body: JSON.stringify({
-        action,
-        ...payload
-      })
-    });
-    
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new TrueLayerCallError(
-        data.error || `Server returned status ${response.status}`,
-        response.status,
-        typeof data.retry_after === 'number' ? data.retry_after : undefined,
-      );
-    }
-    return data;
-  };
-
   const checkTrueLayerConnection = useCallback(async () => {
-    try {
-      const data = await callTrueLayerEdgeFunction('check_connection');
-      setTrueLayerStatus(data);
-    } catch (err) {
-      console.error('Error checking TrueLayer connection:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    void checkTrueLayerConnection();
-  }, [checkTrueLayerConnection]);
+    await queryClient.invalidateQueries({ queryKey: TRUELAYER_CONNECTION_QUERY_KEY });
+  }, [queryClient]);
 
   // Every instance keeps its connection list current when a link lands in
   // another tab; the ledger is refreshed once, by whichever hears it first.
@@ -180,7 +194,7 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
         title: "Disconnected",
         description: connectionId ? "Bank connection removed." : "Bank connections removed.",
       });
-      checkTrueLayerConnection();
+      void checkTrueLayerConnection();
     } catch (err) {
       console.error('Error disconnecting TrueLayer:', err);
       toast({
@@ -204,7 +218,7 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/merchant-logo-cache`, {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/merchant-logo-cache`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -213,6 +227,9 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
         },
         body: JSON.stringify({}),
       });
+      if (response.ok) {
+        void queryClient.invalidateQueries({ queryKey: MERCHANT_LOGOS_QUERY_KEY });
+      }
     } catch (err) {
       console.error('Error refreshing merchant logos:', err);
     }

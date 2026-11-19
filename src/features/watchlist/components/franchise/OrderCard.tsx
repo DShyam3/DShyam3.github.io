@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { OrderEntryInput, OrderEntryView, OrderView } from '@/features/watchlist/franchise';
 import type { StoredOrder } from '@/features/watchlist/viewing-orders-query';
+import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { AddEntryDialog } from './AddEntryDialog';
 import { EntryList } from './EntryList';
 import { FranchiseCard } from './FranchiseCard';
@@ -25,6 +26,7 @@ export function OrderCard({
   busy = false,
   onOpen,
   onAddToLibrary,
+  onSeenIt,
   isAdding,
 }: {
   order: StoredOrder;
@@ -35,6 +37,7 @@ export function OrderCard({
   busy?: boolean;
   onOpen: (entry: OrderEntryView) => void;
   onAddToLibrary?: (entry: OrderEntryView) => void;
+  onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
   isAdding?: (key: string) => boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -95,6 +98,7 @@ export function OrderCard({
         view={view}
         onOpen={onOpen}
         onAddToLibrary={onAddToLibrary}
+        onSeenIt={onSeenIt}
         isAdding={isAdding}
         edits={actions && {
           busy,

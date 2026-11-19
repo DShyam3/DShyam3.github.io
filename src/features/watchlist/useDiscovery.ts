@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,11 +10,25 @@ import {
   discoveryKey,
   discoverySeeds,
   interleaveBySeed,
+  interleaveUpcoming,
+  likelySeenConsensus,
   weekIndex,
   type DiscoveryItem,
   type DiscoveryMedia,
   type DiscoverySeed,
 } from './discovery';
+import {
+  buildOrderView,
+  collectionPartsToEntries,
+  collectionsFromLibrary,
+  hasWatchGap,
+  libraryLookup,
+  tvFranchisesFromLinks,
+  type OrderEntryInput,
+  type OrderView,
+} from './franchise';
+import { POSTER_BASE } from './components/franchise/EntryList';
+import { useTMDB } from './useTMDB';
 import type { LibraryType } from './library-state';
 import type { TMDBSearchResponse } from './tmdb-types';
 
@@ -69,14 +83,12 @@ async function load(sources: Source[]): Promise<Loaded> {
   };
 }
 
-const mediaFor = (type: LibraryType): DiscoveryMedia[] => (type === 'all' ? ['movie', 'tv'] : [type]);
-
 /**
- * One page of suggestions. Pages walk the seed list four at a time; once it
- * runs out, they continue with TMDB's most-voted titles, page by page, so
- * the list does not end.
+ * One page of suggestions for one media type (`movie` or `tv`). Pages walk
+ * that media type's seed list four at a time; once it runs out, they continue
+ * with TMDB's most-voted titles of that media type, page by page.
  */
-function sourcesForPage(seeds: DiscoverySeed[], page: number, type: LibraryType): Source[] {
+function sourcesForMediaPage(seeds: DiscoverySeed[], page: number, media: DiscoveryMedia): Source[] {
   const slice = seeds.slice(page * SEEDS_PER_PAGE, (page + 1) * SEEDS_PER_PAGE);
   if (slice.length > 0) {
     return slice.map((seed) => ({
@@ -90,7 +102,7 @@ function sourcesForPage(seeds: DiscoverySeed[], page: number, type: LibraryType)
     }));
   }
   const fillerPage = page - Math.ceil(seeds.length / SEEDS_PER_PAGE) + 1;
-  return mediaFor(type).map((media) => ({
+  return [{
     endpoint: `discover/${media}`,
     params: { sort_by: 'vote_count.desc', include_adult: 'false', page: String(fillerPage) },
     media,
@@ -98,14 +110,28 @@ function sourcesForPage(seeds: DiscoverySeed[], page: number, type: LibraryType)
     shortReason: 'Widely loved',
     kind: 'recommendation' as const,
     seedKey: `filler:${media}`,
-  }));
+  }];
 }
+
+export interface DiscoveryFranchiseGroup {
+  key: string;
+  name: string;
+  kind: 'collection' | 'tv-spinoff';
+  media: DiscoveryMedia;
+  view: OrderView;
+  missingCount: number;
+  hasGap: boolean;
+}
+
+const COLLECTIONS_PER_BATCH = 8;
 
 export function useDiscovery(type: LibraryType) {
   const { watchlist, favourites, loading, ratingsStatus } = useWatchlist();
+  const { getCollection, getTvSpinoffs } = useTMDB();
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [localDismissed, setLocalDismissed] = useState(readDismissed);
+  const [collectionLimit, setCollectionLimit] = useState(COLLECTIONS_PER_BATCH);
   const today = new Date();
   const week = weekIndex(today);
 
@@ -160,36 +186,60 @@ export function useDiscovery(type: LibraryType) {
         const sent = rows.map((row) => discoveryKey(row.media as DiscoveryMedia, row.tmdb_id));
         queryClient.setQueryData<string[]>(DISMISSED_QUERY_KEY, (old) => [...new Set([...(old ?? []), ...sent])]);
         releaseLocal();
-        void queryClient.invalidateQueries({ queryKey: DISMISSED_QUERY_KEY });
       });
   }, [ownerSynced, localDismissed, remoteKeys, queryClient]);
 
   // Seeds are read at fetch time rather than keyed on: adding a suggestion
   // changes the library, and must not throw the pages already loaded away.
   // Ranking walks the whole library, so only when its inputs change.
+  // Built separately for films and series so All, Films and Series read from
+  // the exact same movie and TV caches: every film shown in All is in Films,
+  // and every series shown in All is in Series.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
-  const seeds = useMemo(() => discoverySeeds(watchlist, favourites, today, type), [watchlist, favourites, type, week]);
-  const seedsRef = useRef(seeds);
+  const movieSeeds = useMemo(() => discoverySeeds(watchlist, favourites, today, 'movie'), [watchlist, favourites, week]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
+  const tvSeeds = useMemo(() => discoverySeeds(watchlist, favourites, today, 'tv'), [watchlist, favourites, week]);
+  const movieSeedsRef = useRef(movieSeeds);
+  const tvSeedsRef = useRef(tvSeeds);
   // Declared before the query, so the first fetch already sees these seeds.
-  useEffect(() => { seedsRef.current = seeds; });
+  useEffect(() => {
+    movieSeedsRef.current = movieSeeds;
+    tvSeedsRef.current = tvSeeds;
+  }, [movieSeeds, tvSeeds]);
 
   // The seed list is fixed when the first page loads and travels with the
   // pages, so it survives the cache: adding or "Seen it"-ing a title
   // reorders the seeds, and paging must not repeat or skip one -- also after
   // leaving Discover and coming back, or switching type and back.
-  const recommendations = useInfiniteQuery({
-    // isAdmin in the key: a visitor's pages (public scores, but no owner-only
-    // shelves) must not be what the owner gets after signing in.
-    queryKey: ['watchlist', 'discovery', 'recommendations', type, week, isAdmin],
+  const movieRecommendations = useInfiniteQuery({
+    // isAdmin in the key: pages seeded as a visitor (no scores) must not be
+    // what the owner gets after signing in.
+    queryKey: ['watchlist', 'discovery', 'recommendations', 'movie', week, isAdmin],
     // Ratings decide the first seeds (8 and up lead, under 6 never seed), so
     // the first page waits for them rather than freezing without them.
-    enabled: !loading && ratingsStatus !== 'loading',
+    enabled: !loading && ratingsStatus !== 'loading' && type !== 'tv',
     staleTime: 60 * 60 * 1000,
     retry: false,
     initialPageParam: { page: 0, seeds: null } as PageParam,
     queryFn: async ({ pageParam }): Promise<SuggestionPage> => {
-      const pageSeeds = pageParam.seeds ?? seedsRef.current;
-      const loaded = await load(sourcesForPage(pageSeeds, pageParam.page, type));
+      const pageSeeds = pageParam.seeds ?? movieSeedsRef.current;
+      const loaded = await load(sourcesForMediaPage(pageSeeds, pageParam.page, 'movie'));
+      return { ...loaded, seeds: pageSeeds };
+    },
+    getNextPageParam: (lastPage, _pages, lastParam): PageParam | undefined => (
+      lastParam.page + 1 < MAX_PAGES ? { page: lastParam.page + 1, seeds: lastPage.seeds } : undefined
+    ),
+  });
+
+  const tvRecommendations = useInfiniteQuery({
+    queryKey: ['watchlist', 'discovery', 'recommendations', 'tv', week, isAdmin],
+    enabled: !loading && ratingsStatus !== 'loading' && type !== 'movie',
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+    initialPageParam: { page: 0, seeds: null } as PageParam,
+    queryFn: async ({ pageParam }): Promise<SuggestionPage> => {
+      const pageSeeds = pageParam.seeds ?? tvSeedsRef.current;
+      const loaded = await load(sourcesForMediaPage(pageSeeds, pageParam.page, 'tv'));
       return { ...loaded, seeds: pageSeeds };
     },
     getNextPageParam: (lastPage, _pages, lastParam): PageParam | undefined => (
@@ -201,27 +251,201 @@ export function useDiscovery(type: LibraryType) {
   const endDate = new Date(today); endDate.setDate(endDate.getDate() + 180);
   const end = endDate.toLocaleDateString('en-CA');
   const upcoming = useQuery({
-    queryKey: ['watchlist', 'discovery', 'upcoming', type, start],
+    queryKey: ['watchlist', 'discovery', 'upcoming', start],
     enabled: !loading,
     staleTime: 60 * 60 * 1000,
     retry: false,
     queryFn: () => load([
-      ...(type !== 'tv' ? [{ endpoint: 'discover/movie', params: { region: 'GB', 'release_date.gte': start, 'release_date.lte': end, with_release_type: '3', sort_by: 'popularity.desc', include_adult: 'false' }, media: 'movie' as const, reason: 'In UK cinemas soon', kind: 'upcoming' as const }] : []),
-      ...(type !== 'movie' ? [{ endpoint: 'discover/tv', params: { 'first_air_date.gte': start, 'first_air_date.lte': end, sort_by: 'popularity.desc', include_adult: 'false' }, media: 'tv' as const, reason: 'New series', kind: 'upcoming' as const }] : []),
+      { endpoint: 'discover/movie', params: { region: 'GB', 'release_date.gte': start, 'release_date.lte': end, with_release_type: '3', sort_by: 'popularity.desc', include_adult: 'false' }, media: 'movie' as const, reason: 'In UK cinemas soon', kind: 'upcoming' as const },
+      { endpoint: 'discover/tv', params: { 'first_air_date.gte': start, 'first_air_date.lte': end, sort_by: 'popularity.desc', include_adult: 'false' }, media: 'tv' as const, reason: 'New series', kind: 'upcoming' as const },
     ]),
   });
 
-  const recommendationItems = useMemo(
-    () => (recommendations.data?.pages ?? []).flatMap((page) => interleaveBySeed(page.items)),
-    [recommendations.data],
+  const recommendationItems = useMemo(() => {
+    const moviePages = movieRecommendations.data?.pages ?? [];
+    const tvPages = tvRecommendations.data?.pages ?? [];
+    if (type === 'movie') return moviePages.flatMap((page) => interleaveBySeed(page.items));
+    if (type === 'tv') return tvPages.flatMap((page) => interleaveBySeed(page.items));
+    const pageCount = Math.max(moviePages.length, tvPages.length);
+    const interleaved: DiscoveryItem[] = [];
+    for (let i = 0; i < pageCount; i += 1) {
+      const m = moviePages[i] ? interleaveBySeed(moviePages[i].items) : [];
+      const t = tvPages[i] ? interleaveBySeed(tvPages[i].items) : [];
+      interleaved.push(...interleaveUpcoming([...m, ...t]));
+    }
+    return interleaved;
+  }, [type, movieRecommendations.data, tvRecommendations.data]);
+
+  const upcomingItems = useMemo(
+    () => (upcoming.data?.items ?? []).filter((item) => type === 'all' || item.media === type),
+    [upcoming.data?.items, type],
+  );
+
+  // --- "Have you already watched?" grouped franchises & spin-offs ----------
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
+  const lookup = useMemo(() => libraryLookup(watchlist, today), [watchlist, week]);
+
+  const libraryCollections = useMemo(() => {
+    return collectionsFromLibrary(
+      watchlist.flatMap((item) =>
+        item.category === 'Movies' &&
+        item.collection_id != null &&
+        (isAdmin || (item.library_state !== 'hidden' && item.library_state !== 'stopped'))
+          ? [{
+              id: item.id,
+              tmdbId: item.tmdb_id ?? null,
+              title: item.title,
+              watched: !!item.watched,
+              releaseDate: item.release_date ?? null,
+              poster: item.image_url ?? null,
+              collectionId: item.collection_id,
+              collectionName: item.collection_name ?? null,
+            }]
+          : [],
+      ),
+    ).sort((a, b) => (b.watched - a.watched) || (b.films.length - a.films.length) || a.name.localeCompare(b.name));
+  }, [watchlist, isAdmin]);
+
+  const activeCollectionIds = useMemo(
+    () => libraryCollections.slice(0, collectionLimit).map((c) => c.collectionId),
+    [libraryCollections, collectionLimit],
+  );
+
+  // Per-collection queries share cache entries with CollectionCard and avoid
+  // re-fetching earlier collections when `collectionLimit` grows.
+  const collectionQueries = useQueries({
+    queries: activeCollectionIds.map((collectionId) => ({
+      queryKey: ['watchlist', 'tmdb-collection', collectionId] as const,
+      enabled: !loading && type !== 'tv',
+      staleTime: 24 * 60 * 60 * 1000,
+      retry: false,
+      queryFn: () => getCollection(collectionId),
+    })),
+  });
+  const expandedCollectionsData = useMemo(
+    () =>
+      activeCollectionIds.flatMap((collectionId, idx) => {
+        const data = collectionQueries[idx]?.data;
+        if (!data) return [];
+        return [{ collectionId, entries: collectionPartsToEntries(data.parts ?? [], POSTER_BASE) }];
+      }),
+    [activeCollectionIds, collectionQueries],
+  );
+  const collectionsPending = activeCollectionIds.length > 0 && collectionQueries.some((q) => q.isPending);
+
+  const tvSeedIds = useMemo(
+    () =>
+      watchlist
+        .filter((item) => item.category === 'TV Shows' && item.tmdb_id && (isAdmin || (item.library_state !== 'hidden' && item.library_state !== 'stopped')))
+        .map((item) => item.tmdb_id!)
+        .sort((a, b) => a - b),
+    [watchlist, isAdmin],
+  );
+  const tvSpinoffs = useQuery({
+    queryKey: ['watchlist', 'tv-spinoffs', tvSeedIds],
+    enabled: !loading && type !== 'movie' && tvSeedIds.length > 0,
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: false,
+    queryFn: () => getTvSpinoffs(tvSeedIds),
+  });
+  const tvFranchiseSummaries = useMemo(
+    () => tvFranchisesFromLinks(tvSpinoffs.data ?? [], watchlist, POSTER_BASE),
+    [tvSpinoffs.data, watchlist],
+  );
+
+  const filterDismissedEntries = (entries: OrderEntryInput[]) =>
+    entries.filter((entry) => {
+      const inLibrary = entry.mediaType === 'movie' ? lookup.movies.has(entry.tmdbId) : lookup.shows.has(entry.tmdbId);
+      return inLibrary || !dismissed.has(entry.key);
+    });
+
+  const franchiseGroups = useMemo((): DiscoveryFranchiseGroup[] => {
+    const groups: DiscoveryFranchiseGroup[] = [];
+    if (type !== 'tv') {
+      const nameById = new Map(libraryCollections.map((c) => [c.collectionId, c.name]));
+      for (const item of expandedCollectionsData) {
+        const filtered = filterDismissedEntries(item.entries);
+        const view = buildOrderView(filtered, lookup);
+        const missingCount = view.total - view.inLibrary;
+        if (missingCount > 0) {
+          groups.push({
+            key: `collection:${item.collectionId}`,
+            name: nameById.get(item.collectionId) ?? `Collection ${item.collectionId}`,
+            kind: 'collection',
+            media: 'movie',
+            view,
+            missingCount,
+            hasGap: hasWatchGap(view),
+          });
+        }
+      }
+    }
+    if (type !== 'movie') {
+      for (const tvGroup of tvFranchiseSummaries) {
+        const filtered = filterDismissedEntries(tvGroup.entries);
+        const view = buildOrderView(filtered, lookup);
+        const missingCount = view.total - view.inLibrary;
+        if (missingCount > 0) {
+          groups.push({
+            key: `spinoff:${tvGroup.key}`,
+            name: tvGroup.name,
+            kind: 'tv-spinoff',
+            media: 'tv',
+            view,
+            missingCount,
+            hasGap: hasWatchGap(view),
+          });
+        }
+      }
+    }
+    return groups.sort(
+      (a, b) =>
+        Number(b.hasGap) - Number(a.hasGap) ||
+        b.view.watched - a.view.watched ||
+        b.view.inLibrary - a.view.inLibrary ||
+        a.name.localeCompare(b.name),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, libraryCollections, expandedCollectionsData, tvFranchiseSummaries, lookup, dismissed]);
+
+  const franchiseEntryKeys = useMemo(
+    () => new Set(franchiseGroups.flatMap((g) => g.view.entries.map((e) => e.key))),
+    [franchiseGroups],
+  );
+
+  // Multi-seed consensus: released titles independently recommended by 2+
+  // titles in the library surface under HAVE YOU ALREADY WATCHED? ("Likely seen")
+  // and are excluded from YOU MIGHT LIKE so they are not shown twice.
+  const likelySeen = useMemo(
+    () =>
+      curateDiscovery(
+        likelySeenConsensus(recommendationItems, today),
+        watchlist,
+        favourites,
+        dismissed,
+        franchiseEntryKeys,
+      ).slice(0, 12),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
+    [recommendationItems, watchlist, favourites, dismissed, franchiseEntryKeys, week],
+  );
+
+  const alreadyWatchedKeys = useMemo(
+    () => new Set([...franchiseEntryKeys, ...likelySeen.map((item) => discoveryKey(item.media, item.id))]),
+    [franchiseEntryKeys, likelySeen],
   );
 
   // Kept in the browser first, so it holds even if the table write fails;
   // the effect above moves it into the table for the owner.
-  const dismiss = (media: DiscoveryMedia, id: number) => {
-    const key = discoveryKey(media, id);
-    setLocalDismissed((prev) => { const next = new Set(prev).add(key); writeDismissed(next); return next; });
+  const dismissMany = (items: ReadonlyArray<{ media: DiscoveryMedia; id: number }>) => {
+    if (items.length === 0) return;
+    setLocalDismissed((prev) => {
+      const next = new Set(prev);
+      for (const item of items) next.add(discoveryKey(item.media, item.id));
+      writeDismissed(next);
+      return next;
+    });
   };
+  const dismiss = (media: DiscoveryMedia, id: number) => dismissMany([{ media, id }]);
   // Visitors can only reset their own browser's dismissals; the owner's
   // table is theirs alone to clear.
   const resetDismissed = async () => {
@@ -234,21 +458,62 @@ export function useDiscovery(type: LibraryType) {
   };
   const resettable = localDismissed.size + (ownerSynced ? remote.data?.length ?? 0 : 0);
 
+  const activeQueries = type === 'movie'
+    ? [movieRecommendations]
+    : type === 'tv'
+      ? [tvRecommendations]
+      : [movieRecommendations, tvRecommendations];
+  const isPending = activeQueries.every((q) => q.isPending);
+  const isError = activeQueries.every((q) => q.isError);
+  const partlyFailed = !isError && (
+    activeQueries.some((q) => q.isError) ||
+    activeQueries.some((q) => q.data?.pages.some((page) => page.failed) ?? false)
+  );
+  const hasMore = activeQueries.some((q) => q.hasNextPage);
+  const loadingMore = activeQueries.some((q) => q.isFetchingNextPage);
+
+  const recommendations = useMemo(
+    () => curateDiscovery(recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys),
+    [recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys],
+  );
+  const upcomingCurated = useMemo(
+    () => curateDiscovery(upcomingItems, watchlist, favourites, dismissed),
+    [upcomingItems, watchlist, favourites, dismissed],
+  );
+
   return {
-    recommendations: curateDiscovery(recommendationItems, watchlist, favourites, dismissed),
-    upcoming: curateDiscovery(upcoming.data?.items ?? [], watchlist, favourites, dismissed),
-    loading: loading || ratingsStatus === 'loading' || recommendations.isPending,
+    recommendations,
+    likelySeen,
+    upcoming: upcomingCurated,
+    franchises: franchiseGroups,
+    franchisesLoading:
+      loading ||
+      (type !== 'tv' && collectionsPending) ||
+      (type !== 'movie' && tvSeedIds.length > 0 && tvSpinoffs.isPending),
+    hasMoreFranchises: type !== 'tv' && collectionLimit < libraryCollections.length,
+    loadMoreFranchises: () => setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH),
+    loading: loading || ratingsStatus === 'loading' || isPending,
     upcomingLoading: loading || upcoming.isPending,
-    failed: recommendations.isError,
-    partlyFailed: !recommendations.isError && (recommendations.data?.pages.some((page) => page.failed) ?? false),
+    failed: isError,
+    partlyFailed,
     upcomingFailed: upcoming.isError || Boolean(upcoming.data?.failed),
-    hasMore: recommendations.hasNextPage,
-    loadingMore: recommendations.isFetchingNextPage,
-    loadMore: () => { void recommendations.fetchNextPage(); },
+    hasMore,
+    loadingMore,
+    loadMore: () => {
+      for (const q of activeQueries) {
+        if (q.isError && !q.isFetching) void q.refetch();
+        else if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
+      }
+    },
     // Only after a total failure, which is one page: refetching every loaded
     // page at once would run into tmdb-proxy's per-minute limit.
-    retry: () => { void recommendations.refetch(); },
+    retry: () => {
+      for (const q of activeQueries) {
+        if (q.isError) void q.refetch();
+      }
+    },
     dismiss,
+    dismissMany,
     resetDismissed,
     dismissedCount: resettable,
     synced: ownerSynced,

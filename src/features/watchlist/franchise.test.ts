@@ -5,8 +5,10 @@ import {
   collectionPartsToEntries,
   collectionsFromLibrary,
   entryState,
+  hasWatchGap,
   libraryLookup,
   sortByRelease,
+  tvFranchisesFromLinks,
   type LibraryLookup,
   type OrderEntryInput,
 } from './franchise';
@@ -161,5 +163,96 @@ describe('libraryLookup', () => {
 
   it('counts aired episodes up to and including today, skipping specials and undated ones', () => {
     expect(libraryLookup([show], today).shows.get(50)).toEqual({ id: 's1', airedEpisodes: 2, watchedEpisodes: 1 });
+  });
+});
+
+describe('tvFranchisesFromLinks', () => {
+  it('groups transitive spin-offs (e.g. TBBT -> Young Sheldon -> Georgie & Mandy), sorts chronologically, and uses library metadata', () => {
+    const watchlist = [
+      { id: '1', category: 'TV Shows', tmdb_id: 1418, title: 'The Big Bang Theory (2007)', release_date: '2007-09-24', image_url: '/tbbt.jpg' },
+      { id: '2', category: 'TV Shows', tmdb_id: 71728, title: 'Young Sheldon (2017)', release_date: '2017-09-25', image_url: '/ys.jpg' },
+    ] as unknown as WatchlistItem[];
+
+    const groups = tvFranchisesFromLinks(
+      [
+        {
+          seedTmdbId: 1418,
+          seedTitle: 'The Big Bang Theory',
+          franchiseId: 'Q141934409',
+          franchiseName: 'The Big Bang Theory',
+          relatedMediaType: 'tv',
+          relatedTmdbId: 71728,
+          relatedTitle: 'Young Sheldon',
+          releaseDate: '2017-09-25',
+        },
+        {
+          seedTmdbId: 71728,
+          seedTitle: 'Young Sheldon',
+          franchiseId: 'Q141934409',
+          franchiseName: 'The Big Bang Theory',
+          relatedMediaType: 'tv',
+          relatedTmdbId: 243875,
+          relatedTitle: "Georgie & Mandy's First Marriage",
+          releaseDate: '2024-10-17',
+          posterPath: '/gm.jpg',
+        },
+      ],
+      watchlist,
+      'https://img/',
+    );
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].name).toBe('The Big Bang Theory Universe');
+    expect(groups[0].entries.map((e) => e.key)).toEqual(['tv:1418', 'tv:71728', 'tv:243875']);
+    expect(groups[0].entries[0]).toMatchObject({ title: 'The Big Bang Theory', poster: '/tbbt.jpg' });
+    expect(groups[0].entries[2]).toMatchObject({
+      title: "Georgie & Mandy's First Marriage",
+      releaseDate: '2024-10-17',
+      poster: 'https://img//gm.jpg',
+    });
+  });
+
+  it('ignores same-title international remakes when no shared franchise name exists', () => {
+    const groups = tvFranchisesFromLinks(
+      [
+        {
+          seedTmdbId: 34307,
+          seedTitle: 'Shameless',
+          franchiseId: null,
+          franchiseName: null,
+          relatedMediaType: 'tv',
+          relatedTmdbId: 1906,
+          relatedTitle: 'Shameless',
+          releaseDate: '2004-01-13',
+        },
+      ],
+      [],
+    );
+    expect(groups).toEqual([]);
+  });
+});
+
+describe('hasWatchGap', () => {
+  it('detects missing or unwatched earlier entries when a later entry is watched', () => {
+    const gapView = buildOrderView(
+      [entry({ key: 'a', tmdbId: 1 }), entry({ key: 'b', tmdbId: 3 }), entry({ key: 'c', tmdbId: 100 })],
+      {
+        movies: new Map([
+          [1, { id: 'm1', watched: true }],
+          [100, { id: 'm3', watched: true }],
+        ]),
+        shows: new Map(),
+      },
+    );
+    expect(hasWatchGap(gapView)).toBe(true);
+
+    const noGapView = buildOrderView(
+      [entry({ key: 'a', tmdbId: 1 }), entry({ key: 'b', tmdbId: 3 })],
+      {
+        movies: new Map([[1, { id: 'm1', watched: true }]]),
+        shows: new Map(),
+      },
+    );
+    expect(hasWatchGap(noGapView)).toBe(false);
   });
 });

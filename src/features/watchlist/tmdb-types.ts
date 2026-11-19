@@ -101,10 +101,9 @@ export interface TMDBDetails {
   name?: string;
   overview?: string;
   original_language?: string;
-  // ISO 3166-1 alpha-2. TMDB returns this on both detail endpoints, but only
-  // on the *TV* search endpoint -- which is why a favourite added as a movie
-  // needs a detail call before its origin is known.
+  // ISO 3166-1 alpha-2 on TV. Films use production_countries instead.
   origin_country?: string[];
+  production_countries?: { iso_3166_1: string }[];
   poster_path?: string | null;
   backdrop_path?: string | null;
   release_date?: string | null;
@@ -113,6 +112,7 @@ export interface TMDBDetails {
   episode_run_time?: number[];
   genres?: TMDBGenre[];
   status?: string;
+  number_of_seasons?: number;
   seasons?: TMDBSeasonSummary[];
   'watch/providers'?: TMDBWatchProviders;
   videos?: TMDBVideos;
@@ -124,6 +124,8 @@ export interface TMDBDetails {
   external_ids?: { imdb_id?: string | null };
   /** Films only: the series it belongs to, e.g. "X-Men Collection". */
   belongs_to_collection?: TMDBCollectionRef | null;
+  vote_average?: number;
+  vote_count?: number;
 }
 
 export interface TMDBCollectionRef {
@@ -145,7 +147,21 @@ export interface TMDBCollection {
     title?: string;
     release_date?: string | null;
     poster_path?: string | null;
+    overview?: string;
   }[];
+}
+
+/** One spin-off / parent TV link returned by `tmdb-proxy?endpoint=wikidata/tv-spinoffs`. */
+export interface WikidataTvSpinoffLink {
+  seedTmdbId: number;
+  seedTitle: string;
+  franchiseId: string | null;
+  franchiseName: string | null;
+  relatedMediaType: 'tv' | 'movie';
+  relatedTmdbId: number;
+  relatedTitle: string;
+  releaseDate: string | null;
+  posterPath?: string | null;
 }
 
 /** One row of `search/movie` or `search/tv`. */

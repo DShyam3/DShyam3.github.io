@@ -20,11 +20,13 @@ import {
   isUpcomingStatus,
 } from '@/features/watchlist/watchlist-utils';
 import { PlatformBadge } from './PlatformLogo';
+import { countdownRelease, releaseDay } from '@/features/watchlist/library-state';
 import { providerSearchUrl } from '@/features/watchlist/provider-links';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import type { ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
 import { PosterCard } from './PosterCard';
 import { SmartScheduleDialog, scheduleReleaseDate } from './SmartScheduleDialog';
+import { libraryCategories } from '../library-categories';
 
 interface WatchlistCardProps {
   item: WatchlistItem;
@@ -35,8 +37,8 @@ interface WatchlistCardProps {
     showId: string,
     seasonNumber: number,
     episodeNumber: number,
-  ) => void;
-  toggleSeasonWatched?: (showId: string, seasonNumber: number) => void;
+  ) => void | Promise<void>;
+  toggleSeasonWatched?: (showId: string, seasonNumber: number) => void | Promise<void>;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -95,47 +97,15 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   // The status pill already says Watched, Stopped watching or Hidden; a
   // paused series keeps its shelf status, so it is the one that needs a label.
   const holdLabel = item.library_state === 'paused' ? 'Paused' : null;
+  const categories = libraryCategories(item);
   // A search page on the provider's own site, not a deep link -- see
   // provider-links.ts.
   const watchUrl = providerSearchUrl(item.streaming_platform, item.title);
 
+  // The date the status pill counts down to, from the same pure source.
   const upcomingReleaseDate = React.useMemo(() => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    if (item.category === 'Movies') {
-      if (item.release_date) {
-        const releaseDate = new Date(item.release_date);
-        releaseDate.setHours(0, 0, 0, 0);
-        if (releaseDate > now) {
-          return releaseDate;
-        }
-      }
-      return null;
-    }
-
-    if (!item.seasons || item.seasons.length === 0) return null;
-
-    const futureSeasons = item.seasons.filter(
-      (s) => s.release_date && new Date(s.release_date) > now,
-    );
-    if (futureSeasons.length > 0) {
-      const earliestSeason = futureSeasons.reduce((earliest, current) => {
-        if (!earliest.release_date) return current;
-        if (!current.release_date) return earliest;
-        return new Date(current.release_date) <
-          new Date(earliest.release_date)
-          ? current
-          : earliest;
-      });
-
-      if (earliestSeason.release_date) {
-        const releaseDate = new Date(earliestSeason.release_date);
-        releaseDate.setHours(0, 0, 0, 0);
-        return releaseDate;
-      }
-    }
-    return null;
+    const next = countdownRelease(item);
+    return next ? releaseDay(next) : null;
   }, [item]);
 
   return (
@@ -145,7 +115,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         title={displayTitle(item.title, item.year)}
         poster={item.image_url}
         onOpen={() => setDetailOpen(true)}
-        subtitle={timeLeft ?? <>{item.year}{item.year && item.genres?.length ? ' · ' : ''}{item.genres?.[0]}</>}
+        subtitle={timeLeft ?? <>{item.year}{item.year && (categories.length || item.genres?.length) ? ' · ' : ''}{categories[0] ?? item.genres?.[0]}</>}
         meta={<>
             {watchUrl ? (
               <a

@@ -17,15 +17,40 @@ export function decodeArchivePhoto(value: string): Uint8Array {
   return bytes;
 }
 
+const PHOTO_TRANSFER_CONCURRENCY = 4;
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const runWorker = async () => {
+    while (nextIndex < items.length) {
+      const current = nextIndex++;
+      results[current] = await worker(items[current], current);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => runWorker()),
+  );
+  return results;
+}
+
 /** Transport is injected so portability and link preservation can be tested without storage. */
 export async function buildTravelArchive(journal: TravelJournal, download: (path: string) => Promise<Uint8Array>): Promise<string> {
   const metadata = validateTravelBackup(buildTravelBackup(journal));
-  const photos: Record<string, string> = {};
-  let size = new TextEncoder().encode(JSON.stringify(metadata)).length;
-  for (const path of photoPaths(journal)) {
+  const paths = photoPaths(journal);
+  const downloaded = await mapWithConcurrency(paths, PHOTO_TRANSFER_CONCURRENCY, async path => {
     const bytes = await download(path);
     const encoded = encode(bytes);
     decodeArchivePhoto(encoded);
+    return [path, encoded] as const;
+  });
+  const photos: Record<string, string> = {};
+  let size = new TextEncoder().encode(JSON.stringify(metadata)).length;
+  for (const [path, encoded] of downloaded) {
     size += encoded.length + path.length + 8;
     if (size > MAX_ARCHIVE_BYTES - 1024) throw new Error('This archive exceeds 60 MB. Export metadata and download photos separately.');
     photos[path] = encoded;
@@ -52,8 +77,12 @@ export function parseTravelArchive(text: string): TravelArchive {
 
 /** Re-upload derivatives, remap paths, and retain stable record IDs/relationships. */
 export async function prepareArchiveRestore(archive: TravelArchive, ownerId: string, upload: (bytes: Uint8Array) => Promise<string>): Promise<TravelBackup> {
-  const paths = new Map<string, string>();
-  for (const [path, bytes] of Object.entries(archive.photos)) paths.set(path, await upload(decodeArchivePhoto(bytes)));
+  const entries = Object.entries(archive.photos);
+  const uploaded = await mapWithConcurrency(entries, PHOTO_TRANSFER_CONCURRENCY, async ([path, bytes]) => {
+    const newPath = await upload(decodeArchivePhoto(bytes));
+    return [path, newPath] as const;
+  });
+  const paths = new Map<string, string>(uploaded);
   return { version: 1,
     trips: archive.journal.trips.map(row => ({ ...row, owner_id: ownerId })),
     visits: archive.journal.visits.map(row => ({ ...row, owner_id: ownerId })),

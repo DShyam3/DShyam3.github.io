@@ -9,6 +9,7 @@ import { DisplayModeProvider } from '@/contexts/DisplayModeContext';
 import { OpeningSequence } from '@/components/layout/OpeningSequence';
 import { useTimeBasedTheme } from '@/hooks/useTimeBasedTheme';
 import { useSiteWarmup } from '@/hooks/useSiteWarmup';
+import { attachPublicQueryPersistence } from '@/lib/query-cache-persistence';
 import { PageLoader } from '@/components/layout/PageLoader';
 import { FinanceRoute, FinanceSession } from '@/features/finance/FinanceSession';
 
@@ -67,9 +68,10 @@ function SiteWarmup() {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Content here changes rarely (admin-edited), so there's no need to
-      // refetch every table on every window focus/remount by default.
-      staleTime: 60_000,
+      // Content here is single-admin and mutations explicitly invalidate their
+      // own keys, so a 10-minute freshness window avoids re-fetching tables on
+      // routine route/tab switches while still revalidating long-lived sessions.
+      staleTime: 10 * 60_000,
       refetchOnWindowFocus: false,
       // Kept for the life of the tab. SiteWarmup fills the cache for pages
       // that have not been opened yet, and the five-minute default would
@@ -79,6 +81,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+attachPublicQueryPersistence(queryClient);
 
 
 // Flattened providers component

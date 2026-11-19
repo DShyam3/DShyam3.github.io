@@ -3101,3 +3101,21 @@ tier's 1,000 requests a day sets the budget: at most 300 lookups per nightly
 part, oldest `scores_checked_at` first, refreshed weekly. The TMDB vote columns
 were removed from the unapplied migration rather than added and dropped.
 Seasons have no outside score.
+
+### Library categories derive from TMDB facts — 2026-11-18
+
+The Library uses TMDB's genre IDs, original language and origin country as facts and computes category memberships from reusable rules. A title can be Cartoon, Action and Sci-Fi at once without copied title records. Media type stays the film/series filter, watch progress stays the status shelf, and Favourites retains its older grouping. OMDb offers less structured category data for this library, while TMDB is already its source for title details and nightly updates. Anime and K-Drama (TV) are project rules over TMDB facts, not TMDB genre names. Missing origin facts do not become a guessed category; sync can fill them later. The new facts columns are nullable, and reads and writes tolerate the old schema while the migration is pending.
+
+Closure: `src/features/watchlist/library-categories.ts`, `library-query.ts`, `useTMDB.ts`, `watchlist-cron-sync/index.ts`, and `supabase/migrations/20261118201834_watchlist_tmdb_categories.sql`. The migration is applied to hosted and `watchlist-cron-sync` v20 is deployed.
+
+### Upcoming holds every dated wait; Up to date keeps the open-ended one — 2026-11-18
+
+Amends "Library shelves by status; News split into Following and Discover" above. Up to date read "S3 in 2d" as upcoming, and the owner asked for the shelf that shows what is coming up to be easier to see ("This would be easier to actually see what is coming up"). So Upcoming now means waiting on a known date, whether or not the series was started: a title not out yet, or a series already caught up on whose next episode or season has a date. Up to date keeps its name and holds only the open-ended wait, a running series with no next date known. A series moves to Upcoming when its date appears, and to Watching when the episode airs. Discover's "Because you're waiting for X" seed stays saved titles not out yet: the owner chose new titles only, so a series with a dated return does not seed suggestions.
+
+Closure: `src/features/watchlist/library-state.ts` (`libraryShelf`, `nextRelease`, `countdownRelease`).
+
+### Grouped film collections and TV spin-offs in Discover and Franchises — 2026-11-18
+
+Discover previously mixed sequels, trilogies and spin-offs from franchises already in the library into the flat `YOU MIGHT LIKE` grid alongside genuinely new titles. Splitting "have you already watched the rest of what you started?" from "discover new" needs no AI model and no hardcoded franchise lists: film trilogies and series come from TMDB's `belongs_to_collection` (`movies.collection_id` and `collection/{id}`), while connected TV spin-offs (such as *The Big Bang Theory* → *Young Sheldon* → *Georgie & Mandy's First Marriage*) come from Wikidata's `P2512` (*spin-off*) edges keyed by TMDB TV ID (`P4983`), queried server-side through `tmdb-proxy` (`endpoint=wikidata/tv-spinoffs`) so the browser CSP `connect-src` stays unchanged and rate limiting still applies. Connected components of spin-off edges are grouped deterministically in release order (`tvFranchisesFromLinks`), excluding same-title international remakes unless Wikidata names a shared franchise (`P8345`). Incomplete film collections and TV spin-off universes appear under `HAVE YOU ALREADY WATCHED?` on Discover (and on `/watchlist/franchises`, where they can be saved as viewing orders), with `Add to library`, `Seen it` (using `WatchedWhenMenu` so back-catalogue watches do not stamp today by default) and `Not interested`, and their entries are excluded from `YOU MIGHT LIKE` so the grid stays for discovering new titles.
+
+Closure: `supabase/functions/tmdb-proxy/index.ts` (deployed v17), `src/features/watchlist/franchise.ts` (`tvFranchisesFromLinks`), `src/features/watchlist/useDiscovery.ts`, `src/features/watchlist/components/DiscoverySection.tsx`, and `src/pages/WatchlistFranchises.tsx`.

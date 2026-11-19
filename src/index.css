@@ -36,60 +36,67 @@
 
 @layer base {
   :root {
-    --background: 48 25% 95%;
-    --foreground: 160 14% 15%;
+    /* Sovereign Folio — light mode: warm rag parchment, archival cream panels,
+       deep plum-charcoal ink, Tudor claret primary, antique brass trim. */
+    --background: 41 33% 88%;
+    --foreground: 273 18% 12%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 160 14% 15%;
+    --card: 42 48% 93%;
+    --card-foreground: 273 18% 12%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 160 14% 15%;
+    --popover: 42 56% 96%;
+    --popover-foreground: 273 18% 12%;
 
-    --primary: 155 30% 28%;
-    --primary-foreground: 60 30% 98%;
+    --primary: 349 57% 27%;
+    --primary-foreground: 42 56% 96%;
 
-    --secondary: 85 18% 90%;
-    --secondary-foreground: 155 18% 25%;
+    --secondary: 40 31% 83%;
+    --secondary-foreground: 273 18% 14%;
 
-    --muted: 70 13% 89%;
-    --muted-foreground: 155 8% 33%;
+    --muted: 40 28% 84%;
+    --muted-foreground: 30 11% 33%;
 
-    --accent: 76 65% 72%;
-    --accent-foreground: 155 25% 18%;
+    --accent: 40 34% 83%;
+    --accent-foreground: 273 18% 12%;
 
-    --destructive: 0 68% 42%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 355 68% 36%;
+    --destructive-foreground: 42 56% 96%;
 
-    --border: 100 12% 82%;
-    --input: 100 12% 82%;
-    --ring: 155 30% 32%;
-    --rule: hsl(160 14% 15% / 0.12);
-    --grid-line: hsl(155 30% 28% / 0.045);
+    --border: 38 25% 72%;
+    --input: 38 25% 72%;
+    --ring: 38 54% 38%;
+    --brass: 38 54% 38%;
+    --well: 40 31% 83%;
+    --ribbon: 273 18% 12%;
+    --ribbon-foreground: 42 48% 93%;
+    --rule: hsl(273 18% 12% / 0.14);
+    --grid-line: hsl(38 54% 38% / 0.06);
 
-    --radius: 0.875rem;
+    --radius: 0.375rem;
 
-    /* Decorative palette, separate from financial status and chart colours. */
-    --sage: 92 38% 65%;
-    --peach: 23 85% 75%;
-    --lavender: 263 65% 79%;
-    --sky: 200 68% 72%;
-    --rose: 342 65% 78%;
-    --surface-opacity: 0.88;
-    --wash-opacity: 0.25;
-    --panel-tint: 0.45;
-    --hero-tint: 0.5;
+    /* Matte enamel route pigments (slot names retained for compatibility):
+       sage -> Indicolite, sky -> Gulf Blue, lavender -> Tyrian Purple,
+       peach -> Saffron Orange, rose -> Tudor Crimson. */
+    --sage: 186 76% 25%;
+    --peach: 30 82% 38%;
+    --lavender: 289 47% 29%;
+    --sky: 212 62% 31%;
+    --rose: 350 63% 33%;
+    --surface-opacity: 1;
+    --wash-opacity: 0;
+    --panel-tint: 0;
+    --hero-tint: 0;
 
     /* Custom tokens */
-    --badge-new: 25 80% 50%;
-    --badge-new-foreground: 0 0% 100%;
+    --badge-new: 30 82% 38%;
+    --badge-new-foreground: 42 56% 96%;
 
-    /* Data-viz palette: stronger contrast than decorative washes. Keep
-       series distinguishable in both themes and status colours separate. */
-    --chart-1: 155 35% 35%;
-    --chart-2: 210 55% 46%;
-    --chart-3: 267 38% 49%;
-    --chart-4: 27 70% 44%;
-    --chart-5: 344 48% 46%;
+    /* Data-viz palette: matte heraldic pigments, distinguishable in both themes. */
+    --chart-1: 186 76% 25%;
+    --chart-2: 212 62% 31%;
+    --chart-3: 289 47% 29%;
+    --chart-4: 30 82% 38%;
+    --chart-5: 350 63% 33%;
 
     /* Merchant monograms pick their own hue per merchant (see
        src/lib/finance/merchant.ts); only the lightness has to follow the
@@ -100,8 +107,8 @@
     /* shadcn ships --destructive but deliberately no success token. A finance
        view has to tell a gain from a loss, so this is the one addition beyond
        the standard contract, shaped the same way. */
-    --positive: 152 45% 34%;
-    --positive-foreground: 0 0% 100%;
+    --positive: 184 72% 25%;
+    --positive-foreground: 42 56% 96%;
 
     /* Preserve the original type identity: Doto for display, Space Mono
        for body and interface text. See src/theme/fonts.ts. */
@@ -111,79 +118,86 @@
     --font-sans: var(--font-body);
 
     --shadow-card:
-      0 1px 3px 0 hsl(160 14% 15% / 0.04), 0 1px 2px -1px hsl(160 14% 15% / 0.04);
+      inset 0 1px 0 hsl(42 56% 98% / 0.75), 0 1px 2px 0 hsl(273 18% 12% / 0.06);
     --shadow-card-hover:
-      0 10px 25px -5px hsl(160 14% 15% / 0.08), 0 8px 10px -6px hsl(160 14% 15% / 0.04);
+      inset 0 1px 0 hsl(42 56% 98% / 0.85), 0 6px 16px -6px hsl(273 18% 12% / 0.14);
 
-    /* Shadow-as-border: layered shadows replace solid borders for depth */
+    /* Shadow-as-border: crisp ruled edge */
     --shadow-border:
-      0px 0px 0px 1px rgba(0, 0, 0, 0.06),
-      0px 1px 2px -1px rgba(0, 0, 0, 0.06),
-      0px 2px 4px 0px rgba(0, 0, 0, 0.04);
+      0px 0px 0px 1px hsl(38 25% 72% / 0.9),
+      0px 1px 2px 0px hsl(273 18% 12% / 0.06);
     --shadow-border-hover:
-      0px 0px 0px 1px rgba(0, 0, 0, 0.08),
-      0px 1px 2px -1px rgba(0, 0, 0, 0.08),
-      0px 2px 4px 0px rgba(0, 0, 0, 0.06);
+      0px 0px 0px 1px hsl(38 54% 38% / 0.75),
+      0px 2px 6px 0px hsl(273 18% 12% / 0.1);
   }
 
   .dark {
-    --background: 160 16% 4%;
-    --foreground: 135 29% 95%;
+    /* Sovereign Folio — dark mode: warm obsidian-plum canvas, matte panels,
+       warm parchment ink, burnished antique brass trim, parchment active ribbon. */
+    --background: 270 14% 8%;
+    --foreground: 40 42% 87%;
 
-    --card: 168 14% 7%;
-    --card-foreground: 135 29% 95%;
+    --card: 270 17% 11%;
+    --card-foreground: 40 42% 87%;
 
-    --popover: 165 16% 10%;
-    --popover-foreground: 135 29% 95%;
+    --popover: 270 17% 14%;
+    --popover-foreground: 40 42% 87%;
 
-    --primary: 145 84% 52%;
-    --primary-foreground: 160 16% 4%;
+    --primary: 39 49% 54%;
+    --primary-foreground: 270 14% 8%;
 
-    --secondary: 165 16% 11%;
-    --secondary-foreground: 135 24% 90%;
+    --secondary: 270 16% 16%;
+    --secondary-foreground: 40 42% 87%;
 
-    --muted: 165 14% 13%;
-    --muted-foreground: 154 9% 64%;
+    --muted: 270 15% 15%;
+    --muted-foreground: 34 12% 58%;
 
-    --accent: 145 84% 52%;
-    --accent-foreground: 160 16% 4%;
+    --accent: 270 17% 19%;
+    --accent-foreground: 40 42% 87%;
 
-    --destructive: 0 78% 63%;
-    --destructive-foreground: 160 16% 4%;
+    --destructive: 352 64% 58%;
+    --destructive-foreground: 270 14% 8%;
 
-    --chart-1: 145 84% 52%;
-    --chart-2: 196 78% 64%;
-    --chart-3: 263 65% 79%;
-    --chart-4: 24 95% 56%;
-    --chart-5: 342 65% 72%;
+    --badge-new: 31 70% 48%;
+    --badge-new-foreground: 270 14% 8%;
 
-    --positive: 145 84% 52%;
-    --positive-foreground: 160 16% 4%;
+    --chart-1: 186 56% 48%;
+    --chart-2: 206 50% 60%;
+    --chart-3: 288 38% 64%;
+    --chart-4: 33 74% 56%;
+    --chart-5: 350 56% 58%;
+
+    --positive: 172 48% 48%;
+    --positive-foreground: 270 14% 8%;
 
     --monogram-lightness: 72%;
-    --sage: 145 72% 48%;
-    --peach: 24 95% 56%;
-    --lavender: 263 65% 79%;
-    --sky: 196 78% 64%;
-    --rose: 342 52% 60%;
-    --surface-opacity: 0.91;
-    --wash-opacity: 0.16;
-    --panel-tint: 0.32;
-    --hero-tint: 0.38;
+    --sage: 186 58% 36%;
+    --peach: 31 68% 46%;
+    --lavender: 288 30% 48%;
+    --sky: 208 42% 52%;
+    --rose: 350 52% 44%;
+    --surface-opacity: 1;
+    --wash-opacity: 0;
+    --panel-tint: 0;
+    --hero-tint: 0;
 
-    --border: 158 14% 15%;
-    --input: 158 14% 15%;
-    --ring: 145 84% 52%;
-    --rule: hsl(145 40% 60% / 0.14);
-    --grid-line: hsl(145 84% 52% / 0.045);
+    --border: 280 12% 23%;
+    --input: 280 12% 23%;
+    --ring: 39 49% 54%;
+    --brass: 39 49% 54%;
+    --well: 270 17% 7%;
+    --ribbon: 41 54% 85%;
+    --ribbon-foreground: 345 39% 12%;
+    --rule: hsl(39 49% 54% / 0.22);
+    --grid-line: hsl(39 49% 54% / 0.045);
 
-    --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.3), 0 0 0 1px hsl(220 20% 20% / 0.15);
+    --shadow-card: inset 0 1px 0 hsl(40 42% 87% / 0.04), 0 2px 6px 0 hsl(0 0% 0% / 0.35);
     --shadow-card-hover:
-      0 10px 30px -5px hsl(0 0% 0% / 0.5), 0 0 0 1px hsl(220 20% 25% / 0.2);
+      inset 0 1px 0 hsl(39 49% 54% / 0.14), 0 10px 24px -8px hsl(0 0% 0% / 0.55);
 
-    /* Shadow-as-border: single white ring for dark backgrounds */
-    --shadow-border: 0 0 0 1px rgba(255, 255, 255, 0.08);
-    --shadow-border-hover: 0 0 0 1px rgba(255, 255, 255, 0.13);
+    /* Shadow-as-border: matte ruled edge */
+    --shadow-border: 0 0 0 1px hsl(280 12% 23% / 0.9);
+    --shadow-border-hover: 0 0 0 1px hsl(39 49% 54% / 0.55);
   }
 }
 
@@ -270,7 +284,7 @@
   }
 
   .item-card {
-    @apply bg-card rounded-2xl overflow-hidden;
+    @apply bg-card rounded-md overflow-hidden;
     box-shadow: var(--shadow-card);
     font-family: var(--font-serif);
     transition-property: box-shadow, transform;
@@ -386,21 +400,21 @@
     width: 9px;
     height: 9px;
     pointer-events: none;
-    border-color: hsl(var(--primary) / 0.45);
+    border-color: hsl(var(--brass) / 0.65);
   }
 
   .hud-corners::before {
     top: -1px;
     left: -1px;
-    border-top: 1px solid hsl(var(--primary) / 0.45);
-    border-left: 1px solid hsl(var(--primary) / 0.45);
+    border-top: 1px solid hsl(var(--brass) / 0.65);
+    border-left: 1px solid hsl(var(--brass) / 0.65);
   }
 
   .hud-corners::after {
     bottom: -1px;
     right: -1px;
-    border-bottom: 1px solid hsl(var(--primary) / 0.45);
-    border-right: 1px solid hsl(var(--primary) / 0.45);
+    border-bottom: 1px solid hsl(var(--brass) / 0.65);
+    border-right: 1px solid hsl(var(--brass) / 0.65);
   }
 
   /* A scroller is the wrong host for the ::after. At rest it is clipped,

@@ -46,7 +46,9 @@ export function WatchedWhenMenu({
   const [picking, setPicking] = useState(false);
   const [date, setDate] = useState('');
   const today = todayLocal();
-  const valid = isCalendarDate(date) && isOnOrBefore(date, today);
+  // No day before it came out (for a season or series, its first air date).
+  const minDate = releaseDate && isCalendarDate(releaseDate.slice(0, 10)) ? releaseDate.slice(0, 10) : undefined;
+  const valid = isCalendarDate(date) && isOnOrBefore(date, today) && (!minDate || isOnOrBefore(minDate, date));
 
   const pick = (when: WatchedWhen) => {
     setOpen(false);
@@ -103,6 +105,7 @@ export function WatchedWhenMenu({
               <Input
                 type="date"
                 value={date}
+                min={minDate}
                 max={today}
                 onChange={(event) => setDate(event.target.value)}
                 className="min-h-10"

@@ -87,6 +87,79 @@
         "--strictPort"
       ],
       "port": 8086
+    },
+    {
+      "name": "wireframe:phase0",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8790",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/private/tmp/dhyan-redesign-phase0/design/redesign-phase0"
+      ],
+      "port": 8790
+    },
+    {
+      "name": "feat:redesign-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "/private/tmp/dhyan-redesign-phase0",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "8791",
+        "--strictPort"
+      ],
+      "port": 8791
+    },
+    {
+      "name": "feat:redesign-build",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8792",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/private/tmp/claude-501/-Users-dhyanshyam--claude-spares-spare-8cBYvb/0c0b261c-84a5-46ba-b1d2-499f54380133/scratchpad/feat-dist"
+      ],
+      "port": 8792
+    },
+    {
+      "name": "feat:redesign-dev-test",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "/private/tmp/dhyan-redesign-phase0",
+        "run",
+        "dev:test",
+        "--",
+        "--port",
+        "8793",
+        "--strictPort"
+      ],
+      "port": 8793
+    },
+    {
+      "name": "caught-up-worktree",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/dhyanshyam/Projects/DShyam3.github.io/.claude/worktrees/caught-up",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "8094",
+        "--strictPort"
+      ],
+      "port": 8094
     }
   ]
 }

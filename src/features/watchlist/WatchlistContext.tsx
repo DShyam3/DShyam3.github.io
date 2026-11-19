@@ -16,11 +16,12 @@ import { useToast } from '@/hooks/use-toast';
 import { useCooldown } from '@/hooks/useCooldown';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
-import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
+import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails, TMDBSeasonSummary } from './tmdb-types';
+import { missingCategoryColumns } from './category-schema';
 import { isSameTitle, isShowWithId, titleKey, type TitleRef } from './title-ref';
 import { applyRatings, ratingColumn, watchlistRatingsQuery, withRating, type RatingTarget } from './ratings-query';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
-import { setWatchedArgs, type WatchedWhen } from './watched-when';
+import { localNoonIso, setWatchedArgs, type WatchedWhen } from './watched-when';
 import {
   resolveFavouriteCategory,
   type FavouriteCategory,
@@ -34,7 +35,7 @@ const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date);
 import { useAuth } from '@/contexts/AuthContext';
 import { NIGHTLY_SYNC_HOUR_UTC } from './sync-logic';
 import { releaseYear } from './watchlist-utils';
-import { isLibraryState, libraryStatus, isValidPersonalRating, type LibraryState } from './library-state';
+import { countdownRelease, isLibraryState, libraryStatus, isValidPersonalRating, releaseCountdown, type LibraryState } from './library-state';
 
 // Returns a referentially-stable function that always calls the latest
 // version of `fn`. Used so the context value below doesn't hand out a new
@@ -139,6 +140,9 @@ export interface WatchlistItem {
   year?: number;
   runtime?: number;
   genres?: string[];
+  genre_ids?: number[] | null;
+  original_language?: string | null;
+  origin_country?: string[] | null;
   image_url?: string;
   backdrop_url?: string;
   link?: string;
@@ -176,6 +180,8 @@ export interface WatchlistItem {
   imdb_id?: string;
   imdb_rating?: number;
   imdb_votes?: number;
+  tmdb_rating?: number;
+  tmdb_votes?: number;
   rt_score?: number;
   metascore?: number;
   /** Films only: the TMDB collection (film series) it belongs to. */
@@ -249,6 +255,8 @@ export interface AddWatchlistOptions {
   skipRefresh?: boolean;
   /** When an item added as watched was watched; absent means now. */
   watchedWhen?: WatchedWhen;
+  /** Pre-fetched TMDB seasons so TV adds do not refetch `tv/{id}`. */
+  seasons?: TMDBSeasonSummary[];
 }
 
 interface WatchlistContextType {
@@ -371,9 +379,6 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const cached = queryClient.getQueryData(watchlistLibraryQuery.queryKey);
     return cached ? watchedEpisodeKeys(cached.watchlist) : new Set();
   });
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [lastAutoSyncTime, setLastAutoSyncTime] = useState<string | null>(null);
-  const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
   const [nextAutoSyncTime, setNextAutoSyncTime] = useState<string>(
     getNextAutoSync().toISOString(),
   );
@@ -437,6 +442,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   // is not a fresh read, and must not stop a stale library being re-read.
   // News rows (watched flags, pins) are derived from the same tables, so they
   // are marked stale too -- without refetching while the page is still open.
+  // Lazy detail hydrations (description / episode titles) don't change DB
+  // state, so they write back to the library cache without invalidating News.
+  const skipNewsInvalidationRef = useRef(false);
   useEffect(() => {
     if (loading) return;
     const key = watchlistLibraryQuery.queryKey;
@@ -445,6 +453,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     queryClient.setQueryData(key, { watchlist, favourites }, {
       updatedAt: queryClient.getQueryState(key)?.dataUpdatedAt,
     });
+    if (skipNewsInvalidationRef.current) {
+      skipNewsInvalidationRef.current = false;
+      return;
+    }
     void queryClient.invalidateQueries({ queryKey: ['watchlist', 'news'], refetchType: 'none' });
   }, [queryClient, loading, watchlist, favourites]);
 
@@ -480,6 +492,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    skipNewsInvalidationRef.current = true;
     setWatchlist((prev) =>
       prev.map((i) =>
         isSameTitle(i, item)
@@ -544,6 +557,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       if (season.trailer_key) trailerBySeason.set(season.id, season.trailer_key);
     });
 
+    skipNewsInvalidationRef.current = true;
     setWatchlist((prev) =>
       prev.map((item) => {
         if (!isShowWithId(item, showId)) return item;
@@ -573,41 +587,42 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     );
   }, []);
 
-  // Fetch sync log from Supabase. Admin-only, and not just as a matter of
-  // taste: `sync_log`'s RLS restricts reads to is_admin(), and migration
-  // 20260905160000 revoked anon's table grant on it outright, so calling this
-  // as a public visitor is a guaranteed 42501 -- a wasted round trip and a
-  // console error on every load of the page.
-  const fetchSyncLog = useCallback(async () => {
-    if (!isAdmin) return;
-    try {
+  // Fetch sync log from Supabase via React Query (in-memory only, never
+  // persisted to IndexedDB). Admin-only: `sync_log`'s RLS restricts reads to
+  // is_admin(), and migration 20260905160000 revoked anon's table grant on it.
+  // Caching it in React Query stops WatchlistProvider remounts from hitting
+  // `sync_log` on every route switch back to /watchlist.
+  const syncLogQuery = useQuery<SyncLogEntry[]>({
+    queryKey: ['watchlist', 'sync-log'] as const,
+    enabled: isAdmin,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
       const { data, error } = await supabase.from('sync_log')
-        .select('*')
+        .select('id, synced_at, sync_type, status, items_synced, error_message, duration_ms, shard, shard_count')
         .order('synced_at', { ascending: false })
         .limit(20);
-      if (error) throw error;
-      if (data) {
-        // `sync_type` and `status` are plain text columns; the union below is
-        // this file's contract for what the sync writers put in them.
-        const entries = data as SyncLogEntry[];
-        setSyncLog(entries);
-        // Find most recent successful sync of any type
-        const lastSuccessful = entries.find((e) => e.status === 'success');
-        if (lastSuccessful) {
-          setLastSyncTime(lastSuccessful.synced_at);
-        }
-        // Find most recent successful auto sync
-        const lastAutoSuccess = entries.find(
-          (e) => e.sync_type === 'auto' && e.status === 'success',
-        );
-        if (lastAutoSuccess) {
-          setLastAutoSyncTime(lastAutoSuccess.synced_at);
-        }
+      if (error) {
+        console.error('Error fetching sync log:', error);
+        return [];
       }
-    } catch (error) {
-      console.error('Error fetching sync log:', error);
-    }
-  }, [isAdmin]);
+      return (data ?? []) as SyncLogEntry[];
+    },
+  });
+
+  const syncLog = useMemo(() => (isAdmin ? syncLogQuery.data ?? [] : []), [isAdmin, syncLogQuery.data]);
+  const lastSyncTime = useMemo(
+    () => syncLog.find((e) => e.status === 'success')?.synced_at ?? null,
+    [syncLog],
+  );
+  const lastAutoSyncTime = useMemo(
+    () => syncLog.find((e) => e.sync_type === 'auto' && e.status === 'success')?.synced_at ?? null,
+    [syncLog],
+  );
+
+  const fetchSyncLog = useCallback(async () => {
+    if (!isAdmin) return;
+    await queryClient.invalidateQueries({ queryKey: ['watchlist', 'sync-log'] });
+  }, [isAdmin, queryClient]);
 
   useEffect(() => {
     const stored = localStorage.getItem('watched_episodes');
@@ -619,55 +634,18 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       }
     }
     void loadLibrary(false);
-    fetchSyncLog();
-  }, [loadLibrary, fetchSyncLog]);
+  }, [loadLibrary]);
 
   const getAutoStatus = useCallback(
     (item: WatchlistItem) => {
       const personalStatus = libraryStatus(item);
       if (['Hidden', 'Stopped watching', 'Watched', 'Completed', 'Watching'].includes(personalStatus)) return personalStatus;
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-
-      if (item.category === 'Movies') {
-        if (item.release_date) {
-          const releaseDate = new Date(item.release_date);
-          releaseDate.setHours(0, 0, 0, 0);
-          if (releaseDate > now) {
-            const diffTime = Math.abs(releaseDate.getTime() - now.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            return `releases in ${diffDays} day${diffDays === 1 ? '' : 's'}`;
-          }
-        }
-        return 'Released';
-      }
-
+      // The countdown comes from one pure source, shared with the card and
+      // the detail dialog (library-state's countdownRelease).
+      const next = countdownRelease(item);
+      if (item.category === 'Movies') return next ? releaseCountdown(next) : 'Released';
       if (!item.seasons || item.seasons.length === 0) return 'Returning Series';
-
-      const futureSeasons = item.seasons.filter(
-        (s) => s.season_number > 0 && s.release_date && new Date(s.release_date) > now,
-      );
-      if (futureSeasons.length > 0) {
-        const earliestSeason = futureSeasons.reduce((earliest, current) => {
-          if (!earliest.release_date) return current;
-          if (!current.release_date) return earliest;
-          return new Date(current.release_date) <
-            new Date(earliest.release_date)
-            ? current
-            : earliest;
-        });
-
-        if (earliestSeason.release_date) {
-          const releaseDate = new Date(earliestSeason.release_date);
-          releaseDate.setHours(0, 0, 0, 0);
-          const diffTime = Math.abs(releaseDate.getTime() - now.getTime());
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          return `S${earliestSeason.season_number} releases in ${diffDays} day${diffDays === 1 ? '' : 's'}`;
-        }
-        return 'Coming Soon';
-      }
-
-      return personalStatus;
+      return next ? releaseCountdown(next) : personalStatus;
     },
     [],
   );
@@ -710,24 +688,46 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const laterWhen = item.watched === true && options.watchedWhen && options.watchedWhen.mode !== 'now'
       ? options.watchedWhen
       : undefined;
-    // The rows are in by then, so a failure must not read "Failed to add".
-    const markAddedWatched = async (kind: 'episode' | 'movie', ids: number[]): Promise<boolean> => {
+    // The rows are in by then, so nothing here may throw: the outer catch
+    // would say "Failed to add" about a title that is there.
+    const markAddedWatched = async (
+      kind: 'episode' | 'movie',
+      ids: number[],
+      releaseDates: ReadonlyMap<number, string> = new Map(),
+    ): Promise<boolean> => {
       if (!laterWhen || ids.length === 0) return true;
-      const { error } = await supabase.rpc('set_watched', setWatchedArgs(kind, ids, true, laterWhen));
-      if (!error) return true;
-      console.error(`Failed to mark "${item.title}" as watched:`, error);
-      toast({
-        title: 'Added, but not marked watched',
-        description: `"${item.title}" is in your library. Mark it as watched from there.`,
-        variant: 'destructive',
-      });
-      return false;
+      try {
+        // A picked day before something aired cannot be right (a series
+        // that ran for years): those rows take their own air date instead.
+        const pickedDay = laterWhen.mode === 'at' ? laterWhen.date : null;
+        const airedLater = (id: number) => {
+          const released = releaseDates.get(id)?.slice(0, 10);
+          return pickedDay !== null && !!released && released > pickedDay;
+        };
+        const onWhen = ids.filter((id) => !airedLater(id));
+        const onRelease = ids.filter(airedLater);
+        const results = await Promise.all([
+          onWhen.length > 0 ? supabase.rpc('set_watched', setWatchedArgs(kind, onWhen, true, laterWhen)) : null,
+          onRelease.length > 0 ? supabase.rpc('set_watched', setWatchedArgs(kind, onRelease, true, { mode: 'release' })) : null,
+        ]);
+        const failed = results.find((r) => r?.error);
+        if (failed?.error) throw failed.error;
+        return true;
+      } catch (error) {
+        console.error(`Failed to mark "${item.title}" as watched:`, error);
+        toast({
+          title: 'Added, but not marked watched',
+          description: `"${item.title}" is in your library. Mark it as watched from there.`,
+          variant: 'destructive',
+        });
+        return false;
+      }
     };
 
     try {
       if (item.category === 'Movies') {
         try {
-          const { data: inserted, error } = await supabase.from('movies').insert({
+          const payload = {
             title: item.title,
             platform: item.streaming_platform || 'Online',
             genre: item.genres?.join(', ') || null,
@@ -742,14 +742,81 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             directors: item.directors ?? null,
             top_cast: item.top_cast ?? null,
             imdb_id: item.imdb_id ?? null,
+            tmdb_rating: item.tmdb_rating ?? null,
+            tmdb_votes: item.tmdb_votes ?? null,
             collection_id: item.collection_id ?? null,
             collection_name: item.collection_name ?? null,
             // "Seen it" from discovery: straight to Finished.
             watched: item.watched === true && !laterWhen,
-          }).select('id').single();
+          };
+          const firstInsert = await supabase.from('movies').insert({
+            ...payload,
+            genre_ids: item.genre_ids ?? null,
+            original_language: item.original_language ?? null,
+            origin_country: item.origin_country ?? null,
+          }).select('id, watched, watched_at').single();
+          const { data: inserted, error } = firstInsert.error && missingCategoryColumns(firstInsert.error.message)
+            ? await supabase.from('movies').insert(payload).select('id, watched, watched_at').single()
+            : firstInsert;
           if (error) throw error;
-          const marked = await markAddedWatched('movie', [inserted.id]);
-          if (!options.skipRefresh) await fetchData();
+          const marked = await markAddedWatched(
+            'movie',
+            [inserted.id],
+            item.release_date ? new Map([[inserted.id, item.release_date]]) : undefined,
+          );
+          if (!options.skipRefresh) {
+            let watched = inserted.watched;
+            let watchedAt = inserted.watched_at;
+            if (laterWhen && marked) {
+              const { data: updatedRow } = await supabase
+                .from('movies')
+                .select('watched, watched_at')
+                .eq('id', inserted.id)
+                .maybeSingle();
+              if (updatedRow) {
+                watched = updatedRow.watched;
+                watchedAt = updatedRow.watched_at;
+              }
+            }
+            const newMovie: WatchlistItem = {
+              id: inserted.id.toString(),
+              watched,
+              watched_at: watchedAt,
+              library_state: 'active',
+              title: item.title,
+              category: 'Movies',
+              description: item.description || undefined,
+              descriptionLoaded: Boolean(item.description),
+              year: item.year || undefined,
+              runtime: item.runtime || undefined,
+              genres: item.genres ?? [],
+              genre_ids: item.genre_ids ?? null,
+              original_language: item.original_language ?? null,
+              origin_country: item.origin_country ?? null,
+              image_url: item.image_url || undefined,
+              backdrop_url: item.backdrop_url || undefined,
+              link: item.tmdb_id ? `https://www.themoviedb.org/movie/${item.tmdb_id}` : undefined,
+              tmdb_id: item.tmdb_id || undefined,
+              release_date: item.release_date || undefined,
+              created_at: item.release_date ? new Date(item.release_date).toISOString() : new Date().toISOString(),
+              streaming_platform: payload.platform,
+              trailer_key: item.trailer_key || undefined,
+              directors: item.directors ?? undefined,
+              top_cast: item.top_cast ?? undefined,
+              imdb_id: item.imdb_id ?? undefined,
+              tmdb_rating: item.tmdb_rating ?? undefined,
+              tmdb_votes: item.tmdb_votes ?? undefined,
+              collection_id: item.collection_id ?? undefined,
+              collection_name: item.collection_name ?? undefined,
+            };
+            setWatchlist((prev) => [...prev, newMovie]);
+            if (item.collection_id) {
+              void queryClient.invalidateQueries({ queryKey: ['watchlist', 'library-collections'] });
+            }
+            if (watched) {
+              void invalidateWatchDerived(queryClient);
+            }
+          }
           if (!options.quiet && marked) {
             toast({ title: 'Success', description: item.watched ? 'Film added as watched' : 'Movie added to watchlist' });
           }
@@ -764,8 +831,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         }
       } else if (item.category === 'TV Shows') {
         try {
-          const { data: show, error: showError } = await supabase.from('tv_shows')
-            .insert({
+          const payload = {
               title: item.title,
               platform: item.streaming_platform || 'Online',
               genre: item.genres?.join(', ') || null,
@@ -779,15 +845,26 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               creators: item.creators ?? null,
               top_cast: item.top_cast ?? null,
               imdb_id: item.imdb_id ?? null,
-            })
-            .select()
-            .single();
+              tmdb_rating: item.tmdb_rating ?? null,
+              tmdb_votes: item.tmdb_votes ?? null,
+          };
+          const firstInsert = await supabase.from('tv_shows').insert({
+            ...payload,
+            genre_ids: item.genre_ids ?? null,
+            original_language: item.original_language ?? null,
+            origin_country: item.origin_country ?? null,
+          }).select().single();
+          const { data: show, error: showError } = firstInsert.error && missingCategoryColumns(firstInsert.error.message)
+            ? await supabase.from('tv_shows').insert(payload).select().single()
+            : firstInsert;
 
           if (showError) throw showError;
 
           let failedSeasonCount = 0;
           let detailsFailed = false;
           const airedEpisodeIds: number[] = [];
+          const airedReleaseDates = new Map<number, string>();
+          const insertedSeasons: Season[] = [];
 
           const now = new Date();
           const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -795,14 +872,16 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             // The show row exists by now, so this must not reach the outer
             // catch: that says "Failed to add" about a row that is there,
             // never refetches it, and lets a retry insert it twice.
-            const showDetails = await fetchTMDBProxy<TMDBDetails>(
-              `tv/${item.tmdb_id}`,
-            ).catch((error) => {
-              console.error(`Failed to load "${item.title}" from TMDB:`, error);
-              detailsFailed = true;
-              return {} as TMDBDetails;
-            });
-            const validSeasons = (showDetails.seasons || []).filter(
+            const rawSeasons = options.seasons !== undefined
+              ? options.seasons
+              : (await fetchTMDBProxy<TMDBDetails>(
+                `tv/${item.tmdb_id}`,
+              ).catch((error) => {
+                console.error(`Failed to load "${item.title}" from TMDB:`, error);
+                detailsFailed = true;
+                return {} as TMDBDetails;
+              })).seasons || [];
+            const validSeasons = rawSeasons.filter(
               // Skip Season 0 and seasons with no episodes
               (s) => s.season_number !== 0 && s.episode_count !== 0,
             );
@@ -845,10 +924,34 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       // season trigger follows from the episodes.
                       watched: !laterWhen && item.watched === true && !!v.air_date && v.air_date <= todayIso,
                     }));
-                    const { data: insertedEps } = await supabase.from('tv_show_episodes').insert(eps).select('id, release_date');
-                    for (const ep of insertedEps ?? []) {
-                      if (ep.release_date && ep.release_date <= todayIso) airedEpisodeIds.push(ep.id);
-                    }
+                    const { data: insertedEps } = await supabase
+                      .from('tv_show_episodes')
+                      .insert(eps)
+                      .select('id, episode_number, title, release_date, runtime, watched');
+                    const mappedEpisodes: Episode[] = (insertedEps ?? [])
+                      .sort((a, b) => (a.episode_number || 0) - (b.episode_number || 0))
+                      .map((ep) => {
+                        if (ep.release_date && ep.release_date <= todayIso) {
+                          airedEpisodeIds.push(ep.id);
+                          airedReleaseDates.set(ep.id, ep.release_date);
+                        }
+                        return {
+                          id: ep.id,
+                          episode_number: ep.episode_number,
+                          title: ep.title || `Episode ${ep.episode_number}`,
+                          release_date: ep.release_date || undefined,
+                          runtime: ep.runtime || undefined,
+                          watched: ep.watched,
+                        };
+                      });
+                    insertedSeasons.push({
+                      id: season.id,
+                      season_number: season.season_number,
+                      release_date: season.release_date || undefined,
+                      trailer_key: season.trailer_key || undefined,
+                      watched: mappedEpisodes.length > 0 && mappedEpisodes.every((ep) => ep.watched),
+                      episodes: mappedEpisodes,
+                    });
                   } else {
                     // No valid episodes, remove the season
                     await supabase.from('tv_show_seasons')
@@ -868,9 +971,69 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             failedSeasonCount = results.filter((ok) => !ok).length;
           }
 
-          const marked = await markAddedWatched('episode', airedEpisodeIds);
-          if (!options.skipRefresh) await fetchData();
-          if (!marked) return true;
+          const marked = await markAddedWatched('episode', airedEpisodeIds, airedReleaseDates);
+          if (!options.skipRefresh) {
+            const airedIdSet = new Set(airedEpisodeIds);
+            const finalSeasons = insertedSeasons
+              .sort((a, b) => a.season_number - b.season_number)
+              .map((season) => {
+                if (!laterWhen || !marked || airedIdSet.size === 0) return season;
+                const episodes = season.episodes.map((ep) =>
+                  ep.id && airedIdSet.has(ep.id) ? { ...ep, watched: true } : ep,
+                );
+                return {
+                  ...season,
+                  episodes,
+                  watched: episodes.length > 0 && episodes.every((ep) => ep.watched),
+                };
+              });
+            const showIdStr = show.id.toString();
+            loadedShowsRef.current.add(showIdStr);
+            const watchedAt = marked && item.watched && airedEpisodeIds.length > 0
+              ? (laterWhen?.mode === 'at'
+                ? localNoonIso(laterWhen.date)
+                : laterWhen?.mode === 'unknown'
+                  ? null
+                  : new Date().toISOString())
+              : null;
+            const newShow: WatchlistItem = {
+              id: showIdStr,
+              library_state: 'active',
+              watched_at: watchedAt,
+              title: item.title,
+              category: 'TV Shows',
+              status: show.status || 'Plan to Watch',
+              description: item.description || undefined,
+              descriptionLoaded: Boolean(item.description),
+              year: item.year || releaseYear(show.release_date),
+              genres: item.genres ?? [],
+              genre_ids: item.genre_ids ?? null,
+              original_language: item.original_language ?? null,
+              origin_country: item.origin_country ?? null,
+              image_url: item.image_url || undefined,
+              backdrop_url: item.backdrop_url || undefined,
+              link: item.tmdb_id ? `https://www.themoviedb.org/tv/${item.tmdb_id}` : undefined,
+              tmdb_id: item.tmdb_id || undefined,
+              release_date: item.release_date || undefined,
+              created_at: item.release_date ? new Date(item.release_date).toISOString() : new Date().toISOString(),
+              streaming_platform: payload.platform,
+              series_status: (show.status as WatchlistItem['series_status']) || undefined,
+              trailer_key: item.trailer_key || undefined,
+              creators: item.creators ?? undefined,
+              top_cast: item.top_cast ?? undefined,
+              imdb_id: item.imdb_id ?? undefined,
+              tmdb_rating: item.tmdb_rating ?? undefined,
+              tmdb_votes: item.tmdb_votes ?? undefined,
+              episodesLoaded: true,
+              seasons: finalSeasons,
+            };
+            setWatchlist((prev) => [...prev, newShow]);
+            if (marked && item.watched && airedEpisodeIds.length > 0) {
+              void invalidateWatchDerived(queryClient);
+            }
+          }
+          // A failed mark has its own toast; a failed season still needs one.
+          if (!marked && !detailsFailed && failedSeasonCount === 0) return true;
           if (options.quiet && !detailsFailed && failedSeasonCount === 0) return true;
           toast({
             title: 'Success',
@@ -916,18 +1079,26 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     try {
       if (!isAdmin || item.category !== 'Movies') throw new Error('Movie update unavailable');
       const id = Number(item.id);
+      let updated: { id: number; watched: boolean; watched_at: string | null } | null = null;
       // Any "when" but now goes through set_watched: the trigger stamps now()
       // whenever `watched` flips, so a client-sent watched_at cannot win.
       if (watched && when && when.mode !== 'now') {
         const { error: rpcError } = await supabase.rpc('set_watched', setWatchedArgs('movie', [id], true, when));
         if (rpcError) throw rpcError;
+        const { data, error } = await supabase.from('movies').select('id, watched, watched_at').eq('id', id).single();
+        if (error || !data) throw error ?? new Error('Movie update failed');
+        updated = data;
       } else {
-        const { error: updateError } = await supabase.from('movies').update({ watched }).eq('id', id);
-        if (updateError) throw updateError;
+        const { data, error: updateError } = await supabase
+          .from('movies')
+          .update({ watched })
+          .eq('id', id)
+          .select('id, watched, watched_at')
+          .single();
+        if (updateError || !data) throw updateError ?? new Error('Movie update failed');
+        updated = data;
       }
-      const { data, error } = await supabase.from('movies').select('id, watched, watched_at').eq('id', id).single();
-      if (error || !data) throw error ?? new Error('Movie update failed');
-      setWatchlist((prev) => prev.map((row) => row.category === item.category && row.id === item.id ? { ...row, watched: data.watched, watched_at: data.watched_at } : row));
+      setWatchlist((prev) => prev.map((row) => row.category === item.category && row.id === item.id ? { ...row, watched: updated.watched, watched_at: updated.watched_at } : row));
       await invalidateWatchDerived(queryClient);
     } catch (error) { reportPersonalUpdateError(error); }
   };
@@ -1054,27 +1225,46 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         if (details) {
           facts = {
             original_language: details.original_language ?? null,
-            origin_country: details.origin_country ?? [],
+            origin_country: details.origin_country?.length ? details.origin_country : details.production_countries?.map((country) => country.iso_3166_1) ?? [],
             genre_ids: details.genres?.map((genre) => genre.id).filter((id): id is number => typeof id === 'number') ?? [],
           };
         }
       }
-      const { error } = await supabase.from('favourites').insert({
-        title: item.title,
-        poster: item.poster || null,
-        media_type: item.media_type,
-        tmdb_id: item.tmdb_id || null,
-        original_language: facts.original_language ?? null,
-        origin_country: facts.origin_country ?? null,
-        genre_ids: facts.genre_ids ?? null,
-        // The fallback string, read back only for a row whose facts stay
-        // thin. Resolved rather than left null so it always holds a real
-        // bucket -- a null here would fall through to a different last
-        // resort than the add dialog just advertised.
-        category: item.category ?? resolveFavouriteCategory(facts),
-      });
-      if (error) throw error;
-      await fetchData();
+      const { data: insertedFav, error } = await supabase
+        .from('favourites')
+        .insert({
+          title: item.title,
+          poster: item.poster || null,
+          media_type: item.media_type,
+          tmdb_id: item.tmdb_id || null,
+          original_language: facts.original_language ?? null,
+          origin_country: facts.origin_country ?? null,
+          genre_ids: facts.genre_ids ?? null,
+          // The fallback string, read back only for a row whose facts stay
+          // thin. Resolved rather than left null so it always holds a real
+          // bucket -- a null here would fall through to a different last
+          // resort than the add dialog just advertised.
+          category: item.category ?? resolveFavouriteCategory(facts),
+        })
+        .select('id, title, poster, media_type, tmdb_id, created_at, category, original_language, origin_country, genre_ids')
+        .single();
+      if (error || !insertedFav) throw error ?? new Error('Failed to add favourite');
+      const insertedFacts: TmdbFacts = {
+        original_language: insertedFav.original_language ?? null,
+        origin_country: insertedFav.origin_country ?? null,
+        genre_ids: insertedFav.genre_ids ?? null,
+      };
+      const newFav: FavouriteItem = {
+        id: insertedFav.id.toString(),
+        title: insertedFav.title,
+        poster: insertedFav.poster || undefined,
+        media_type: insertedFav.media_type as 'movie' | 'tv',
+        tmdb_id: insertedFav.tmdb_id || undefined,
+        created_at: insertedFav.created_at || new Date().toISOString(),
+        category: resolveFavouriteCategory(insertedFacts, insertedFav.category),
+        facts: insertedFacts,
+      };
+      setFavourites((prev) => [...prev, newFav]);
       // The About page's favourite cards read titles on their own key.
       void queryClient.invalidateQueries({ queryKey: ['favourites'] });
       toast({ title: 'Success', description: 'Added to favourites' });
@@ -1114,9 +1304,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     seasonNumber: number,
     episodeNumbers: ReadonlySet<number>,
     watched: boolean,
+    watchedAtOverride?: string,
   ) => {
     setWatchlist((prev) => prev.map((show) => !isShowWithId(show, showId) ? show : {
       ...show,
+      ...(watchedAtOverride !== undefined ? { watched_at: watchedAtOverride } : {}),
       seasons: show.seasons?.map((season) => season.season_number !== seasonNumber ? season : {
         ...season,
         episodes: season.episodes.map((ep) =>
@@ -1163,8 +1355,14 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         (e) => e.episode_number === episodeNumber,
       );
       await persistWatchedProgress(queryClient, [episode?.id], nextWatched);
-      markEpisodesWatched(showId, seasonNumber, new Set([episodeNumber]), nextWatched);
-      void refreshShowWatchedAt(showId);
+      markEpisodesWatched(
+        showId,
+        seasonNumber,
+        new Set([episodeNumber]),
+        nextWatched,
+        nextWatched ? new Date().toISOString() : undefined,
+      );
+      if (!nextWatched) void refreshShowWatchedAt(showId);
       setWatchedEpisodes((prev) => {
         const next = new Set(prev);
         if (nextWatched) next.add(episodeKey);
@@ -1208,10 +1406,15 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       await persistWatchedProgress(queryClient, episodes.map((ep) => ep.id), nextWatched, when);
+      const isNow = nextWatched && (!when || when.mode === 'now');
       markEpisodesWatched(
-        showId, seasonNumber, new Set(episodes.map((ep) => ep.episode_number)), nextWatched,
+        showId,
+        seasonNumber,
+        new Set(episodes.map((ep) => ep.episode_number)),
+        nextWatched,
+        isNow ? new Date().toISOString() : undefined,
       );
-      void refreshShowWatchedAt(showId);
+      if (!isNow) void refreshShowWatchedAt(showId);
       setWatchedEpisodes((prev) => {
         const next = new Set(prev);
         for (const ep of episodes) {
@@ -1286,7 +1489,133 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (!target) startSyncCooldown(data?.retry_after);
-      await Promise.all([fetchData(), fetchSyncLog()]);
+      if (target) {
+        const targetId = Number(target.id);
+        const refreshOne = async () => {
+          if (target.category === 'Movies') {
+            const { data: movie } = await supabase
+              .from('movies')
+              .select('id, title, platform, genre, genre_ids, original_language, origin_country, release_year, poster, release_date, tmdb_id, runtime, watched, watched_at, library_state, collection_id, collection_name, overview, trailer_key, directors, top_cast, imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes')
+              .eq('id', targetId)
+              .maybeSingle();
+            if (!movie) return;
+            loadedDescriptionsRef.current.add(titleKey(target));
+            setWatchlist((prev) =>
+              prev.map((row) =>
+                row.category === 'Movies' && row.id === target.id
+                  ? {
+                      ...row,
+                      watched: movie.watched,
+                      watched_at: movie.watched_at,
+                      library_state: movie.library_state as LibraryState,
+                      title: movie.title,
+                      streaming_platform: movie.platform,
+                      genres: movie.genre ? movie.genre.split(',').map((g: string) => g.trim()) : [],
+                      genre_ids: movie.genre_ids ?? null,
+                      original_language: movie.original_language ?? null,
+                      origin_country: movie.origin_country ?? null,
+                      year: movie.release_year || undefined,
+                      runtime: movie.runtime || undefined,
+                      image_url: movie.poster || undefined,
+                      release_date: movie.release_date || undefined,
+                      description: movie.overview || '',
+                      descriptionLoaded: true,
+                      trailer_key: movie.trailer_key || undefined,
+                      directors: movie.directors ?? undefined,
+                      top_cast: movie.top_cast ?? undefined,
+                      collection_id: movie.collection_id ?? undefined,
+                      collection_name: movie.collection_name ?? undefined,
+                      imdb_id: movie.imdb_id ?? undefined,
+                      imdb_rating: movie.imdb_rating ?? undefined,
+                      imdb_votes: movie.imdb_votes ?? undefined,
+                      tmdb_rating: movie.tmdb_rating ?? undefined,
+                      tmdb_votes: movie.tmdb_votes ?? undefined,
+                      rt_score: movie.rt_score ?? undefined,
+                      metascore: movie.metascore ?? undefined,
+                    }
+                  : row,
+              ),
+            );
+          } else {
+            const [{ data: show }, { data: lastWatched }] = await Promise.all([
+              supabase
+                .from('tv_shows')
+                .select(`id, title, platform, genre, genre_ids, original_language, origin_country, status, poster, release_date, tmdb_id, library_state,
+                  overview, trailer_key, creators, top_cast, imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes,
+                  tv_show_seasons (id, season_number, release_date, watched, trailer_key,
+                    tv_show_episodes (id, episode_number, title, watched, runtime, release_date))`)
+                .eq('id', targetId)
+                .maybeSingle(),
+              supabase
+                .from('watchlist_show_last_watched')
+                .select('last_watched_at')
+                .eq('tv_show_id', targetId)
+                .maybeSingle(),
+            ]);
+            if (!show) return;
+            loadedDescriptionsRef.current.add(titleKey(target));
+            loadedShowsRef.current.add(target.id);
+            const refreshedSeasons: Season[] = (show.tv_show_seasons || [])
+              .sort((a, b) => a.season_number - b.season_number)
+              .map((season) => ({
+                id: season.id,
+                season_number: season.season_number,
+                release_date: season.release_date || undefined,
+                watched: season.watched,
+                trailer_key: season.trailer_key || undefined,
+                episodes: (season.tv_show_episodes || [])
+                  .sort((a, b) => (a.episode_number || 0) - (b.episode_number || 0))
+                  .map((ep) => ({
+                    id: ep.id,
+                    episode_number: ep.episode_number,
+                    title: ep.title || `Episode ${ep.episode_number}`,
+                    release_date: ep.release_date || undefined,
+                    runtime: ep.runtime || undefined,
+                    watched: ep.watched,
+                  })),
+              }));
+            setWatchlist((prev) =>
+              prev.map((row) =>
+                row.category === 'TV Shows' && row.id === target.id
+                  ? {
+                      ...row,
+                      library_state: show.library_state as LibraryState,
+                      watched_at: lastWatched?.last_watched_at ?? null,
+                      title: show.title,
+                      status: show.status || 'Plan to Watch',
+                      series_status: show.status as WatchlistItem['series_status'],
+                      streaming_platform: show.platform,
+                      genres: show.genre ? show.genre.split(',').map((g: string) => g.trim()) : [],
+                      genre_ids: show.genre_ids ?? null,
+                      original_language: show.original_language ?? null,
+                      origin_country: show.origin_country ?? null,
+                      year: releaseYear(show.release_date),
+                      image_url: show.poster || undefined,
+                      release_date: show.release_date || undefined,
+                      description: show.overview || '',
+                      descriptionLoaded: true,
+                      trailer_key: show.trailer_key || undefined,
+                      creators: show.creators ?? undefined,
+                      top_cast: show.top_cast ?? undefined,
+                      imdb_id: show.imdb_id ?? undefined,
+                      imdb_rating: show.imdb_rating ?? undefined,
+                      imdb_votes: show.imdb_votes ?? undefined,
+                      tmdb_rating: show.tmdb_rating ?? undefined,
+                      tmdb_votes: show.tmdb_votes ?? undefined,
+                      rt_score: show.rt_score ?? undefined,
+                      metascore: show.metascore ?? undefined,
+                      episodesLoaded: true,
+                      seasons: refreshedSeasons,
+                    }
+                  : row,
+              ),
+            );
+          }
+        };
+        await Promise.all([refreshOne(), fetchSyncLog()]);
+      } else {
+        await Promise.all([fetchData(), fetchSyncLog()]);
+      }
       setNextAutoSyncTime(getNextAutoSync().toISOString());
 
       const itemsSynced = data?.itemsSynced ?? 0;
@@ -1376,54 +1705,74 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     let failed = 0;
     let attempted = 0;
 
-    try {
-      for (const fav of batch) {
-        // Shares the Sync Updates button's cancel flag, because it shares the
-        // toolbar's Cancel affordance. Without this the button rendered and
-        // did nothing for 50 sequential proxy calls.
-        if (syncCancelRef.current) break;
-        attempted++;
-        try {
-          const details = await fetchTMDBProxy<TMDBDetails>(
-            `${fav.media_type}/${fav.tmdb_id}`,
-          ).catch((error) => {
-            // TMDB no longer has this id. Empty facts retire the row; thrown,
-            // it would stay stale and head every batch after this one.
-            if (
-              error instanceof FunctionsHttpError &&
-              (error.context as Response).status === 404
-            ) {
-              return {} as TMDBDetails;
-            }
-            throw error;
-          });
-          // The detail endpoints expand genres to objects; the derivation
-          // wants ids, and TMDB never returns both shapes at once.
-          const genreIds =
-            details.genres
-              ?.map((g) => g.id)
-              .filter((id): id is number => typeof id === 'number') ?? [];
+    const CONCURRENCY = 5;
+    const updatedFacts = new Map<string, TmdbFacts>();
 
-          const { error } = await supabase
-            .from('favourites')
-            .update({
-              original_language: details.original_language ?? null,
-              // Empty rather than null: see the note above on what marks a
-              // row finished.
-              origin_country: details.origin_country ?? [],
-              genre_ids: genreIds,
-            })
-            .eq('id', Number(fav.id));
-          if (error) throw error;
-          synced++;
-        } catch (error) {
-          console.error(`Favourite facts sync failed for ${fav.title}:`, error);
-          failed++;
-        }
-        setSyncProgress(Math.round((attempted / batch.length) * 100));
+    try {
+      for (let i = 0; i < batch.length; i += CONCURRENCY) {
+        if (syncCancelRef.current) break;
+        const slice = batch.slice(i, i + CONCURRENCY);
+        await Promise.all(
+          slice.map(async (fav) => {
+            attempted++;
+            try {
+              const details = await fetchTMDBProxy<TMDBDetails>(
+                `${fav.media_type}/${fav.tmdb_id}`,
+              ).catch((error) => {
+                // TMDB no longer has this id. Empty facts retire the row; thrown,
+                // it would stay stale and head every batch after this one.
+                if (
+                  error instanceof FunctionsHttpError &&
+                  (error.context as Response).status === 404
+                ) {
+                  return {} as TMDBDetails;
+                }
+                throw error;
+              });
+              // The detail endpoints expand genres to objects; the derivation
+              // wants ids, and TMDB never returns both shapes at once.
+              const genreIds =
+                details.genres
+                  ?.map((g) => g.id)
+                  .filter((id): id is number => typeof id === 'number') ?? [];
+              const facts: TmdbFacts = {
+                original_language: details.original_language ?? null,
+                // Empty rather than null: see the note above on what marks a
+                // row finished.
+                origin_country: details.origin_country?.length ? details.origin_country : details.production_countries?.map((country) => country.iso_3166_1) ?? [],
+                genre_ids: genreIds,
+              };
+
+              const { error } = await supabase
+                .from('favourites')
+                .update(facts)
+                .eq('id', Number(fav.id));
+              if (error) throw error;
+              updatedFacts.set(fav.id, facts);
+              synced++;
+            } catch (error) {
+              console.error(`Favourite facts sync failed for ${fav.title}:`, error);
+              failed++;
+            }
+            setSyncProgress(Math.round((attempted / batch.length) * 100));
+          }),
+        );
       }
 
-      await fetchData();
+      if (updatedFacts.size > 0) {
+        setFavourites((prev) =>
+          prev.map((fav) => {
+            const facts = updatedFacts.get(fav.id);
+            if (!facts) return fav;
+            return {
+              ...fav,
+              facts,
+              category: resolveFavouriteCategory(facts, fav.category),
+            };
+          }),
+        );
+        void queryClient.invalidateQueries({ queryKey: ['favourites'] });
+      }
 
       // Counts what is still stale, not what this batch left over: a failed
       // row is still stale, and reporting only `stale - batch` understates

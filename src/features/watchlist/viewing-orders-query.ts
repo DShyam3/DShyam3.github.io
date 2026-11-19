@@ -60,6 +60,7 @@ export interface LibraryCollectionRow {
 /** Read here, not with the library, so the site-wide warm-up stays small. */
 export const libraryCollectionsQueryOptions = queryOptions({
   queryKey: ['watchlist', 'library-collections'],
+  staleTime: 5 * 60 * 1000,
   queryFn: async (): Promise<LibraryCollectionRow[]> => {
     const { data, error } = await selectAllPages(
       (from, to) =>

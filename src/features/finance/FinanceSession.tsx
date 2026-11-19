@@ -50,7 +50,16 @@ export function FinanceSession({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isAdmin || prefersSavedData()) return;
-    return whenIdle(() => setRequested(true));
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const cancelIdle = whenIdle(() => {
+      // Wait briefly past the first idle tick so the visible page (e.g. Watchlist
+      // or Home) finishes its own stage-1 reads before Finance's ledger loads.
+      timer = setTimeout(() => setRequested(true), 2_500);
+    });
+    return () => {
+      cancelIdle();
+      if (timer !== null) clearTimeout(timer);
+    };
   }, [isAdmin]);
 
   useEffect(() => {

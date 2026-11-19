@@ -130,7 +130,7 @@ function FinanceView() {
   // its rows already loaded. Re-read them behind the ones on screen if they
   // are older than the query cache's staleTime, as the rest of the site does.
   useEffect(() => {
-    refreshIfStale(60_000);
+    refreshIfStale(10 * 60_000);
     // Mount only: a return visit, not every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -336,9 +336,7 @@ function FinanceView() {
       // the link starts only when a tap in this browser asked for it.
       navigate(window.location.pathname, { replace: true });
       if (consumeTrueLayerConnectIntent(window.localStorage)) void connectTrueLayer();
-      else checkTrueLayerConnection();
-    } else {
-      checkTrueLayerConnection();
+      else void checkTrueLayerConnection();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);

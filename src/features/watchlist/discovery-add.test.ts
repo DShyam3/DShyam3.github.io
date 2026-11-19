@@ -8,6 +8,7 @@ type Detail = Parameters<typeof discoveryAddPayload>[1];
 const detail = (overrides: Partial<Detail> = {}): Detail => ({
   title: 'A title',
   series_status: undefined,
+  season_count: null,
   overview: 'A synopsis',
   poster: null,
   backdrop: null,
@@ -15,6 +16,9 @@ const detail = (overrides: Partial<Detail> = {}): Detail => ({
   release_year: 2020,
   runtime: null,
   genres: ['Drama'],
+  genre_ids: [18],
+  original_language: 'en',
+  origin_country: ['US'],
   tmdb_id: 42,
   platform: 'Online',
   trailer_key: undefined,

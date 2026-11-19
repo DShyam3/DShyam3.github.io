@@ -224,8 +224,8 @@
 }
 
 .travel-country-row--active {
-  background: rgba(218, 165, 32, 0.04);
-  border-left-color: rgba(218, 165, 32, 0.4);
+  background: hsl(var(--brass) / 0.08);
+  border-left-color: hsl(var(--brass) / 0.75);
 }
 
 .travel-flag {

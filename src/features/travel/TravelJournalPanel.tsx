@@ -1,19 +1,18 @@
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Camera, ExternalLink, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { safeHref } from '@/lib/safe-url';
 import { citySummary } from './journal-summary';
-import { useTravelPhoto } from './journal-media';
+import { useTravelPhoto, useTravelPhotos } from './journal-media';
 import { TravelJournalEditor, type JournalEdit } from './TravelJournalEditor';
 import type { CityIdentity, TravelMemory, TravelVisit } from './journal-types';
 import type { JournalController } from './useTravelJournal';
 
 interface Props { city: CityIdentity; journal: JournalController; isAdmin: boolean; legacyVisited: boolean }
 
-function Photo({ memory, onOpen }: { memory: TravelMemory; onOpen: () => void }) {
-  const { url, loading } = useTravelPhoto(memory.photo_path);
+function Photo({ memory, url, loading, onOpen }: { memory: TravelMemory; url?: string; loading: boolean; onOpen: () => void }) {
   return <button type="button" onClick={onOpen} className="w-full overflow-hidden rounded-xl border border-border bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Open photo: ${memory.title}`}>
     {url ? <img src={url} alt={memory.title} loading="lazy" className="aspect-square w-full object-cover" /> : <span className="flex aspect-square items-center justify-center gap-2 text-xs text-muted-foreground"><Camera className="h-4 w-4" />{loading ? 'Loading photo…' : 'Photo unavailable'}</span>}
     <span className="block p-2 text-xs break-words">{memory.title}</span>
@@ -42,6 +41,16 @@ export function TravelJournalPanel({ city, journal, isAdmin, legacyVisited }: Pr
   const notes = memories.filter(memory => memory.kind === 'note');
   const cover = photos.find(memory => memory.is_cover);
   const selectedPhotos = photos.filter(memory => (!visitFilter || memory.visit_id === visitFilter) && (!tripFilter || memory.trip_id === tripFilter));
+  const visiblePhotoPaths = useMemo(() => {
+    if (tab === 'Overview') {
+      return [cover?.photo_path, ...photos.slice(0, 4).map(memory => memory.photo_path)];
+    }
+    if (tab === 'Photos') {
+      return selectedPhotos.map(memory => memory.photo_path);
+    }
+    return [];
+  }, [tab, cover, photos, selectedPhotos]);
+  const { urls: photoUrls, loading: photosLoading } = useTravelPhotos(visiblePhotoPaths);
 
   function removeMemory(memory: TravelMemory) {
     askDelete({ name: memory.title, description: 'Remove this memory from the journal? Its image file stays in private storage but is no longer included in backups.', onConfirm: async () => { try { await journal.remove('memories', memory); } catch { setError('Could not remove this memory. Please try again.'); } } });
@@ -71,11 +80,11 @@ export function TravelJournalPanel({ city, journal, isAdmin, legacyVisited }: Pr
     <div className="flex flex-wrap gap-1" role="tablist" aria-label="City journal sections">{['Overview', 'Visits', 'Favourites', 'Photos'].map((value, index, tabs) => <Button key={value} id={`${id}-${value}`} aria-controls={`${id}-panel`} role="tab" aria-selected={tab === value} tabIndex={tab === value ? 0 : -1} variant={tab === value ? 'secondary' : 'ghost'} size="sm" onClick={() => setTab(value)} onKeyDown={event => { const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : undefined; if (next !== undefined) { event.preventDefault(); setTab(tabs[next]); document.getElementById(`${id}-${tabs[next]}`)?.focus(); } }}>{value}</Button>)}</div>
     <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${tab}`} className="space-y-3">
       {tab === 'Overview' && <>
-        {cover && <Photo memory={cover} onOpen={() => setPhoto(cover)} />}
+        {cover && <Photo memory={cover} url={cover.photo_path ? photoUrls?.get(cover.photo_path) : undefined} loading={photosLoading} onOpen={() => setPhoto(cover)} />}
         {notes.length > 0 ? notes.map(memoryItem) : <p className="text-sm text-muted-foreground">No city memories recorded yet.</p>}
         {isAdmin && <Button size="sm" variant="outline" disabled={journal.busy || Boolean(journal.error)} onClick={() => setEdit({ table: 'memories', city, kind: 'note' })}><Plus className="mr-1 h-3 w-3" />Add a memory</Button>}
         {favourites.length > 0 && <><h3 className="readout-label pt-2">Favourite places</h3>{favourites.slice(0, 3).map(memoryItem)}</>}
-        {photos.length > 0 && <><h3 className="readout-label pt-2">Moments here</h3><div className="grid grid-cols-2 gap-2">{photos.slice(0, 4).map(memory => <Photo key={memory.id} memory={memory} onOpen={() => { setTab('Photos'); setPhoto(memory); }} />)}</div></>}
+        {photos.length > 0 && <><h3 className="readout-label pt-2">Moments here</h3><div className="grid grid-cols-2 gap-2">{photos.slice(0, 4).map(memory => <Photo key={memory.id} memory={memory} url={memory.photo_path ? photoUrls?.get(memory.photo_path) : undefined} loading={photosLoading} onOpen={() => { setTab('Photos'); setPhoto(memory); }} />)}</div></>}
       </>}
       {tab === 'Visits' && <>
         {isAdmin && <Button size="sm" variant="outline" disabled={journal.busy || Boolean(journal.error)} onClick={() => setEdit({ table: 'visits', city })}><Plus className="mr-1 h-3 w-3" />Add visit</Button>}
@@ -88,7 +97,7 @@ export function TravelJournalPanel({ city, journal, isAdmin, legacyVisited }: Pr
         {journal.data.trips.some(trip => photos.some(memory => memory.trip_id === trip.id)) && <label className="block space-y-2 text-xs">Filter album by trip<select className="h-9 w-full rounded-md border border-input bg-background px-2" value={tripFilter} onChange={event => setTripFilter(event.target.value)}><option value="">All trips</option>{journal.data.trips.filter(trip => photos.some(memory => memory.trip_id === trip.id)).map(trip => <option key={trip.id} value={trip.id}>{trip.title}</option>)}</select></label>}
         {visits.length > 0 && <label className="block space-y-2 text-xs">Filter album by visit<select className="h-9 w-full rounded-md border border-input bg-background px-2" value={visitFilter} onChange={event => setVisitFilter(event.target.value)}><option value="">All visits</option>{visits.map(visit => <option key={visit.id} value={visit.id}>{visit.start_date ?? 'Dates not recorded'} · {visit.status}</option>)}</select></label>}
         {selectedPhotos.length === 0 && <p className="text-sm text-muted-foreground">No photos in this album yet.</p>}
-        <div className="grid grid-cols-2 gap-2">{selectedPhotos.map(memory => <div key={memory.id} className="space-y-1"><Photo memory={memory} onOpen={() => setPhoto(memory)} />{isAdmin && <div className="flex gap-1"><Button size="sm" variant="ghost" disabled={journal.busy} onClick={() => setEdit({ table: 'memories', row: memory, city })}>Edit</Button><Button size="sm" variant="ghost" disabled={journal.busy} onClick={() => removeMemory(memory)} aria-label={`Delete ${memory.title}`}><Trash2 className="h-3 w-3" /></Button></div>}</div>)}</div>
+        <div className="grid grid-cols-2 gap-2">{selectedPhotos.map(memory => <div key={memory.id} className="space-y-1"><Photo memory={memory} url={memory.photo_path ? photoUrls?.get(memory.photo_path) : undefined} loading={photosLoading} onOpen={() => setPhoto(memory)} />{isAdmin && <div className="flex gap-1"><Button size="sm" variant="ghost" disabled={journal.busy} onClick={() => setEdit({ table: 'memories', row: memory, city })}>Edit</Button><Button size="sm" variant="ghost" disabled={journal.busy} onClick={() => removeMemory(memory)} aria-label={`Delete ${memory.title}`}><Trash2 className="h-3 w-3" /></Button></div>}</div>)}</div>
       </>}
     </div>
     {edit && isAdmin && <TravelJournalEditor key={`${edit.table}-${edit.row?.id ?? ('kind' in edit ? edit.kind : 'new')}`} edit={edit} journal={journal} cities={[city]} onClose={() => setEdit(null)} />}

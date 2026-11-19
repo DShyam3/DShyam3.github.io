@@ -18,7 +18,7 @@ export interface RatingRow {
 
 export const watchlistRatingsQuery = queryOptions({
   queryKey: ['watchlist', 'ratings'] as const,
-  staleTime: 5 * 60 * 1000,
+  staleTime: 10 * 60 * 1000,
   // Everyone reads it and Discover waits on it, so a failing read must not
   // hold a visitor's page for the default three retries.
   retry: 1,

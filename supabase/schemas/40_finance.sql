@@ -2155,3 +2155,33 @@ DROP TRIGGER IF EXISTS "tr_finance_user_holidays_keep_scope" ON "public"."financ
 CREATE TRIGGER "tr_finance_user_holidays_keep_scope"
     BEFORE UPDATE ON "public"."finance_user_holidays"
     FOR EACH ROW EXECUTE FUNCTION "public"."finance_keep_row_scope"();
+
+CREATE TABLE IF NOT EXISTS "public"."uk_bank_holidays" (
+    "region" "text" NOT NULL,
+    "date" "date" NOT NULL,
+    "title" "text" NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "uk_bank_holidays_pkey" PRIMARY KEY ("region", "date"),
+    CONSTRAINT "uk_bank_holidays_region_check" CHECK ("region" = ANY (ARRAY['england-and-wales'::"text", 'scotland'::"text", 'northern-ireland'::"text"]))
+);
+
+ALTER TABLE "public"."uk_bank_holidays" ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read uk_bank_holidays" ON "public"."uk_bank_holidays";
+CREATE POLICY "Public read uk_bank_holidays" ON "public"."uk_bank_holidays"
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admin insert uk_bank_holidays" ON "public"."uk_bank_holidays";
+CREATE POLICY "Admin insert uk_bank_holidays" ON "public"."uk_bank_holidays"
+    FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
+
+DROP POLICY IF EXISTS "Admin update uk_bank_holidays" ON "public"."uk_bank_holidays";
+CREATE POLICY "Admin update uk_bank_holidays" ON "public"."uk_bank_holidays"
+    FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
+
+DROP POLICY IF EXISTS "Admin delete uk_bank_holidays" ON "public"."uk_bank_holidays";
+CREATE POLICY "Admin delete uk_bank_holidays" ON "public"."uk_bank_holidays"
+    FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
+
+GRANT SELECT ON TABLE "public"."uk_bank_holidays" TO "anon", "authenticated";
+GRANT ALL ON TABLE "public"."uk_bank_holidays" TO "service_role";

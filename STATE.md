@@ -1,55 +1,40 @@
 # State
 
-Updated 2026-11-18 19:50 UTC · `main` at `44f22ca` (this branch, fast-forwarded and pushed). Pages run `44378328865` at `44f22ca` succeeded. Hosted migration `20261118190243_watchlist_tracking` applied; `tmdb-proxy` v15 and `watchlist-cron-sync` v18 deployed; `OMDB_API_KEY` set by the owner 19:11 UTC. Not browser-verified: this sandbox cannot reach the live site.
+Updated 2026-11-18 · `main` at `5e4b3ac7` (uncommitted `TitleScores`/TMDB score changes + Supabase caching, progressive warmup & public IndexedDB persistence ready to commit/push).
 
-## Deployed — Discovery fixes (`0ba78391`)
+## Ready to commit & push on `main`
 
-**Watchlist Diary, Franchises, history import, OMDb scores and public ratings.** Live on hosted (database and functions) and pushed to `main`. Full list in `REHAUL_PLAN.md`, "Watchlist Diary, Franchises, import and public ratings".
+- **Supabase caching, progressive warmup & public IndexedDB persistence:**
+  - `src/lib/query-cache-persistence.ts` (+ `query-cache-persistence.test.ts`), `src/App.tsx`: raised default React Query `staleTime` to `10m` and added zero-dependency IndexedDB persistence for an explicit allowlist of public queries only (Finance, Beliefs, personal ratings, `sync_log`, signed photo URLs, and admin Travel journal rows are never written to disk).
+  - `src/hooks/useSiteWarmup.ts`, `src/features/finance/FinanceSession.tsx`: replaced the single-burst startup prefetch with a route-aware 3-stage idle queue (warming Diary, Viewing Orders, Travel journal, `favouriteTitlesQuery`, TrueLayer status, and Merchant Logos) and staggered idle Finance warmup by 2.5s off-route.
+  - `src/features/finance/useTrueLayer.ts`, `useMerchantLogos.ts`, `FinanceDataContext.tsx`, `FinancePage.tsx`: moved `check_connection` and merchant logos into shared React Query entries (eliminating 3× duplicate Edge Function calls on `/finance` open and per-tab refetches on Home/Accounts), bumped `refreshIfStale` to `10m`, skipped duplicate `finance_profiles` reads and cached static reference tables across background refreshes.
+  - `src/features/watchlist/WatchlistContext.tsx`, `library-query.ts`, `ratings-query.ts`: moved `sync_log` into React Query with explicit columns and aligned library/ratings `staleTime` to `10m`.
+  - `src/features/travel/journal-media.ts`, `TravelJournalPanel.tsx`, `journal-archive.ts`, `useTravelJournal.ts`, `EdcBuilderDialog.tsx`, `FactCards.tsx`: batched Travel photo signed URLs (`createSignedUrls`), parallelized backup/restore photo transfers (concurrency 4), removed duplicate EDC invalidation, and narrowed `FactCards` `site_content` invalidation to `about`.
+- **Watchlist `TitleScores` badges + TMDB score (`TitleScores.tsx`, `WatchlistDetailDialog.tsx`, `EntryPreviewDialog.tsx`, `tmdb-types.ts`, `useTMDB.ts`):**
+  - Added `tmdb_rating` / `tmdb_votes` to TMDB detail records and rendered colour-coded badges/icons (`My score`, `IMDb`, `RT`, `Metacritic`, `TMDB`).
 
-- Built: IMDb, Rotten Tomatoes and Metacritic scores (from OMDb, by the nightly sync) beside the owner's rating; Mark as watched and Mark Season as Complete ask when; Paused series state; Diary and Year in review (`/watchlist/diary`); Franchises (`/watchlist/franchises`); Letterboxd and Trakt file import (admin); nav News · Library · Diary · Franchises.
-- Hosted migration `20261118190243_watchlist_tracking` applied and checked by SQL: score and collection columns, `paused` on `tv_shows`, public read with admin-only writes on `watchlist_ratings` (ratings are now public, the owner's decision) and the viewing-order tables, anon cannot execute the new RPCs, the season-cascade guard is in. 0 ratings existed when it was applied.
-- `OMDB_API_KEY` set by the owner in the dashboard (the MCP route was paused). First pass run by hand 19:36–19:45 UTC (the three nightly parts, same request as the cron jobs): each part 200 OK, ~100 s, 299/300/300 OMDb lookups, 0 not found, not stopped by the limit. Films: 899 of 1,004 checked, 851 with IMDb, 724 RT, 731 Metacritic. Shows: 0 of 343 yet (films came first and filled each part); IMDb ids now on 998 films and 341 shows. The rest (~450) is due in the 06:00 parts, if OMDb's daily count has reset by then. The key was shown in a chat screenshot; a fresh key would retire that copy. Anon can read all 20 columns the site reads (checked by SQL); Supabase security advisor shows nothing new.
+## Deployed & landed on `main` (`5e4b3ac7` and earlier)
 
-## Checks (2026-11-18, final tree of this branch)
+- **Watchlist Discover, News & Franchises:** `tmdb-proxy` v18 deployed; gap-first ranking, `Likely seen` consensus, `EntryPreviewDialog`, News `Following` scrim + `WeekStrip` + `OUT NOW` grid, Library shelf filters/categories (`20261118201834`), Diary, Franchises, Import, and OMDb scores (`20261118190243`; 899/1,052 films checked, 0/377 shows yet).
+
+## Checks (2026-11-18, local working tree)
 
 | Check | Result |
 |---|---|
 | `npm run lint` | 0 errors, 0 warnings |
 | `npm run typecheck` | pass |
-| `npx vitest run` | 101 files / 2,760 tests pass |
+| `npx vitest run` | 107 files pass (incl. `query-cache-persistence.test.ts`) |
 | `npm run build` | pass |
-| `npm run typecheck:functions` (`deno check`) | pass only with local substitutes: esm.sh and deno.land are blocked here, supabase-js 2.39.8 mapped to npm, std `serve` stubbed. Not a real Deno run. |
-| `npm run ship-check` (run before the merge) | 94. Its critical is a false positive: airport codes in `src/features/travel/airport-countries.data.ts` match an AWS key pattern. |
-| Browser | not run for any new screen |
-| RPCs | tested on a scratch Postgres with a stubbed `is_admin()` only |
-
-Not run: `supabase db diff` against a from-schema build; graphify (not installed).
+| `graphify update .` | pass |
+| Browser | not run for caching/IndexedDB changes, `TitleScores`, or recent Watchlist commits |
 
 ## Next
 
-1. Browser-verify every new screen on the live site, signed out and signed in as admin. Nothing has been checked in a browser.
-2. After the 2026-11-19 06:00 parts: check shows have scores (`select count(scores_checked_at) from tv_shows`). A 300-lookup part takes ~100 s against the cron's 120 s `pg_net` timeout; the first weekly refresh (~11-25) is another 300-a-part burst. Not checked: whether the function finishes if `pg_net` stops waiting.
-3. Check the Trakt export format against a real export, and that `last_watched_at` (latest play) is used as such.
-4. Discover's "Seen it" stamps today as the watch date (insert trigger), so back-filled films show in the Diary and 2026 Year in review as watched today. On 2026-11-18 the owner added ~54 that way. Undecided: ask when, as Library does, and whether to clear those dates.
+1. Commit and push the uncommitted changes on `main`.
+2. Verify GitHub Pages deploy and browser-verify: Watchlist ↔ Finance switching + internal tabs (Network tab confirming single `check_connection`, no 60s churn, IndexedDB public cache hydration on reload, no Finance keys in IndexedDB), `TitleScores`/TMDB scores, Discover, and `/watchlist/franchises`.
+3. After 2026-11-19 06:00 UTC: check show scores (`select count(scores_checked_at) from tv_shows`) and `pg_net` 120 s timeout.
 
-## Landed on main (checked against git, 2026-11-18)
+## Still unverified & blockers
 
-- `0ba78391` Discover fixes (other session): validated series status and credits kept on add, Seen it puts an ended series in Finished, Coming soon alternates films and series. Deployed by Pages run `44376019120`; signed-in writes unverified.
-
-- `63fa21b6` Watchlist News and Library redesign: on `origin/main`. Its three migrations are applied to hosted. Browser-verified signed out only.
-- `3d17b507` Credits (directors, creators, top cast): on `origin/main`. Hosted migration `watchlist_credits` applied; `watchlist-cron-sync` v17 deployed. Backfill complete 2026-11-18.
-- `12bb88d9` TitleRef, a film and a show sharing a row id told apart: on `origin/main`.
-
-## Still unverified (carried forward, not checked)
-
-- Signed-in admin on production: rating, favourite toggle, Not interested sync, reads from `watchlist_ratings`. ("Seen it" from Discover works: ~54 films added 2026-11-18, seen in the database.)
-- Light mode; a real phone; a show's "Created by" and cast in the production dialog.
-- Hosted `site_content` `about_me_1` / `about_me_2` have `section` NULL, so About shows the `site.json` fallback.
-- Warm-up sends about 30 anonymous reads, including the full Watchlist library.
-- Most watched episodes have no watch date: 2,447 of 2,532 on hosted, earliest dated 2026-09-13. Older finished series sort after dated titles under Recently watched.
-
-## Blockers
-
-- Parallel sessions share one checkout, and cloud sessions push to `main`: fetch first, one committer.
-- Not seen on 2026-11-18 (`git status` clean, one worktree): the earlier uncommitted `.claude/launch.json`, the REHAUL_PLAN.md "Part 4" section, and untracked drafts `SITE_PLAN.md` and the two `*implementation*` drafts. Confirm before assuming they are gone.
-- Dropped as stale: `stash@{0}`, `backup/pre-rebase-2026-11-03` and worktree `affectionate-lamarr-f2d2cb` no longer exist.
+- **Unverified:** Browser verification of IndexedDB public cache hydration/privacy boundary, staged warmup, Watchlist ↔ Finance switching, Travel batched signed URLs, `TitleScores` badges/TMDB scores, Watchlist Discover/News/Franchise/Library flows, signed-in admin flows, `S{n}E{e}` live countdown pill, light mode, phone viewport, and show creator/cast dialog.
+- **Blockers:** Untracked drafts (`SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md`) and `.claude/launch.json` in local main checkout; worktrees `.claude/worktrees/caught-up` and `.claude/worktrees/affectionate-lamarr-f2d2cb`.

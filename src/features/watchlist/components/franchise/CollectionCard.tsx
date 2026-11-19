@@ -10,6 +10,7 @@ import {
   type OrderEntryView,
 } from '@/features/watchlist/franchise';
 import type { TMDBCollection } from '@/features/watchlist/tmdb-types';
+import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { EntryList, POSTER_BASE } from './EntryList';
 import { FranchiseCard } from './FranchiseCard';
@@ -22,6 +23,7 @@ export function CollectionCard({
   getCollection,
   onOpen,
   onAddToLibrary,
+  onSeenIt,
   isAdding,
   onSave,
 }: {
@@ -30,6 +32,7 @@ export function CollectionCard({
   getCollection: (id: number) => Promise<TMDBCollection | null>;
   onOpen: (entry: OrderEntryView) => void;
   onAddToLibrary?: (entry: OrderEntryView) => void;
+  onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
   isAdding?: (key: string) => boolean;
   /** Admin only; receives the entries in release order. */
   onSave?: (collection: CollectionSummary, view: ReturnType<typeof buildOrderView>) => Promise<void>;
@@ -55,8 +58,13 @@ export function CollectionCard({
   return (
     <FranchiseCard
       name={collection.name}
-      summary={`${collection.watched} of ${collection.films.length} in library watched`}
-      strip={collection.films.map((f) => ({ key: String(f.tmdbId), poster: f.poster, mediaType: 'movie', watched: f.watched }))}
+      summary={view ? `${view.watched} of ${view.total} watched` : `${collection.watched} of ${collection.films.length} in library watched`}
+      nextUp={view?.nextUp?.title}
+      strip={
+        view
+          ? view.entries.map((e) => ({ key: e.key, poster: e.poster, mediaType: e.mediaType, watched: e.state === 'watched' }))
+          : collection.films.map((f) => ({ key: String(f.tmdbId), poster: f.poster, mediaType: 'movie', watched: f.watched }))
+      }
       open={open}
       onToggle={() => setOpen((value) => !value)}
     >
@@ -83,7 +91,7 @@ export function CollectionCard({
               Save as viewing order
             </Button>
           )}
-          <EntryList view={view} onOpen={onOpen} onAddToLibrary={onAddToLibrary} isAdding={isAdding} />
+          <EntryList view={view} onOpen={onOpen} onAddToLibrary={onAddToLibrary} onSeenIt={onSeenIt} isAdding={isAdding} />
         </>
       )}
     </FranchiseCard>

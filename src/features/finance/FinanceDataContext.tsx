@@ -163,6 +163,25 @@ export type StoredStudentLoanRate = StudentLoanRateRow & { id: string; isDefault
  * adding a column the client reads must land before the client does; the
  * failure is a loud toast, not an empty switcher.
  */
+const readTaxConfigs = () =>
+  supabase.from('finance_tax_configs').select('id, is_default, effective_from, student_loan_thresholds, student_loan_rates, income_tax_bands, national_insurance_bands');
+const readRecurringTemplates = () =>
+  supabase.from('finance_recurring_templates').select('id, is_default, name, category, emoji, tag, default_amount, frequency, linked_budget_item_id, budget_category_name');
+const readCreditBureaus = () =>
+  supabase.from('finance_credit_bureaus').select('id, is_default, key, label, emoji, color, max_score, gradient');
+const readHolidayDefaults = () =>
+  supabase.from('finance_holiday_defaults').select('id, is_default, month_index, count, dates, occasion');
+const readBudgetPresets = () =>
+  supabase.from('finance_budget_presets').select('id, is_default, preset_type, name, emoji, group_type');
+
+interface ReferenceTablesCache {
+  taxConfigsRes: Awaited<ReturnType<typeof readTaxConfigs>>;
+  recurringTemplatesRes: Awaited<ReturnType<typeof readRecurringTemplates>>;
+  creditBureausRes: Awaited<ReturnType<typeof readCreditBureaus>>;
+  holidayDefaultsRes: Awaited<ReturnType<typeof readHolidayDefaults>>;
+  budgetPresetsRes: Awaited<ReturnType<typeof readBudgetPresets>>;
+}
+
 const FINANCE_PROFILE_COLUMNS =
   'id, name, is_self, is_public, emoji, currency, region, birth_year, retirement_age, pension_growth_percent';
 
@@ -377,20 +396,19 @@ function useProvideFinanceData() {
       let fetchedHolsInYear: string[] = [];
       const fetchedHolsMap: Record<string, string> = {};
       try {
-        const res = await fetch('https://www.gov.uk/bank-holidays.json');
-        if (!res.ok) throw new Error('Failed to fetch holidays');
-        const data = await res.json();
-
-        const events = (data[region]?.events ?? []) as { date: string; title: string }[];
         const yearStr = settings.taxYear.toString();
-        fetchedHolsInYear = events
-          .filter((e) => e.date.startsWith(yearStr))
-          .map((e) => e.date);
+        const { data, error } = await supabase
+          .from('uk_bank_holidays')
+          .select('date, title')
+          .eq('region', region)
+          .gte('date', `${yearStr}-01-01`)
+          .lte('date', `${yearStr}-12-31`);
+        if (error) throw error;
 
+        const events = data ?? [];
+        fetchedHolsInYear = events.map((e) => e.date);
         events.forEach((e) => {
-          if (e.date.startsWith(yearStr)) {
-            fetchedHolsMap[e.date] = e.title;
-          }
+          fetchedHolsMap[e.date] = e.title;
         });
       } catch (err) {
         console.error('Error fetching bank holidays:', err);
@@ -442,6 +460,14 @@ function useProvideFinanceData() {
   const lastLoadedProfileRef = useRef<string | null>(null);
   // When that profile's rows last finished loading, for refreshIfStale.
   const lastLoadedAtRef = useRef(0);
+  // Avoids immediately re-reading `finance_profiles` inside fetchSupabaseData
+  // right after loadProfiles() already fetched them.
+  const profilesLoadedAtRef = useRef(0);
+  // Static shared reference tables (tax configs, recurring templates, credit
+  // bureaus, holiday defaults, budget presets) cached for the session so
+  // background refreshIfStale calls don't re-fetch them every time.
+  const referenceTablesCacheRef = useRef<ReferenceTablesCache | null>(null);
+  const studentLoanRatesLoadedRef = useRef(false);
   // For the tables saved row by row: the row objects this page read from, or
   // last wrote to, the database, each with the number of the load it belongs
   // to. An edit replaces the row it changes with a copy, so a save writes
@@ -620,6 +646,7 @@ function useProvideFinanceData() {
       }
       const selected = loaded.find(profile => profile.id === currentProfileRef.current);
       const resolved = selected?.id ?? loaded.find(profile => profile.isSelf)?.id ?? loaded[0].id;
+      profilesLoadedAtRef.current = Date.now();
       setProfiles(loaded);
       setProfileId(resolved);
       setProfileLoadState('ready');
@@ -639,6 +666,9 @@ function useProvideFinanceData() {
   useLayoutEffect(() => {
     profileAuthRef.current = isAdmin ? authUserId : null;
     currentProfileRef.current = null;
+    profilesLoadedAtRef.current = 0;
+    referenceTablesCacheRef.current = null;
+    studentLoanRatesLoadedRef.current = false;
     setProfileId(null);
     setProfiles([]);
     setProfileLoadState('idle');
@@ -812,6 +842,7 @@ function useProvideFinanceData() {
     }));
     // A row you entered for a date replaces the shipped row for the same date.
     const own = new Set(rows.filter(r => !r.isDefault).map(r => r.effectiveFrom));
+    studentLoanRatesLoadedRef.current = true;
     setStudentLoanRates(rows.filter(r => !r.isDefault || !own.has(r.effectiveFrom)));
   }, [isAdmin]);
   useEffect(() => { void fetchStudentLoanRates(); }, [fetchStudentLoanRates]);
@@ -1510,7 +1541,7 @@ function useProvideFinanceData() {
     void fetchNetWorthHistory(profileId);
   }, [fetchNetWorthHistory, profileId]);
 
-  const fetchSupabaseData = async () => {
+  const fetchSupabaseData = async (options?: { skipStaticReference?: boolean }) => {
     if (!isAdmin) return;
     // Every query below is scoped, and `scoped` throws without a profile. The
     // effect already waits for one, but this function is also exposed on the
@@ -1518,6 +1549,8 @@ function useProvideFinanceData() {
     // stated here rather than assumed of every caller.
     if (!profileId) return;
     if (profileId !== currentProfileRef.current) return;
+    const cachedRef = options?.skipStaticReference ? referenceTablesCacheRef.current : null;
+    const skipProfilesRead = Date.now() - profilesLoadedAtRef.current < 30_000;
     // Claimed before anything is awaited: from here a switch's saves are
     // blocked and any older load is stale.
     const loadSeq = ++loadSeqRef.current;
@@ -1582,15 +1615,17 @@ function useProvideFinanceData() {
             .order('date', { ascending: true })
             .order('id', { ascending: true })
             .range(from, to), row => row.id),
-          supabase.from('finance_tax_configs').select('id, is_default, effective_from, student_loan_thresholds, student_loan_rates, income_tax_bands, national_insurance_bands'),
-          supabase.from('finance_recurring_templates').select('id, is_default, name, category, emoji, tag, default_amount, frequency, linked_budget_item_id, budget_category_name'),
-          supabase.from('finance_credit_bureaus').select('id, is_default, key, label, emoji, color, max_score, gradient'),
-          supabase.from('finance_holiday_defaults').select('id, is_default, month_index, count, dates, occasion'),
-          supabase.from('finance_budget_presets').select('id, is_default, preset_type, name, emoji, group_type'),
-          supabase
-            .from('finance_profiles')
-            .select(FINANCE_PROFILE_COLUMNS)
-            .order('is_self', { ascending: false }),
+          cachedRef ? Promise.resolve(cachedRef.taxConfigsRes) : readTaxConfigs(),
+          cachedRef ? Promise.resolve(cachedRef.recurringTemplatesRes) : readRecurringTemplates(),
+          cachedRef ? Promise.resolve(cachedRef.creditBureausRes) : readCreditBureaus(),
+          cachedRef ? Promise.resolve(cachedRef.holidayDefaultsRes) : readHolidayDefaults(),
+          cachedRef ? Promise.resolve(cachedRef.budgetPresetsRes) : readBudgetPresets(),
+          skipProfilesRead
+            ? Promise.resolve(null)
+            : supabase
+              .from('finance_profiles')
+              .select(FINANCE_PROFILE_COLUMNS)
+              .order('is_self', { ascending: false }),
           scopedByProfile(supabase.from('finance_category_rules').select('id, profile_id, merchant_pattern, category, rename_to, created_at, updated_at'))
         ]);
         if (loadSeq !== loadSeqRef.current || profileId !== currentProfileRef.current) return;
@@ -1600,7 +1635,27 @@ function useProvideFinanceData() {
         // scoped queries above could not have been built -- so this only picks
         // up renames and newly added profiles. A failed refresh keeps the list
         // `loadProfiles` already put there rather than emptying the switcher.
-        if (!selfProfileRes.error) setProfiles((selfProfileRes.data ?? []).map(toFinanceProfile));
+        if (selfProfileRes && !selfProfileRes.error) {
+          profilesLoadedAtRef.current = Date.now();
+          setProfiles((selfProfileRes.data ?? []).map(toFinanceProfile));
+        }
+
+        if (
+          !cachedRef
+          && !taxConfigsRes.error
+          && !recurringTemplatesRes.error
+          && !creditBureausRes.error
+          && !holidayDefaultsRes.error
+          && !budgetPresetsRes.error
+        ) {
+          referenceTablesCacheRef.current = {
+            taxConfigsRes,
+            recurringTemplatesRes,
+            creditBureausRes,
+            holidayDefaultsRes,
+            budgetPresetsRes,
+          };
+        }
 
         // A single failing table used to `throw` here, aborting the whole load
         // and silently dropping the page back to localStorage — which is how a
@@ -2206,7 +2261,7 @@ function useProvideFinanceData() {
     if (!profileId || loadingDb) return;
     const loaded = lastLoadedProfileRef.current === profileId;
     if (loaded && Date.now() - lastLoadedAtRef.current < maxAgeMs) return;
-    void fetchSupabaseData();
+    void fetchSupabaseData({ skipStaticReference: true });
     void fetchTransfers(profileId);
     void fetchPayslips(profileId);
     void fetchPayslipReconciliations(profileId);
@@ -2214,7 +2269,7 @@ function useProvideFinanceData() {
     void fetchTransferDismissals(profileId);
     void fetchTransferSingleLegs(profileId);
     void fetchNetWorthHistory(profileId);
-    void fetchStudentLoanRates();
+    if (!studentLoanRatesLoadedRef.current) void fetchStudentLoanRates();
   };
 
   // Only tables still saved whole. A row-saved table (RowTable) is never
