@@ -31,8 +31,9 @@ import { isRestTimeout } from '@/integrations/supabase/rest-timeout-fetch';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { Json, TablesInsert } from '@/integrations/supabase/types';
 import { findPayslipReimbursementCandidates, type Payslip, type PayslipLine, type PayslipReimbursementLink, type PayslipTransactionLink, type PayslipTransactionReconciliation, type ProfileTransfer, type StudentLoanRateRow } from '@/lib/finance';
-import type {
-  SingleLegVerdict, StoredSingleLegDecision, StoredTransferDismissal, StoredTransferLink,
+import {
+  transferExcludedTransactionIds,
+  type SingleLegVerdict, type StoredSingleLegDecision, type StoredTransferDismissal, type StoredTransferLink,
 } from '@/lib/finance/transfer-detection';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -3145,10 +3146,22 @@ function useProvideFinanceData() {
   };
 
   const recurringToday = todayInLocalTimezone();
-  const visibleRecurrings = recurrings.map(bill => ({
-    ...bill,
-    isPaid: bill.isPaid && isRecurringPaidForPeriod(bill, recurringToday),
-  }));
+  const visibleRecurrings = useMemo(
+    () =>
+      recurrings.map(bill => ({
+        ...bill,
+        isPaid: bill.isPaid && isRecurringPaidForPeriod(bill, recurringToday),
+      })),
+    [recurrings, recurringToday],
+  );
+  const activeRecurrings = useMemo(
+    () => visibleRecurrings.filter(isActiveRecurring),
+    [visibleRecurrings],
+  );
+  const spendingLedger = useMemo(() => {
+    const excludedIds = transferExcludedTransactionIds(transferLinks, transferSingleLegs);
+    return excludedIds.size === 0 ? mockTransactions : mockTransactions.filter(tx => !excludedIds.has(tx.id));
+  }, [mockTransactions, transferLinks, transferSingleLegs]);
 
   const value = {
     transfers,
@@ -3221,8 +3234,9 @@ function useProvideFinanceData() {
     profileId,
     recurringTemplates,
     // Consumers calculate obligations from active bills; CRUD keeps every review.
-    recurrings: visibleRecurrings.filter(isActiveRecurring),
+    recurrings: activeRecurrings,
     allRecurrings: visibleRecurrings,
+    spendingLedger,
     recurringDataReady: hasLoaded && !loadingDb && !blockedSaveKeysFor(profileId).has('recurrings') && !blockedSaveKeysFor(profileId).has('transactions'),
     saveDataToSupabase,
     currentLoadGenerations,

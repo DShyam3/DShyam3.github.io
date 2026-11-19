@@ -1,5 +1,5 @@
 import { toISODate } from '@/lib/finance/dates';
-import { lazy, Suspense, useState, useEffect, useRef, useMemo } from 'react';
+import { lazy, memo, Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import { Navigate, useLocation, useMatch, useNavigate } from 'react-router-dom';
@@ -20,6 +20,7 @@ import {
   type TabKey,
 } from './surfaces';
 import { FinanceDataProvider, useFinanceData } from './FinanceDataContext';
+import { useFinanceTarget } from './FinanceSession';
 import { useCoalescedSave } from './useCoalescedSave';
 import { sectionChunks, warmFinanceSections } from './section-chunks';
 import { prefersSavedData, whenIdle } from '@/lib/idle';
@@ -116,22 +117,13 @@ function FinanceView() {
 
   // The visible section comes from the URL, not from state: a surface is a
   // route (REHAUL_PLAN.md 7.C), so a view is linkable and the back button
-  // works. `optimisticTab` flips the nav highlight immediately on click so
-  // React Router's startTransition never leaves the button looking dead.
+  // works. `setActiveTab` keeps its old signature so the cross-links further
+  // down this file did not have to change.
   const navigate = useNavigate();
   const [, surfaceSeg, sectionSeg] = useLocation().pathname.split('/').slice(1);
-  const urlTab = tabFromPath(surfaceSeg, sectionSeg);
-  const [pendingTab, setPendingTab] = useState<TabKey | null>(null);
-  useEffect(() => {
-    setPendingTab(null);
-  }, [urlTab]);
-  const activeTab = urlTab;
-  const navTab = pendingTab ?? urlTab;
-  const activeSurface = surfaceForTab(navTab);
-  const setActiveTab = (tab: TabKey) => {
-    setPendingTab(tab);
-    navigate(pathForTab(tab));
-  };
+  const activeTab = tabFromPath(surfaceSeg, sectionSeg);
+  const activeSurface = surfaceForTab(activeTab);
+  const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
   const figures = useHiddenFigures();
   const activeSections = (SURFACES.find(su => su.key === activeSurface)?.tabs ?? []) as readonly TabKey[];
 
@@ -833,10 +825,7 @@ function FinanceView() {
           return (
             <div key={surface.key} className="flex items-center gap-2 md:gap-4">
               <button
-                onClick={() => {
-                  setPendingTab(surface.tabs[0]);
-                  navigate(pathForSurface(surface.key));
-                }}
+                onClick={() => navigate(pathForSurface(surface.key))}
                 onPointerEnter={() => sectionChunks[surface.tabs[0]]?.()}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
@@ -895,10 +884,10 @@ function FinanceView() {
             key={tab}
             onClick={() => setActiveTab(tab)}
             onPointerEnter={() => sectionChunks[tab]?.()}
-            aria-current={navTab === tab ? 'page' : undefined}
+            aria-current={activeTab === tab ? 'page' : undefined}
             className={cn(
               'text-xs whitespace-nowrap font-sans transition-colors',
-              navTab === tab
+              activeTab === tab
                 ? 'text-foreground font-semibold'
                 : 'text-muted-foreground hover:text-foreground'
             )}
@@ -1073,18 +1062,33 @@ function FinanceView() {
 }
 
 /**
- * The provider and, while /finance is open, the view rendered into the
- * route's mount point. Mounted by FinanceSession for the admin's session, so
- * `target` is null on every other page and only the data stays alive.
+ * Renders FinanceView into the /finance route mount point.
+ *
+ * Lives *inside* FinanceDataProvider and reads both `target` (via context) and
+ * `useMatch('/finance/*')` here so FinanceDataProvider never re-renders when
+ * navigating between site routes or switching internal Finance tabs.
  */
-export default function FinanceHost({ target }: { target: HTMLElement | null }) {
+function FinancePortal() {
+  const target = useFinanceTarget();
   // The route's mount point is cleared a commit after navigation. Without the
   // match the view would re-render once for the new path in between, falling
   // back to Dashboard and mounting it in a detached node.
   const onFinance = useMatch('/finance/*') !== null;
+  if (!target || !onFinance) return null;
+  return createPortal(<FinanceView />, target);
+}
+
+/**
+ * The provider and, while /finance is open, the view rendered into the
+ * route's mount point. Memoised with no props so FinanceSession updates
+ * (e.g. `target` changing on route entry/exit) never re-render the provider.
+ */
+const FinanceHost = memo(function FinanceHost() {
   return (
     <FinanceDataProvider>
-      {target && onFinance && createPortal(<FinanceView />, target)}
+      <FinancePortal />
     </FinanceDataProvider>
   );
-}
+});
+
+export default FinanceHost;

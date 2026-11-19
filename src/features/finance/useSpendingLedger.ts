@@ -12,8 +12,6 @@
  * transfer still happened, it just was not spending.
  */
 
-import { useMemo } from 'react';
-import { transferExcludedTransactionIds } from '@/lib/finance/transfer-detection';
 import { useFinanceData } from './FinanceDataContext';
 import type { MockTransaction } from './finance-types';
 
@@ -22,17 +20,7 @@ export function useSpendingLedger(): {
   /** True when the exclusions could not load, so totals may count transfers. */
   exclusionsUnreliable: boolean;
 } {
-  const { mockTransactions, transferLinks, transferSingleLegs, transferExclusionsFailed } = useFinanceData();
+  const { spendingLedger, transferExclusionsFailed } = useFinanceData();
 
-  const excludedIds = useMemo(
-    () => transferExcludedTransactionIds(transferLinks, transferSingleLegs),
-    [transferLinks, transferSingleLegs],
-  );
-
-  const ledger = useMemo(
-    () => (excludedIds.size === 0 ? mockTransactions : mockTransactions.filter(tx => !excludedIds.has(tx.id))),
-    [mockTransactions, excludedIds],
-  );
-
-  return { ledger, exclusionsUnreliable: transferExclusionsFailed };
+  return { ledger: spendingLedger, exclusionsUnreliable: transferExclusionsFailed };
 }

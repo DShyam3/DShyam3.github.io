@@ -22,6 +22,13 @@ const loadFinanceHost = () => lazy(() => import('./FinancePage'));
 /** How the /finance route hands its mount point up to the session. */
 const FinanceSlotContext = createContext<(target: HTMLElement | null) => void>(() => {});
 
+/** The active /finance DOM mount point, read inside FinancePortal so FinanceDataProvider never re-renders on route changes. */
+const FinanceTargetContext = createContext<HTMLElement | null>(null);
+
+export function useFinanceTarget(): HTMLElement | null {
+  return useContext(FinanceTargetContext);
+}
+
 /**
  * Holds the finance data for the admin's whole session, not for one visit.
  *
@@ -72,11 +79,13 @@ export function FinanceSession({ children }: { children: ReactNode }) {
     <FinanceSlotContext.Provider value={setTarget}>
       {children}
       {hosted && (
-        <FinanceHostBoundary key={attempt} target={target} onRetry={retry}>
-          <Suspense fallback={target ? createPortal(<PageLoader />, target) : null}>
-            <FinanceHost target={target} />
-          </Suspense>
-        </FinanceHostBoundary>
+        <FinanceTargetContext.Provider value={target}>
+          <FinanceHostBoundary key={attempt} target={target} onRetry={retry}>
+            <Suspense fallback={target ? createPortal(<PageLoader />, target) : null}>
+              <FinanceHost />
+            </Suspense>
+          </FinanceHostBoundary>
+        </FinanceTargetContext.Provider>
       )}
     </FinanceSlotContext.Provider>
   );
