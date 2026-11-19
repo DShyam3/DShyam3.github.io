@@ -75,7 +75,7 @@ export default function WatchlistFranchises() {
             }]
           : [],
       ),
-    );
+    ).filter((c) => c.films.length >= 2);
   }, [watchlist, isAdmin]);
   const openCollections = collections.filter((c) => !savedCollectionIds.has(c.collectionId));
 
