@@ -74,6 +74,7 @@ export function WorkspaceRail() {
           type="button"
           onClick={toggleDisplaySize}
           aria-pressed={largerDisplay}
+          aria-label={largerDisplay ? 'Display: Larger. Switch to Standard.' : 'Display: Standard. Switch to Larger.'}
           className={cn(
             'w-full flex items-center justify-between gap-2 rounded-xl border px-2.5 py-2 text-xs transition-colors',
             largerDisplay
@@ -85,7 +86,7 @@ export function WorkspaceRail() {
             <Type className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
             <span className="truncate">
               <DotMatrixText
-                text={largerDisplay ? 'Display: Larger' : 'Display: Standard'}
+                text={largerDisplay ? 'Text: Large' : 'Text: Std'}
                 size="ui"
                 wrap={false}
               />
@@ -97,6 +98,7 @@ export function WorkspaceRail() {
           type="button"
           onClick={toggleWideMode}
           aria-pressed={wideMode === 'centered'}
+          aria-label={wideMode === 'centered' ? 'Layout: Centered. Switch to Ultrawide.' : 'Layout: Ultrawide. Switch to Centered.'}
           title={wideMode === 'auto' ? 'Using full ultrawide cockpit when screen is wide. Click to center.' : 'Centered at standard wide width. Click for automatic ultrawide cockpit.'}
           className={cn(
             'hidden min-[1920px]:flex w-full items-center justify-between gap-2 rounded-xl border px-2.5 py-2 text-xs transition-colors',
@@ -111,7 +113,7 @@ export function WorkspaceRail() {
               : <Columns3 className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />}
             <span className="truncate">
               <DotMatrixText
-                text={wideMode === 'centered' ? 'Layout: Centered' : 'Layout: Ultrawide'}
+                text={wideMode === 'centered' ? 'Wide: Center' : 'Wide: Auto'}
                 size="ui"
                 wrap={false}
               />
