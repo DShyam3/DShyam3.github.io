@@ -33,6 +33,7 @@ const CATEGORIES = [
 
 export const recipesCollection: CollectionConfig<RecipeRow> = {
   table: 'recipes',
+  columns: 'id, title, category, description, image_url, link, is_personal, ingredients, instructions, created_at',
   path: '/recipes',
   title: 'Recipes',
   subtitle: 'My dishes',

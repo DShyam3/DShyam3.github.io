@@ -35,6 +35,7 @@ const skillList = (skills: string | null): string[] =>
 /** Things built, being built, and planned. */
 export const projectsCollection: CollectionConfig<ProjectRow> = {
   table: 'projects',
+  columns: 'id, title, status, summary, url, image, skills, created_at',
   path: '/projects',
   title: 'Projects',
   subtitle: 'Built, building and planned',

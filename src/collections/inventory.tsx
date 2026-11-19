@@ -272,6 +272,7 @@ const SpecTable = ({
 
 export const inventoryCollection: CollectionConfig<InventoryRow> = {
   table: 'inventory_items',
+  columns: 'id, name, brand, category, subcategory, price, image, link, is_new, is_wishlist, description, specs, created_at, is_edc, edc_slot, edc_order',
   path: '/inventory',
   title: 'Inventory',
   subtitle: 'Things I own',

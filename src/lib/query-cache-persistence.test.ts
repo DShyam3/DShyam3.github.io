@@ -11,7 +11,9 @@ import {
 describe('isPersistablePublicQueryKey', () => {
   it('allows public collections, watchlist public data, and anonymous travel', () => {
     expect(isPersistablePublicQueryKey(['books', '*', undefined])).toBe(true);
+    expect(isPersistablePublicQueryKey(['books', 'id, title, author, cover_url', undefined])).toBe(true);
     expect(isPersistablePublicQueryKey(['inventory_items', '*', undefined])).toBe(true);
+    expect(isPersistablePublicQueryKey(['inventory_items', 'id, name, brand', undefined])).toBe(true);
     expect(isPersistablePublicQueryKey(['site_content', '*', { column: 'section', value: 'about' }])).toBe(true);
     expect(isPersistablePublicQueryKey(['favourites', 'titles'])).toBe(true);
     expect(isPersistablePublicQueryKey(['travel', 'visited-countries'])).toBe(true);
