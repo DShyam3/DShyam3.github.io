@@ -12,7 +12,6 @@ import { useNavigate } from 'react-router-dom';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useToast } from '@/hooks/use-toast';
 import { useFinanceData } from '../FinanceDataContext';
-import type { MockTransaction } from '../finance-types';
 import { MONTH_NAMES, getBudgetItemSpent, getDueDateText, isDueThisMonth } from '../finance-defaults';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -105,6 +104,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     return data;
   };
 
+  const DASHBOARD_TX_PAGE = 25;
   const todayDayNum = todayDateObj.getDate();
 
   // Dashboard spending progress period
@@ -113,6 +113,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   const [selectedAccountFilter, setSelectedAccountFilter] = useState<string>('all');
 
   const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const [visibleTxLimit, setVisibleTxLimit] = useState(DASHBOARD_TX_PAGE);
 
   const toggleTransactionReviewed = (id: string) => {
     const updated = mockTransactions.map(t => t.id === id ? { ...t, isReviewed: !t.isReviewed } : t);
@@ -125,20 +126,30 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   const billsPercent = totalBudget > 0 ? (unpaidRecurrings / totalBudget) * 100 : 0;
   const freePercent = totalBudget > 0 ? (Math.max(0, freeToSpend) / totalBudget) * 100 : 0;
 
+  const bankAccountById = useMemo(
+    () => new Map(bankAccounts.map(acc => [acc.id, acc])),
+    [bankAccounts],
+  );
 
   // Same account match as the Transactions tab, so a filtered view here opens
   // there showing the same rows.
-  const isInSelectedAccount = (tx: MockTransaction) =>
-    selectedAccountFilter === 'all'
-    || tx.bankAccountId === selectedAccountFilter
-    || tx.accountId === selectedAccountFilter;
+  const { displayedTransactions, accountTransactionsCount } = useMemo(() => {
+    const inAccount = selectedAccountFilter === 'all'
+      ? mockTransactions
+      : mockTransactions.filter(tx =>
+        tx.bankAccountId === selectedAccountFilter || tx.accountId === selectedAccountFilter,
+      );
+    const displayed = showAllTransactions ? inAccount : inAccount.filter(tx => !tx.isReviewed);
+    return {
+      displayedTransactions: displayed,
+      accountTransactionsCount: inAccount.length,
+    };
+  }, [mockTransactions, selectedAccountFilter, showAllTransactions]);
 
-  const displayedTransactions = (showAllTransactions
-    ? mockTransactions
-    : mockTransactions.filter(tx => !tx.isReviewed)
-  ).filter(isInSelectedAccount);
-
-  const accountTransactionsCount = mockTransactions.filter(isInSelectedAccount).length;
+  const visibleTransactions = useMemo(
+    () => displayedTransactions.slice(0, visibleTxLimit),
+    [displayedTransactions, visibleTxLimit],
+  );
 
   // Opens the Transactions tab on this list's view; TransactionsTab reads the
   // params once and drops them.
@@ -477,6 +488,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               strokeDasharray="4 4"
               dot={false}
               strokeWidth={1.5}
+              isAnimationActive={false}
               name={dashboardSpendRange === 'this_month' ? 'Ideal Limit' : 'Budget Limit'}
             />
             {/* Actual Curve (solid colored area) */}
@@ -488,6 +500,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               strokeWidth={2.5}
               connectNulls={false}
               dot={false}
+              isAnimationActive={false}
               name="Actual Spent"
             />
           </AreaChart>
@@ -666,7 +679,10 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             {bankAccounts.length > 0 && (
               <Select
                 value={selectedAccountFilter}
-                onValueChange={setSelectedAccountFilter}
+                onValueChange={(value) => {
+                  setSelectedAccountFilter(value);
+                  setVisibleTxLimit(DASHBOARD_TX_PAGE);
+                }}
               >
                 <SelectTrigger className="w-auto min-w-[140px] max-w-[220px] text-xs font-mono h-8 rounded-lg border-border/40 bg-muted/20">
                   <SelectValue placeholder="All Accounts" />
@@ -700,7 +716,10 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setShowAllTransactions(!showAllTransactions)}
+              onClick={() => {
+                setShowAllTransactions(!showAllTransactions);
+                setVisibleTxLimit(DASHBOARD_TX_PAGE);
+              }}
               className="text-xs rounded-lg hover:bg-muted font-mono h-8 text-muted-foreground hover:text-foreground"
             >
               {showAllTransactions ? "Show Pending Only" : `View All (${accountTransactionsCount})`}
@@ -709,14 +728,13 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         </CardHeader>
         <CardContent className="p-0 pt-4">
 
-          {/* Unreviewed list with Exit Animation */}
+          {/* Unreviewed list with Exit Animation (capped to avoid mounting hundreds of animated rows on Home) */}
           <div className="space-y-2.5">
-            <AnimatePresence mode="popLayout">
-              {displayedTransactions.map(tx => (
+            <AnimatePresence initial={false}>
+              {visibleTransactions.map(tx => (
                 <motion.div
                   key={tx.id}
-                  layout
-                  initial={{ opacity: 1, y: 0, scale: 1 }}
+                  initial={false}
                   exit={{ opacity: 0, x: -80, scale: 0.95, transition: { duration: 0.2 } }}
                   className={cn(
                     "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border border-border/30 transition-all duration-200 font-mono",
@@ -744,7 +762,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                           {tx.name}
                         </span>
                         {(() => {
-                          const linkedAccount = bankAccounts.find(acc => acc.id === (tx.bankAccountId || tx.accountId));
+                          const linkedAccount = bankAccountById.get(tx.bankAccountId || tx.accountId || '');
                           if (!linkedAccount) return null;
                           return (
                             <span 
@@ -796,6 +814,32 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                 </motion.div>
               ))}
             </AnimatePresence>
+
+            {displayedTransactions.length > visibleTxLimit && (
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/30 font-mono">
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  Showing {visibleTransactions.length} of {displayedTransactions.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setVisibleTxLimit(prev => prev + DASHBOARD_TX_PAGE)}
+                    className="h-8 text-xs font-mono rounded-lg"
+                  >
+                    Show {Math.min(DASHBOARD_TX_PAGE, displayedTransactions.length - visibleTxLimit)} more
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openTransactions()}
+                    className="h-8 text-xs font-mono rounded-lg text-muted-foreground hover:text-foreground gap-1"
+                  >
+                    Open in Transactions <ArrowUpRight className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Empty pending state */}
             {displayedTransactions.length === 0 && !showAllTransactions && (
