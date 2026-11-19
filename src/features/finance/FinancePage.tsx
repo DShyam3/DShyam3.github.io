@@ -843,9 +843,9 @@ function FinanceView() {
           rather than stacking one link per line beside these. */}
       <div className="flex w-full items-center gap-2 pb-3 empty:hidden sm:w-auto sm:pb-0">
         {figures.supported && (
-          <Button variant="ghost" size="sm" onClick={figures.toggle} className="shrink-0 font-sans text-xs">
+          <Button variant="ghost" size="sm" onClick={figures.toggle} className="shrink-0 text-xs">
             {figures.hidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
-            {figures.hidden ? 'Show figures' : 'Hide figures'}
+            <DotMatrixText text={figures.hidden ? 'Show figures' : 'Hide figures'} size="ui" wrap={false} />
           </Button>
         )}
         {loadingDb && (

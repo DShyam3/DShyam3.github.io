@@ -176,7 +176,11 @@ export function NavMenu({ className }: { className?: string }) {
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t pt-3">
           <Button variant={largerDisplay ? 'secondary' : 'outline'} onClick={toggleDisplaySize} aria-pressed={largerDisplay}>
             <Type aria-hidden="true" />
-            Display size: {largerDisplay ? 'Larger' : 'Standard'}
+            <DotMatrixText
+              text={`Display size: ${largerDisplay ? 'Larger' : 'Standard'}`}
+              size="ui"
+              wrap={false}
+            />
           </Button>
           <p className="text-sm text-muted-foreground">Adjust text, cards and controls for comfortable viewing.</p>
         </div>

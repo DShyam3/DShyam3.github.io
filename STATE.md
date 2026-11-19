@@ -1,6 +1,19 @@
 # State
 
-Updated 2026-11-19 · `main` at `0763a04b`. Travel double-flash (`37bae8a9`, `0763a04b`) and Finance tab/Home latency (`194093c2`, `22998cc7`) fixes are pushed and user-verified live. Payslip code `d5120557` and row-logo change `234eeba2` were pushed; migration `20261119150000_payslip_reimbursement_links.sql` is recorded as applied on the linked Supabase project `yvtiybyuifkiwyrnjebe`. Signed-in browser verification of the payslip/reimbursement UI and live Pages deployment of the About layout fix (`76a56f9a`) remain open.
+Updated 2026-11-19 · `main` at `0763a04b` + uncommitted local H3 hex map and dot-matrix UI chrome work. Travel double-flash (`37bae8a9`, `0763a04b`) and Finance tab/Home latency (`194093c2`, `22998cc7`) fixes are pushed and user-verified live. Payslip code `d5120557` and row-logo change `234eeba2` were pushed; migration `20261119150000_payslip_reimbursement_links.sql` is recorded as applied on `yvtiybyuifkiwyrnjebe`. Signed-in browser verification of payslip/reimbursement UI, live Pages deployment of About layout fix (`76a56f9a`), and browser check of the dot-matrix UI chrome remain open.
+
+## Dot-matrix UI chrome (uncommitted, local)
+
+- Added `size="ui"` (`15px` desktop / `14px` mobile, weight `600`, `"RNDM" 0`) to `DotMatrixText` (`DotMatrixText.tsx`, `DotMatrixText.css`, `src/index.css`) and switched `.readout-label` to `Doto` across the app.
+- Applied `DotMatrixText size="ui"` to stationary chrome: `WorkspaceRail.tsx` (section numbers/labels, `Display`, `Layout`, `Search`), `Header.tsx` (`Search`), `CommandDock.tsx` (dock trigger + palette section rows), `NavMenu.tsx` (`Display size`), `TravelPage.tsx` (view/import/backup buttons), `CollectionPage.tsx` (section badge), `WatchlistNav.tsx`, and `FinancePage.tsx` (`Show/Hide figures`). Keycaps (`⌘K`), currency/figures, and record/body text remain `Space Mono`.
+- `npm run lint` (0 errors, 0 warnings), `npm run build`, and `graphify update .` pass; `npm run typecheck` passed on all modified files, failing only on 4 pre-existing errors in `DotMatrixGlobe.tsx:690-711`. Browser verification remains open.
+
+## Travel H3 hexagon map (uncommitted, local)
+
+- Replaced the 360×180 dot grid in `DotMatrixGlobe.tsx` with a single-tier H3 res-3 hexagon map (`hexMapData.ts` + `h3-js@4.5.0` + `scripts/generate-hex-map.py`):
+  - **`public/data/hex-world-map-r3.json` (303 KB):** 12,390 H3 res-3 cells across 234 countries/territories, with small-island centroid seeding and overseas territories (`YT`, `RE`, `GF`, `GP`, `MQ`, `SJ`, `BQ`) split out from parent Natural Earth polygons so they show their own names and visited status.
+  - Uses 16×8 spatial-bucket viewport culling in 2D, color-batched `Path2D` fills, inlined zero-allocation 3D rotation math, and city `(lat, lon)` hex snapping in `TravelPage.tsx` / `hexMapData.ts`.
+- `npm run lint` (0 errors, 0 warnings), `npm run typecheck`, `npm run build`, and `graphify update .` passed; browser check of the single-tier res-3 build and `npm run test` (Vitest) remain open.
 
 ## About wide-screen layout fix
 
@@ -21,11 +34,11 @@ Updated 2026-11-19 · `main` at `0763a04b`. Travel double-flash (`37bae8a9`, `07
 | Check | Result |
 |---|---|
 | `npm run lint` | 0 errors, 0 warnings |
-| `npm run typecheck` | pass |
-| `npm run typecheck:functions` | pass |
-| `npm run test` (Vitest) | 109 files, 2,818 tests pass |
+| `npm run typecheck` | 4 pre-existing errors in `DotMatrixGlobe.tsx:690-711` |
+| `npm run typecheck:functions` | pass (prior run) |
+| `npm run test` (Vitest) | 109 files, 2,818 tests pass (prior run) |
 | `npm run build` | pass |
-| `graphify update .` | pass after the row-logo edit |
+| `graphify update .` | pass after dot-matrix UI chrome edits |
 | `npm run ship-check` | command passed; scan verdict **Do not launch yet** (93/100, one reported critical finding later inspected as a false positive; Semgrep skipped) |
 | Browser and database migration | browser not verified; linked remote migration history shows `20261119150000` applied (table access/RLS not yet checked) |
 

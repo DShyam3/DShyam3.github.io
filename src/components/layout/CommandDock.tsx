@@ -13,6 +13,7 @@ import {
 } from '@/collections/record-search';
 import type { CollectionRow } from '@/collections/types';
 import { DialogOverlay } from '@/components/ui/dialog';
+import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { ignoreOverlayPointerDown } from '@/components/ui/dismiss-on-release';
 import { cn } from '@/lib/utils';
 import { useSiteNavLinks } from './navLinks';
@@ -159,7 +160,9 @@ export function CommandDock() {
           >
             <span className="flex items-center gap-2 min-w-0 truncate">
               <Terminal className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
-              <span className="truncate font-mono">Search sections and records</span>
+              <span className="truncate">
+                <DotMatrixText text="Search sections and records" size="ui" wrap={false} />
+              </span>
             </span>
             <kbd className="shrink-0 rounded border border-border/70 bg-background/80 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
               ⌘K
@@ -260,11 +263,14 @@ export function CommandDock() {
                         >
                           <span className="flex items-center gap-2 min-w-0">
                             <Compass className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
-                            <span className="tabular-nums font-mono text-xs text-muted-foreground">
-                              {badge}
-                            </span>
-                            <span className="truncate font-medium text-foreground">
-                              {link.label}
+                            <DotMatrixText
+                              text={badge}
+                              size="ui"
+                              wrap={false}
+                              className="tabular-nums text-muted-foreground"
+                            />
+                            <span className="truncate text-foreground">
+                              <DotMatrixText text={link.label} size="ui" wrap={false} />
                             </span>
                           </span>
                           <span className="font-mono text-xs text-muted-foreground">{link.to}</span>

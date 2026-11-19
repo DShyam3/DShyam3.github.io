@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Library, ListOrdered, Newspaper, NotebookPen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { cn } from '@/lib/utils';
 
 export type WatchlistView = 'news' | 'library' | 'diary' | 'franchises';
@@ -25,7 +26,7 @@ export function WatchlistNav({ current, className }: { current: WatchlistView; c
         >
           <Link to={to} aria-current={view === current ? 'page' : undefined}>
             <Icon className="h-4 w-4" aria-hidden="true" />
-            {label}
+            <DotMatrixText text={label} size="ui" wrap={false} />
           </Link>
         </Button>
       ))}

@@ -374,7 +374,10 @@
   }
 
   .readout-label {
-    font-size: 0.75rem;
+    font-family: var(--font-matrix, 'Doto', monospace);
+    font-feature-settings: "RNDM" 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
     line-height: 1.2;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -552,6 +555,11 @@
 
 
 @media (max-width: 767px) {
+  .dot-matrix-text-ui,
+  .readout-label {
+    font-size: 0.875rem;
+  }
+
   .dot-matrix-text-xs {
     font-size: 0.875rem;
   }

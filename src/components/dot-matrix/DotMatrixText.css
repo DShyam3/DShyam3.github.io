@@ -10,6 +10,12 @@
   transition: transform 0.2s ease, color 0.2s ease;
 }
 
+.dot-matrix-text-ui {
+  font-size: 0.9375rem; /* 15px: Doto optical equivalent of 12px mono */
+  font-weight: 600;
+  letter-spacing: 0.07em;
+}
+
 .dot-matrix-text-xs {
   font-size: 1.15rem; /* ~18.5px */
   font-weight: 500;

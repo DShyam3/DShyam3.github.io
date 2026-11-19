@@ -188,7 +188,7 @@ export function Header({
                 className="nav-link flex flex-shrink-0 items-center justify-center gap-2 rounded text-xs hover:bg-secondary/70 transition-colors max-md:h-11 max-md:w-11 md:px-2.5 md:py-1.5"
               >
                 <Search className="h-4 w-4 text-primary shrink-0 md:h-3.5 md:w-3.5" aria-hidden="true" />
-                <span className="hidden md:inline">Search</span>
+                <DotMatrixText text="Search" size="ui" wrap={false} className="hidden md:inline-flex" />
                 <kbd className="max-md:hidden rounded border border-border/70 bg-background/70 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                   ⌘K
                 </kbd>

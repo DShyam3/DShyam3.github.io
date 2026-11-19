@@ -525,12 +525,20 @@ const TravelContent = () => {
 
                     <div className="flex flex-wrap items-center justify-between gap-2 pb-4">
                         <div className="flex gap-1" aria-label="Travel view">
-                            <Button variant={section === 'places' ? 'secondary' : 'ghost'} aria-pressed={section === 'places'} onClick={() => setSection('places')}>Places</Button>
-                            <Button variant={section === 'trips' ? 'secondary' : 'ghost'} aria-pressed={section === 'trips'} onClick={() => setSection('trips')}>Trips & memories</Button>
+                            <Button variant={section === 'places' ? 'secondary' : 'ghost'} aria-pressed={section === 'places'} onClick={() => setSection('places')}>
+                                <DotMatrixText text="Places" size="ui" wrap={false} />
+                            </Button>
+                            <Button variant={section === 'trips' ? 'secondary' : 'ghost'} aria-pressed={section === 'trips'} onClick={() => setSection('trips')}>
+                                <DotMatrixText text="Trips & memories" size="ui" wrap={false} />
+                            </Button>
                         </div>
                         {isAdmin && <div className="flex flex-wrap gap-2">
-                            <Button size="sm" variant="outline" disabled={journal.loading || !!journal.error} onClick={() => setImportOpen(true)}>Import itinerary</Button>
-                            <Button size="sm" variant="ghost" disabled={journal.loading || !!journal.error} onClick={() => setBackupOpen(true)}>Backup & restore</Button>
+                            <Button size="sm" variant="outline" disabled={journal.loading || !!journal.error} onClick={() => setImportOpen(true)}>
+                                <DotMatrixText text="Import itinerary" size="ui" wrap={false} />
+                            </Button>
+                            <Button size="sm" variant="ghost" disabled={journal.loading || !!journal.error} onClick={() => setBackupOpen(true)}>
+                                <DotMatrixText text="Backup & restore" size="ui" wrap={false} />
+                            </Button>
                         </div>}
                     </div>
                     {section === 'trips' ? <TravelJournalWorkspace journal={journal} isAdmin={isAdmin} cities={journalCities} onSelectCity={selectCity} selectedItemId={selectedItem ? selectedItem.id : null} onSelectItem={selectItem} /> : <>

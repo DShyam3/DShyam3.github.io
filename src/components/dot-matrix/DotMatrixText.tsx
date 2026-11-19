@@ -1,6 +1,6 @@
 import './DotMatrixText.css';
 
-type Size = 'xs' | 'sm' | 'md' | 'lg';
+type Size = 'ui' | 'xs' | 'sm' | 'md' | 'lg';
 
 interface DotMatrixTextProps {
   text: string;

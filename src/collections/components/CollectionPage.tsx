@@ -134,7 +134,7 @@ function CollectionPageView<T extends CollectionRow, R>({
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               <h2 className="inline-flex min-h-11 items-center gap-2 rounded-full bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground">
                 <CollectionIcon className="h-4 w-4 shrink-0" />
-                {config.title}
+                <DotMatrixText text={config.title} size="ui" wrap={false} />
               </h2>
               <CountLabel
                 count={loading ? undefined : count}
