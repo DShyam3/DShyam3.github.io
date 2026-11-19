@@ -2041,6 +2041,54 @@ GRANT ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" TO "se
 COMMENT ON TABLE "public"."finance_payslip_transaction_reconciliations" IS
     'User-confirmed, one-to-one links between a payslip take-home figure and its incoming finance transaction.';
 
+-- One confirmed reimbursement line on a payslip points to one card expense.
+-- The line's position, label and amount are captured together so the client can
+-- detect a stale confirmation if a later PDF read or edit changes the lines.
+-- Suggestions remain local; only a person's confirmation is stored.
+CREATE TABLE IF NOT EXISTS "public"."finance_payslip_reimbursement_links" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "payslip_id" "text" NOT NULL,
+    "line_index" integer NOT NULL,
+    "line_label" "text" NOT NULL,
+    "line_amount" numeric NOT NULL,
+    "transaction_id" "text" NOT NULL,
+    "confirmed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "finance_payslip_reimbursement_links_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "finance_payslip_reimbursement_links_profile_check" CHECK ("profile_id" IS NOT NULL),
+    CONSTRAINT "finance_payslip_reimbursement_links_line_check" CHECK ("line_index" >= 0 AND length(btrim("line_label")) > 0 AND "line_amount" > 0),
+    CONSTRAINT "finance_payslip_reimbursement_links_profile_fkey"
+        FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE,
+    CONSTRAINT "finance_payslip_reimbursement_links_payslip_fkey"
+        FOREIGN KEY ("profile_id", "payslip_id") REFERENCES "public"."finance_payslips"("profile_id", "id") ON DELETE CASCADE,
+    CONSTRAINT "finance_payslip_reimbursement_links_transaction_fkey"
+        FOREIGN KEY ("profile_id", "transaction_id") REFERENCES "public"."finance_transactions"("profile_id", "id") ON DELETE CASCADE
+);
+
+ALTER TABLE "public"."finance_payslip_reimbursement_links" OWNER TO "postgres";
+
+-- The unique keys enforce one-to-one confirmation and cover both composite
+-- foreign keys. Their profile prefix also covers the profile foreign key.
+CREATE UNIQUE INDEX "idx_finance_payslip_reimbursement_line"
+    ON "public"."finance_payslip_reimbursement_links" ("profile_id", "payslip_id", "line_index");
+CREATE UNIQUE INDEX "idx_finance_payslip_reimbursement_transaction"
+    ON "public"."finance_payslip_reimbursement_links" ("profile_id", "transaction_id");
+
+ALTER TABLE "public"."finance_payslip_reimbursement_links" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_payslip_reimbursement_links"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+REVOKE ALL ON TABLE "public"."finance_payslip_reimbursement_links" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_payslip_reimbursement_links" FROM "authenticated";
+GRANT SELECT, INSERT, DELETE ON TABLE "public"."finance_payslip_reimbursement_links" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_payslip_reimbursement_links" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_payslip_reimbursement_links" IS
+    'User-confirmed links between a positive payslip reimbursement line and one card expense. A copied line label and amount let the client detect confirmations made stale by payslip edits.';
+
 -- Merchant pattern matching rules for transaction categorisation and renaming
 -- (20261029230000_finance_category_rules.sql).
 CREATE TABLE IF NOT EXISTS "public"."finance_category_rules" (

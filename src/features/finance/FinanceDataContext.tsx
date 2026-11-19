@@ -30,7 +30,7 @@ import { readProfilesWithRetry } from './profile-load';
 import { isRestTimeout } from '@/integrations/supabase/rest-timeout-fetch';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { Json, TablesInsert } from '@/integrations/supabase/types';
-import type { Payslip, PayslipLine, PayslipTransactionLink, PayslipTransactionReconciliation, ProfileTransfer, StudentLoanRateRow } from '@/lib/finance';
+import { findPayslipReimbursementCandidates, type Payslip, type PayslipLine, type PayslipReimbursementLink, type PayslipTransactionLink, type PayslipTransactionReconciliation, type ProfileTransfer, type StudentLoanRateRow } from '@/lib/finance';
 import type {
   SingleLegVerdict, StoredSingleLegDecision, StoredTransferDismissal, StoredTransferLink,
 } from '@/lib/finance/transfer-detection';
@@ -543,6 +543,8 @@ function useProvideFinanceData() {
   const [transfers, setTransfers] = useState<ProfileTransfer[]>([]);
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [payslipReconciliations, setPayslipReconciliations] = useState<PayslipTransactionReconciliation[]>([]);
+  const [payslipReimbursementLinks, setPayslipReimbursementLinks] = useState<PayslipReimbursementLink[]>([]);
+  const [payslipReimbursementsAvailable, setPayslipReimbursementsAvailable] = useState(false);
   const [transferLinks, setTransferLinks] = useState<StoredTransferLink[]>([]);
   // True when the last read of the links failed. Every figure that excludes
   // transfers is then overstated, and the surfaces showing one say so.
@@ -912,6 +914,42 @@ function useProvideFinanceData() {
     void fetchPayslipReconciliations(profileId);
   }, [fetchPayslipReconciliations, profileId]);
 
+  const fetchPayslipReimbursementLinks = useCallback(async (forProfile: string | null) => {
+    if (!isAdmin || !forProfile) {
+      setPayslipReimbursementLinks([]);
+      setPayslipReimbursementsAvailable(false);
+      return;
+    }
+    setPayslipReimbursementsAvailable(false);
+    const { data, error } = await selectAllPages((from, to) => supabase
+      .from('finance_payslip_reimbursement_links')
+      .select('id, payslip_id, line_index, line_label, line_amount, transaction_id, confirmed_at', { count: 'exact' })
+      .eq('profile_id', forProfile)
+      .order('confirmed_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
+    if (forProfile !== currentProfileRef.current) return;
+    if (error) {
+      console.warn('payslip reimbursement links unavailable');
+      setPayslipReimbursementsAvailable(false);
+      return;
+    }
+    setPayslipReimbursementsAvailable(true);
+    setPayslipReimbursementLinks((data ?? []).map(row => ({
+      id: row.id,
+      payslipId: row.payslip_id,
+      lineIndex: row.line_index,
+      lineLabel: row.line_label,
+      lineAmount: Number(row.line_amount),
+      transactionId: row.transaction_id,
+      confirmedAt: row.confirmed_at,
+    })));
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void fetchPayslipReimbursementLinks(profileId);
+  }, [fetchPayslipReimbursementLinks, profileId]);
+
   /* ---- Confirmed internal transfers -----------------------------------
      Money moved between the owner's own accounts is neither income nor
      spending, but in the ledger it looks exactly like both: a positive row
@@ -1075,7 +1113,7 @@ function useProvideFinanceData() {
     }
     // The foreign key removes its confirmation too. Refresh both local views
     // so its old transaction is immediately eligible for another review.
-    await Promise.all([fetchPayslips(profileId), fetchPayslipReconciliations(profileId)]);
+    await Promise.all([fetchPayslips(profileId), fetchPayslipReconciliations(profileId), fetchPayslipReimbursementLinks(profileId)]);
     return true;
   };
 
@@ -1128,6 +1166,43 @@ function useProvideFinanceData() {
     }
     await fetchPayslipReconciliations(profileId);
     toast({ title: 'Bank payment unlinked' });
+    return true;
+  };
+
+  const savePayslipReimbursementLink = async (payslipId: string, lineIndex: number, transactionId: string): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
+    const payslip = payslips.find(item => item.id === payslipId);
+    const line = payslip?.lines?.[lineIndex];
+    const transaction = mockTransactions.find(item => item.id === transactionId);
+    if (!payslip || !line || !transaction || !findPayslipReimbursementCandidates(payslip, [transaction])
+      .some(candidate => candidate.lineIndex === lineIndex && candidate.transactionId === transactionId)) return false;
+    const { error } = await supabase.from('finance_payslip_reimbursement_links').insert({
+      profile_id: profileId,
+      payslip_id: payslipId,
+      line_index: lineIndex,
+      line_label: line.label,
+      line_amount: line.amount,
+      transaction_id: transactionId,
+    });
+    if (error) {
+      await fetchPayslipReimbursementLinks(profileId);
+      toast({ title: 'Could not confirm reimbursement', description: 'Please try again.', variant: 'destructive' });
+      return false;
+    }
+    await fetchPayslipReimbursementLinks(profileId);
+    toast({ title: 'Card expense linked to reimbursement' });
+    return true;
+  };
+
+  const deletePayslipReimbursementLink = async (id: string): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
+    const { error } = await supabase.from('finance_payslip_reimbursement_links').delete().eq('id', id).eq('profile_id', profileId);
+    if (error) {
+      toast({ title: 'Could not unlink reimbursement', description: 'Please try again.', variant: 'destructive' });
+      return false;
+    }
+    await fetchPayslipReimbursementLinks(profileId);
+    toast({ title: 'Reimbursement unlinked' });
     return true;
   };
 
@@ -3086,9 +3161,13 @@ function useProvideFinanceData() {
     savePayslip,
     deletePayslip,
     payslipReconciliations,
+    payslipReimbursementLinks,
+    payslipReimbursementsAvailable,
     savePayslipReconciliation,
     savePayslipReconciliations,
     deletePayslipReconciliation,
+    savePayslipReimbursementLink,
+    deletePayslipReimbursementLink,
     transferLinks,
     // Either half of what decides a transfer exclusion failed to load, so
     // every figure that drops transfers may be overstated.

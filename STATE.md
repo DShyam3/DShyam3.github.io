@@ -1,51 +1,45 @@
 # State
 
-Updated 2026-11-19 · `main` at `332a7ad` (this branch, merging `origin/main` `b04db3e`). Pages run `44479344055` (manual re-run) deployed it; the push run `44478486168` failed twice at the Pages deploy step on a GitHub artifact error (none found, then two found), not on any check. Browser check not done.
+Updated 2026-11-19 · `main`, based on `39201dcb`; the payslip, reimbursement and future-holiday changes are prepared for this commit and push. Migration `20261119150000_payslip_reimbursement_links.sql` is written but **not applied** because the connected Supabase project reports `INACTIVE` and database reads timed out. The last confirmed Pages deployment is run `44483401937` for separate Watchlist work; deployment of this changeset is unverified.
 
-## Closed 2026-11-19
+## Local work in the tree
 
-- **Library Watching shelf narrowed (`library-state.ts`, `82210f40`, deployed by Pages run `44483401937`; live signed-out check shows Watching 2 with the new hint):** Watching holds only series part-way through a season, or kept up with as they air (next episode due within 14 days; earlier seasons skipped or not). A started series at a season boundary, or with only some seasons ticked, sits on To watch with a pill naming where you pick up (`S5 next`), and its detail opens on that season. A longer mid-season break sits on Upcoming with its countdown. The pill text is the pure, tested `statusLabel`, shared with the shelf rule. Discover's watching seed keeps any started show. Signed-out dev preview against live data: Watching 2 (Dan Da Dan; Tulsa King `S4E6 in 1d`), Bridgerton `S4 next`, Stranger Things `S5 next`, Up to date 23, Upcoming 38, clean console.
-- **Travel double-load & visual flash elimination (`TravelPage.tsx`):** removed destructive `key={`${session?.user.id ?? 'public'}-${isAdmin}`}` on `<TravelContent />` that was causing React to completely unmount and remount the Three.js globe and page tree once auth state resolved.
-- **Finance internal tab switching & re-entry latency (`FinancePage.tsx`):**
-  1. Kept `FinanceView` mounted in a persistent DOM container in `FinanceHost` across route transitions, eliminating the heavy remount, un-suspending, and tab reset when navigating away from Finance and back.
-  2. Wrapped visited tabs in `TabSlot` comparator so inactive tabs skip re-rendering on tab switches (preventing exponential slowdown as multiple heavy chart/table surfaces are visited).
-  3. Prefetched all 17 finance section chunks eagerly on mount and on tab pointer enter rather than waiting for 4s idle timeout.
-  4. Scoped `detectRecurringPayments` to run only when the recurrings tab is in `visitedTabs`.
-- **Watchlist News card alignment & grid baseline (`WatchlistNews.tsx`, `WatchlistNews.css`):** cards use `flex flex-col h-full` with schedule actions pinned to the bottom (`mt-auto`), `line-clamp-2` with `min-h-[2.5rem]` for titles so 1- and 2-line titles allocate the same height, and `minmax(min(100%, 16.5rem), 1fr)` columns to prevent platform and countdown pill wrapping.
-- **GitHub Pages deploy workflow artifact race & retry failure (`.github/workflows/deploy.yml`):** split single `deploy` job into `build` (test, build, `upload-pages-artifact`) and `deploy` (`needs: build`, `deploy-pages`) jobs, eliminating `Found 0 artifact(s)` race and `Multiple artifacts named "github-pages"` error on re-runs.
-- **Discover "Seen it" stamped today's date.** It now asks when, with the same menu as Mark as watched (just now, on release or each episode's air date, date unknown, or a picked date bounded by release and today). Browser check still open.
-- The ~54 films added 2026-11-18 with today's date (ids 2362-2417) were set to "date unknown" by SQL on 2026-11-18. They stay watched.
+- Payslip history uses a full-width ledger within each group. The group heading shows totals; rows show the complete employer and gross with take-home and labelled status. The clicked detail dialog remains as before.
+- Once the reimbursement table is available, a payslip can record a reimbursement payment line manually. Matching suggests penny-exact prior spending within 120 days, with explicit confirmation; confirmed expenses show in the transaction ledger and stale links need review. Until then, the reimbursement controls are hidden.
+- Future leave years explain that bank holidays follow ordinary UK rules and can change for exceptional holidays or new rules.
+- Other edits and untracked drafts may be present in the shared checkout; do not attribute them to this work without checking their diff.
 
-## Deployed & landed on `main`
-
-- **Watchlist Discover, News & Franchises:** `tmdb-proxy` v18 deployed; gap-first ranking, `Likely seen` consensus, `EntryPreviewDialog`, News `Following` scrim + `WeekStrip` + `OUT NOW` grid, Library shelf filters/categories (`20261118201834`), Diary, Franchises, Import.
-- **Watchlist `TitleScores` badges + TMDB score:** committed on this branch; browser check outstanding.
-- **Staged warmup, public IndexedDB cache, deduplicated Supabase calls** (`565c605`): committed on this branch; browser check outstanding.
-
-## OMDb scores
-
-- **First pass complete.** Three parts ran at 06:00 UTC on 2026-11-19, each 200 OK in 68-75 s (the cron `pg_net` timeout is 120 s).
-- Films: 1,064 of 1,070 checked; 1,008 with an IMDb rating.
-- Series: 393 of 395 checked; 354 with an IMDb rating; only 3 with Rotten Tomatoes (OMDb rarely carries RT for series).
-
-## Checks (2026-11-19, merged tree `049ed65`)
+## Checks (2026-11-19, local tree)
 
 | Check | Result |
 |---|---|
 | `npm run lint` | 0 errors, 0 warnings |
 | `npm run typecheck` | pass |
-| `npx vitest run` | 107 files, 2,806 tests pass |
+| `npm run typecheck:functions` | pass |
+| Targeted Vitest (reimbursement, payslip reconciliation, RLS) | 3 files, 17 tests pass |
 | `npm run build` | pass |
-| Browser | not run |
+| `npm run ship-check` | command passed; scan verdict **Do not launch yet** (93/100, one reported critical blocker; Semgrep skipped) |
+| Browser and database migration | not verified / not applied |
+
+## Earlier landed work
+
+- `feat/watching-mid-season` narrowed Watching to series mid-season or current as episodes air; signed-out live-data preview was checked. Signed-in shelves remain unverified.
+- Travel remount flash and Finance re-entry/tab switching latency were addressed. Watchlist News cards were aligned. The Pages build/deploy artifact race was addressed; the last recorded manual re-run deployed.
+- Discover “Seen it” now asks when; the affected ~54 films were set to “date unknown” on 2026-11-18.
+- Watchlist Discover, News, Franchises, Library, Diary and Import changes, TitleScores/TMDB score, staged warmup, public IndexedDB cache and deduplicated Supabase calls were recorded as landed previously. Browser checks remain open.
+- OMDb first pass completed on 2026-11-19: films 1,064/1,070 checked (1,008 IMDb ratings); series 393/395 checked (354 IMDb ratings; 3 RT ratings).
 
 ## Next
 
-1. Browser-verify: Discover "Seen it" menu and picked-date bounds (signed in as admin); Watchlist ↔ Finance switching and internal tabs (single `check_connection`, IndexedDB public cache hydration on reload, no Finance keys in IndexedDB); `TitleScores`/TMDB scores; Discover; `/watchlist/franchises`.
-2. First weekly OMDb refresh (~2026-11-25): it re-asks ~900 titles at up to 300 a part (~100 s, close to the 120 s timeout). Check that day's `sync_log`.
+1. Restore database access and apply and verify the reimbursement-link migration in the intended environment, then browser-check payslip layout at desktop and phone widths, manual reimbursement entry, suggestion/confirmation/unlink, stale links, and the ledger marker. Test a future leave year such as 2049.
+2. Browser-verify Discover “Seen it” dating; signed-in Watching/To watch shelves; Watchlist ↔ Finance switching and internal tabs; IndexedDB cache hydration and privacy boundary; TitleScores/TMDB badges; Discover, News, Franchises, Library; Travel signed URLs; countdown pill; light mode and phone viewport.
+3. Check the first weekly OMDb refresh around 2026-11-25 in `sync_log` (roughly 900 titles at up to 300 per part).
+4. Carry forward the other ship-check findings rather than treating an exit code of zero as launch approval. The reported AWS key in `airport-countries.data.ts:226` was inspected and is a false positive inside a static encoded airport-country lookup string.
 
-## Still unverified & blockers
+## Still unverified and blockers
 
-- **Unverified (not browser-checked):** Discover "Seen it" dating, IndexedDB public cache hydration and privacy boundary, staged warmup, Watchlist ↔ Finance switching, Travel batched signed URLs, `TitleScores` badges, Watchlist Discover/News/Franchise/Library flows, signed-in admin flows, the narrowed Watching / To watch shelves signed in, `S{n}E{e}` live countdown pill, light mode, phone viewport, and show creator/cast dialog.
-- **Unverified (not yet run):** the weekly OMDb refresh.
-- **Blocker:** the 2026-11-19 finance sync reported "Revolut: bank access needs renewing; reconnect this bank". Not yet reconnected.
-- **Carried forward from 2026-11-18, not re-checked:** untracked drafts (`SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md`) and `.claude/launch.json` in the local main checkout; worktree `.claude/worktrees/affectionate-lamarr-f2d2cb` (owner unknown). `.claude/worktrees/caught-up` was removed 2026-11-19; `.claude/launch.json` on `main` still carries its stale `caught-up-worktree` entry.
+- No browser verification of this local payslip/reimbursement/holiday work. New PDF imports still capture summary figures, not reimbursement line items; enter those lines manually for matching.
+- The connected Supabase project reports `INACTIVE`; its migration list and a read-only table check timed out. The reimbursement table migration has not been applied or database-tested; the controls stay hidden until the table is available.
+- The 2026-11-19 finance sync reported “Revolut: bank access needs renewing; reconnect this bank”. Not yet reconnected.
+- Prior browser work remains open for staged warmup, Watchlist flows, signed-in admin flows, show creator/cast dialog and the items in Next.
+- Carried forward without re-checking: untracked drafts (`SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md`), `.claude/launch.json` with stale `caught-up-worktree` entry, and `.claude/worktrees/affectionate-lamarr-f2d2cb` (owner unknown).

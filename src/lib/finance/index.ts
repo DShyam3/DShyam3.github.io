@@ -25,6 +25,7 @@ export * from './payday';
 export * from './payslip';
 export * from './payslip-parse';
 export * from './payslip-reconciliation';
+export * from './payslip-reimbursement';
 export * from './retirement';
 export * from './review';
 export * from './scenario';

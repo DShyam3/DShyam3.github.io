@@ -1422,6 +1422,12 @@ export default function TaxIncomeSurface({
           </div>
         </div>
 
+        {currentTaxYear > realCurrentYear && (
+          <p className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            Future bank holidays are calculated from the usual UK rules. One-off holidays or rule changes may alter these dates.
+          </p>
+        )}
+
         <div className="holiday-tracker-tiles grid gap-2 border-b border-border/30 pb-4">
           <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
             <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Allowance</span>

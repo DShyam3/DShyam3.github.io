@@ -49,6 +49,17 @@ export interface PayslipTransactionReconciliation {
   confirmedAt: string;
 }
 
+/** A person's confirmation that one payroll reimbursement paid back one card expense. */
+export interface PayslipReimbursementLink {
+  id: string;
+  payslipId: string;
+  lineIndex: number;
+  lineLabel: string;
+  lineAmount: number;
+  transactionId: string;
+  confirmedAt: string;
+}
+
 export interface PayslipLine {
   label: string;
   /** Always positive. `kind` says which way it moves. */

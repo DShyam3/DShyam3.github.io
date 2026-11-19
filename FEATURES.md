@@ -732,8 +732,8 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   show their type: Net pay arrangement, Salary sacrifice, or Relief at source.
   A Take-home by tax band card under Breakdown Rates shows the same figures
   sliced by tax band (see Tax calculator).
-- **Payslips** — stored with line items, viewable natively, extracted from PDF
-  in the browser. A PDF attached in the add or edit form is read and parsed before
+- **Payslips** — stored with optional line items and viewable natively, with summary
+  figures extracted from PDF in the browser. A PDF attached in the add or edit form is read and parsed before
   saving; the date, employer and any blank or zero fields are filled from the PDF
   and employer logos matched from experience rows. Payslips can be deleted from the
   detail or edit dialog. Totals group by tax year (the default), calendar year or employer, each group with
@@ -742,7 +742,11 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   scope. A student loan line, always for the newest tax year, sets the year's
   deductions against what each payslip's own pay owes: the plan's rate on the pay
   above a month's threshold, after salary sacrifice, rounded down to whole pounds.
-  The full history shows in the page, without a scroll box of its own.
+  The full history shows in the page, without a scroll box of its own. The list
+  gives take-home prominence in the headline cards. Each group has a heading
+  with its earned and take-home totals, followed by full-width payslip rows
+  showing the date, employer, gross and take-home without clipping the gross.
+  Rows label bank matches and archived PDFs beside the figures.
 - **Tax calculator** — a what-if calculator for 2026/27 UK rules. Type any salary
   or self-employed profit in the box, or drag the slider up to £250,000, and it
   shows take-home, effective rate, marginal rate and how many pence of the next
@@ -859,7 +863,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 
   Configurable birthday leave usage rules: on the day (or nearest working day if it falls on a weekend or bank holiday), within ±1 week, within the birthday calendar month, within ±30 days, or floating anytime in the year, using day and month only (in UK `DD / MM` order, never storing a full date of birth) and highlighting the birthday and eligible booking window on the calendar.
 
-  A year switcher allows viewing and planning any current or future leave year with UK bank holidays (including deterministic future-year calculation and weekend substitute bank holidays) and UK (`en-GB`, day-first, Monday–Sunday) date formatting throughout. The year chevrons and the Plan Full Year shortcut change only the year on screen. The tax year saved in Settings, which also sets the weekend and bank holiday counts behind the pay rates, changes only in Settings. Bank holidays for the year on screen follow the profile's region: UK bank holidays are stored in Supabase and refreshed quarterly from gov.uk, so the saved year reads from that table (falling back to deterministic calculation), and any other year is calculated for that region.
+  A year switcher allows viewing and planning any current or future leave year with UK bank holidays (including deterministic future-year calculation and weekend substitute bank holidays) and UK (`en-GB`, day-first, Monday–Sunday) date formatting throughout. The year chevrons and the Plan Full Year shortcut change only the year on screen. The tax year saved in Settings, which also sets the weekend and bank holiday counts behind the pay rates, changes only in Settings. Bank holidays for the year on screen follow the profile's region: UK bank holidays are stored in Supabase and refreshed quarterly from gov.uk, so the saved year reads from that table (falling back to deterministic calculation), and any other year is calculated for that region. Future years carry a note that these dates follow the usual rules and may change for one-off holidays or new rules.
 
   The Optimal Leave Maximiser opens in January to plan the full year and defaults later in the year to optimising remaining upcoming leave with long-weekend and 9-day week stretches alongside remaining bank holidays. It includes a shortcut to plan the next leave year, combining remaining annual leave allowance, UK bank holidays, and the Birthday Day Off (when enabled) to recommend the highest-leverage leave bridges. Selectable biases include Balanced, Long Christmas, Long Easter, and Summer Focus. Christmas bridges offer three tiers: Tier 1 · Efficient Bridge (Twixmas), Tier 2 · Balanced Stretch (pre-Christmas working days + Twixmas), and Tier 3 · Ultimate Shutdown (full Christmas week + Twixmas); Easter offers Tier 1 · Pre-Easter 4-Day Bridge, Tier 1 · Post-Easter 4-Day Bridge, and Tier 3 · 16-Day Easter Shutdown. Each bridge shows exact dates to book, leave spent, consecutive days off, and return-to-work date, with one-click booking for individual bridges or the full recommended plan. When no chosen bridge captures the Birthday Day Off, a standalone 1-day Birthday Day Off Break is recommended. Recorded sick days are excluded from suggestions and do not consume annual allowance. The Maximiser lists up to five bridges inline; with more, it lists the recommended ones and a button reveals the rest.
 
@@ -907,6 +911,13 @@ one-to-one, and penny-exact. Bank payment candidates come from the pay month
 and within five days either side of it, to account for early or late payment
 around calendar boundaries. When a payslip has exactly one matching bank payment
 for its take-home on the pay date itself, a button confirms all such matches at once.
+Expense reimbursement lines can be entered against an existing payslip when
+its PDF did not capture that detail. For each clearly labelled payment line,
+the page suggests penny-exact spending from the preceding 120 days; a person
+confirms the link. One expense can be linked to one reimbursement line, and a
+confirmed expense is marked in the transaction ledger. Changed line or expense
+details cause the confirmation to show as needing review. These controls appear
+when the reimbursement link table is available.
 
 ---
 

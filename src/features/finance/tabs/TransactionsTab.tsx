@@ -64,7 +64,7 @@ import { StatementImportDialog } from '@/features/finance/components/StatementIm
 import { TransferReviewSection } from '@/features/finance/components/TransferReviewSection';
 import { CategoryRulesDialog } from '@/features/finance/components/CategoryRulesDialog';
 import { useFinanceData } from '@/features/finance/FinanceDataContext';
-import { resolveMerchant, matchesCategoryRule, calculateRuleImpact } from '@/lib/finance';
+import { resolveMerchant, matchesCategoryRule, calculateRuleImpact, findPayslipReimbursementCandidates } from '@/lib/finance';
 
 /* Rows drawn at once. The whole ledger on screen was 18,000+ DOM nodes at
    1,000 transactions, and opening anything over it -- the sync popover took
@@ -491,7 +491,22 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     categoryRules,
     saveCategoryRule,
     deleteCategoryRule,
+    payslips,
+    payslipReimbursementLinks,
   } = useFinanceData();
+  const reimbursedTransactionIds = useMemo(() => {
+    const payslipsById = new Map(payslips.map(payslip => [payslip.id, payslip]));
+    const transactionsById = new Map(transactions.map(transaction => [transaction.id, transaction]));
+    return new Set(payslipReimbursementLinks.flatMap(link => {
+      const payslip = payslipsById.get(link.payslipId);
+      const transaction = transactionsById.get(link.transactionId);
+      const line = payslip?.lines?.[link.lineIndex];
+      if (!payslip || !transaction || !line || line.label !== link.lineLabel
+        || Math.round(line.amount * 100) !== Math.round(link.lineAmount * 100)) return [];
+      return findPayslipReimbursementCandidates(payslip, [transaction])
+        .some(candidate => candidate.lineIndex === link.lineIndex) ? [transaction.id] : [];
+    }));
+  }, [payslipReimbursementLinks, payslips, transactions]);
   const deleteTransactions = (ids: string[]) => {
     void deleteFinanceRows('finance_transactions', ids).then(ok => {
       if (!ok) void fetchSupabaseData();
@@ -978,7 +993,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                           data-tx-row={tx.id}
                           role="button"
                           tabIndex={0}
-                          aria-label={`${tx.name}, ${formatGBP(Math.abs(tx.amount))}, ${tx.isReviewed ? 'reviewed' : 'needs review'}`}
+                          aria-label={`${tx.name}, ${formatGBP(Math.abs(tx.amount))}, ${tx.isReviewed ? 'reviewed' : 'needs review'}${reimbursedTransactionIds.has(tx.id) ? ', reimbursed through payroll' : ''}`}
                           aria-pressed={isSelected}
                           onFocus={(event) => { if (event.target === event.currentTarget) setSelectedTxId(tx.id); }}
                           onKeyDown={(event) => {
@@ -1030,6 +1045,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                                 <span className="text-xs font-semibold text-foreground break-words block">
                                   {tx.name}
                                   <span className="block mt-1 font-normal text-muted-foreground">{tx.isReviewed ? 'Reviewed' : 'Needs review'}</span>
+                                  {reimbursedTransactionIds.has(tx.id) && <span className="mt-1 block font-normal text-positive">Reimbursed through payroll</span>}
                                 </span>
                                 {accInfo && (
                                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/40 border border-border/40 px-2 py-0.5 rounded-md shrink-0 font-medium">
@@ -1136,6 +1152,9 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
               {/* Title & Amount inline editor */}
               <div className="space-y-2">
+                {reimbursedTransactionIds.has(selectedTx.id) && (
+                  <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-xs text-positive">Matched to a confirmed payslip reimbursement.</p>
+                )}
                 <Input
                   value={selectedTx.name}
                   onChange={e => updateSelectedField('name', e.target.value)}

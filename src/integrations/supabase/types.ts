@@ -1110,6 +1110,61 @@ export type Database = {
           },
         ]
       }
+      finance_payslip_reimbursement_links: {
+        Row: {
+          confirmed_at: string
+          id: string
+          line_amount: number
+          line_index: number
+          line_label: string
+          payslip_id: string
+          profile_id: string
+          transaction_id: string
+        }
+        Insert: {
+          confirmed_at?: string
+          id?: string
+          line_amount: number
+          line_index: number
+          line_label: string
+          payslip_id: string
+          profile_id: string
+          transaction_id: string
+        }
+        Update: {
+          confirmed_at?: string
+          id?: string
+          line_amount?: number
+          line_index?: number
+          line_label?: string
+          payslip_id?: string
+          profile_id?: string
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_payslip_reimbursement_links_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_payslip_reimbursement_links_payslip_fkey"
+            columns: ["profile_id", "payslip_id"]
+            isOneToOne: false
+            referencedRelation: "finance_payslips"
+            referencedColumns: ["profile_id", "id"]
+          },
+          {
+            foreignKeyName: "finance_payslip_reimbursement_links_transaction_fkey"
+            columns: ["profile_id", "transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["profile_id", "id"]
+          },
+        ]
+      }
       finance_payslip_transaction_reconciliations: {
         Row: {
           confirmed_at: string
