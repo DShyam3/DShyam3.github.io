@@ -66,7 +66,7 @@ describe('discoverySeeds', () => {
     ]);
   });
 
-  it('waits only for new titles, not a caught-up series with a dated return', () => {
+  it('waits only for new titles; a series kept up with is watched, one with no date is saved', () => {
     const episodes = (next?: string) => [
       { title: 'Aired', episode_number: 1, watched: true, release_date: '2026-01-01' },
       ...(next ? [{ title: 'Next', episode_number: 2, release_date: next }] : []),
@@ -74,10 +74,14 @@ describe('discoverySeeds', () => {
     const watchlist: WatchlistItem[] = [
       makeWatchlistItem({ id: '1', title: 'Returning Show', category: 'TV Shows', tmdb_id: 80, series_status: 'Returning Series', seasons: [{ season_number: 1, episodes: episodes('2026-12-01') }] }),
       makeWatchlistItem({ id: '2', title: 'Quiet Show', category: 'TV Shows', tmdb_id: 90, series_status: 'Returning Series', seasons: [{ season_number: 1, episodes: episodes() }] }),
+      makeWatchlistItem({ id: '3', title: 'Next Season Show', category: 'TV Shows', tmdb_id: 95, seasons: [{ season_number: 1, episodes: episodes() }, { season_number: 2, episodes: [{ title: 'Out', episode_number: 1, release_date: '2026-06-01' }] }] }),
     ];
     const reasons = discoverySeeds(watchlist, [], new Date(2026, 10, 18, 12)).map((seed) => seed.reason);
     expect(reasons).not.toContain('Because you’re waiting for Returning Show');
-    expect(reasons).toContain('Based on Returning Show in your library');
+    expect(reasons).toContain('Because you’re watching Returning Show');
+    expect(reasons).toContain('Based on Quiet Show in your library');
+    // Between seasons, on To watch, still counts as a show you are watching.
+    expect(reasons).toContain('Because you’re watching Next Season Show');
     expect(reasons).not.toContain('Because you’re waiting for Quiet Show');
   });
 

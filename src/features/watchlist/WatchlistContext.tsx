@@ -35,7 +35,7 @@ const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date);
 import { useAuth } from '@/contexts/AuthContext';
 import { NIGHTLY_SYNC_HOUR_UTC } from './sync-logic';
 import { releaseYear } from './watchlist-utils';
-import { countdownRelease, isLibraryState, libraryStatus, isValidPersonalRating, releaseCountdown, type LibraryState } from './library-state';
+import { isLibraryState, isValidPersonalRating, type LibraryState, statusLabel } from './library-state';
 
 // Returns a referentially-stable function that always calls the latest
 // version of `fn`. Used so the context value below doesn't hand out a new
@@ -636,19 +636,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     void loadLibrary(false);
   }, [loadLibrary]);
 
-  const getAutoStatus = useCallback(
-    (item: WatchlistItem) => {
-      const personalStatus = libraryStatus(item);
-      if (['Hidden', 'Stopped watching', 'Watched', 'Completed', 'Watching'].includes(personalStatus)) return personalStatus;
-      // The countdown comes from one pure source, shared with the card and
-      // the detail dialog (library-state's countdownRelease).
-      const next = countdownRelease(item);
-      if (item.category === 'Movies') return next ? releaseCountdown(next) : 'Released';
-      if (!item.seasons || item.seasons.length === 0) return 'Returning Series';
-      return next ? releaseCountdown(next) : personalStatus;
-    },
-    [],
-  );
+  // The pill text is pure and tested in library-state (statusLabel), shared
+  // with the shelf rule so the two never disagree.
+  const getAutoStatus = useCallback((item: WatchlistItem) => statusLabel(item), []);
 
   const addItemKey = (item: {
     tmdb_id?: number;

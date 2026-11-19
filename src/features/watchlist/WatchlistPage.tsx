@@ -140,10 +140,10 @@ const SHELF_SORTS: Record<Shelf, LibrarySort[]> = {
 
 /** What each shelf holds, said once under its count. */
 const SHELF_HINTS: Record<Shelf, string> = {
-  Watching: 'Series you have started, with aired episodes still to watch. Films go straight from To watch to Finished.',
-  'To watch': 'Out now, and not started yet.',
-  Upcoming: 'Nothing to watch until a dated release: new titles, and the next season or episode of a series you are up to date on. Soonest first.',
-  'Up to date': 'Running series with every aired episode watched and no next date known. A series moves to Upcoming once its next episode or season has a date.',
+  Watching: 'Series you are part-way through a season of, or keeping up with as it airs (next episode due within two weeks). Films go straight from To watch to Finished.',
+  'To watch': 'Out now and not started, or a series between seasons with the next one out. Its card says where you pick up.',
+  Upcoming: 'Nothing to watch until a dated release: new titles, and the return of a series you are up to date on. Soonest first.',
+  'Up to date': 'Running series with every aired episode watched and no next date known. A series moves to Upcoming once its return has a date, or to Watching when its next episode is due within two weeks.',
   Finished: 'Films you have watched, and ended series watched to the last episode.',
   Favourites: 'Titles you have hearted. A favourite also stays on its own shelf.',
   'Stopped watching': 'Set aside, with your progress and ratings kept.',

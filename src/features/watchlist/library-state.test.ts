@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countdownRelease, isValidPersonalRating, libraryShelf, libraryStatus, matchesLibraryType, nextAirDate, nextRelease, releaseCountdown, shelfFromParam } from './library-state';
+import { countdownRelease, isValidPersonalRating, libraryShelf, libraryStatus, matchesLibraryType, nextAirDate, nextRelease, nextSeasonToWatch, releaseCountdown, shelfFromParam, statusLabel } from './library-state';
 import type { WatchlistItem } from './WatchlistContext';
 const today = new Date(2026, 10, 17, 12);
 const show: WatchlistItem = {
@@ -10,17 +10,40 @@ const show: WatchlistItem = {
   ] }],
 };
 describe('library progress', () => {
-  it('keeps a series caught up until its next episode airs', () => {
-    expect(libraryStatus(show, today)).toBe('Caught up');
+  it('counts a series kept up with week by week as Watching, before and after the next episode airs', () => {
+    expect(libraryStatus(show, today)).toBe('Watching');
     expect(libraryStatus(show, new Date(2026, 10, 18, 12))).toBe('Watching');
   });
   it('ignores unwatched specials when deciding caught up', () => {
-    expect(libraryStatus({ ...show, seasons: [...show.seasons!, { season_number: 0, episodes: [{ title: 'Special', episode_number: 1, release_date: '2025-01-01' }] }] }, today)).toBe('Caught up');
+    const waiting: WatchlistItem = { ...show, seasons: [{ season_number: 1, episodes: [show.seasons![0].episodes[0]] }] };
+    expect(libraryStatus(waiting, today)).toBe('Caught up');
+    expect(libraryStatus({ ...waiting, seasons: [...waiting.seasons!, { season_number: 0, episodes: [{ title: 'Special', episode_number: 1, release_date: '2025-01-01' }] }] }, today)).toBe('Caught up');
+  });
+  it('keeps Watching for a series part-way through a season, and sends one between seasons to To watch', () => {
+    const ep = (episode_number: number, watched: boolean, release_date = '2026-01-01') => ({ title: `E${episode_number}`, episode_number, watched, release_date });
+    const midSeason: WatchlistItem = { ...show, seasons: [{ season_number: 1, episodes: [ep(1, true), ep(2, true)] }, { season_number: 2, episodes: [ep(1, true), ep(2, false)] }] };
+    expect(libraryStatus(midSeason, today)).toBe('Watching');
+    expect(libraryShelf(midSeason, today)).toBe('Watching');
+    expect(statusLabel(midSeason, today)).toBe('Watching');
+    const boundary: WatchlistItem = { ...show, seasons: [{ season_number: 1, episodes: [ep(1, true), ep(2, true)] }, { season_number: 2, episodes: [ep(1, false), ep(2, false)] }] };
+    expect(libraryStatus(boundary, today)).toBe('Between seasons');
+    expect(libraryShelf(boundary, today)).toBe('To watch');
+    expect(nextSeasonToWatch(boundary, today)).toBe(2);
+    expect(statusLabel(boundary, today)).toBe('S2 next');
+    expect(countdownRelease(boundary, today)).toBeNull();
+    // Only a middle season ticked, as with a show started part-way: pick up
+    // after the last season watched, not at season 1.
+    const gap: WatchlistItem = { ...show, series_status: 'Ended', seasons: [1, 2, 3, 4, 5].map((season_number) => ({ season_number, episodes: [ep(1, season_number === 4), ep(2, season_number === 4)] })) };
+    expect(libraryShelf(gap, today)).toBe('To watch');
+    expect(statusLabel(gap, today)).toBe('S5 next');
+    // Nothing left after the last season watched: fall back to the first gap.
+    expect(nextSeasonToWatch({ ...gap, seasons: gap.seasons!.slice(0, 4) }, today)).toBe(1);
   });
   it('distinguishes completed from caught up and never completes an empty show', () => {
     expect(libraryStatus({ ...show, series_status: 'Ended', seasons: [{ season_number: 1, episodes: [show.seasons![0].episodes[0]] }] }, today)).toBe('Completed');
     expect(libraryStatus({ ...show, series_status: 'Ended', seasons: [] }, today)).toBe('To Watch');
-    expect(libraryStatus({ ...show, series_status: 'Ended' }, today)).toBe('Caught up');
+    // An ended show with a dated episode still to air is being kept up with.
+    expect(libraryStatus({ ...show, series_status: 'Ended' }, today)).toBe('Watching');
   });
   it('never assumes an unknown release date has aired', () => {
     expect(libraryStatus({ ...show, seasons: [{ season_number: 1, episodes: [{ title: 'TBA', episode_number: 1 }] }] }, today)).toBe('To Watch');
@@ -35,9 +58,44 @@ describe('library progress', () => {
 });
 describe('library shelves', () => {
   const ended: WatchlistItem = { ...show, series_status: 'Ended', seasons: [{ season_number: 1, episodes: [show.seasons![0].episodes[0]] }] };
-  it('puts a caught-up series with a dated next episode on Upcoming until it airs', () => {
-    expect(libraryShelf(show, today)).toBe('Upcoming');
+  it('keeps up with a show joined part-way, but treats a long break as caught up', () => {
+    const ep = (episode_number: number, watched: boolean, release_date: string) => ({ title: `E${episode_number}`, episode_number, watched, release_date });
+    // S1 never watched; S2 followed week by week.
+    const joinedLate: WatchlistItem = { ...show, seasons: [
+      { season_number: 1, episodes: [ep(1, false, '2025-01-01'), ep(2, false, '2025-01-08')] },
+      { season_number: 2, episodes: [ep(1, true, '2026-11-03'), ep(2, true, '2026-11-10'), ep(3, false, '2026-11-24')] },
+    ] };
+    expect(libraryShelf(joinedLate, today)).toBe('Watching');
+    expect(statusLabel(joinedLate, today)).toBe('S2E3 releases in 7 days');
+    // A mid-season break of months is not watching now: Upcoming, counting down.
+    const brk: WatchlistItem = { ...show, seasons: [{ season_number: 1, episodes: [ep(1, true, '2026-11-03'), ep(2, false, '2027-05-20')] }] };
+    expect(libraryStatus(brk, today)).toBe('Caught up');
+    expect(libraryShelf(brk, today)).toBe('Upcoming');
+    expect(statusLabel(brk, today)).toBe('S1E2 releases in 184 days');
+    // Two weeks out still counts as keeping up; fifteen days does not.
+    const near = (day: string): WatchlistItem => ({ ...show, seasons: [{ season_number: 1, episodes: [ep(1, true, '2026-11-10'), ep(2, false, day)] }] });
+    expect(libraryShelf(near('2026-12-01'), today)).toBe('Watching');
+    expect(libraryShelf(near('2026-12-02'), today)).toBe('Upcoming');
+  });
+  it('keeps a title ticked before its air date off To watch', () => {
+    const early: WatchlistItem = { ...show, seasons: [{ season_number: 1, episodes: [
+      { title: 'Pilot', episode_number: 1, watched: true, release_date: '2026-11-18' },
+      { title: 'Two', episode_number: 2, release_date: '2026-11-25' },
+    ] }] };
+    expect(libraryShelf(early, today)).toBe('Watching');
+    expect(statusLabel(early, today)).toBe('S1E2 releases in 8 days');
+  });
+  it('shows no countdown for a series with something to watch now', () => {
+    const ep = (episode_number: number, watched: boolean, release_date: string) => ({ title: `E${episode_number}`, episode_number, watched, release_date });
+    const midSeason: WatchlistItem = { ...show, seasons: [{ season_number: 1, episodes: [ep(1, true, '2026-11-01'), ep(2, false, '2026-11-08'), ep(3, false, '2026-11-20')] }] };
+    expect(countdownRelease(midSeason, today)).toBeNull();
+    expect(statusLabel(midSeason, today)).toBe('Watching');
+  });
+  it('keeps a series kept up with week by week on Watching, counting down to its next episode', () => {
+    expect(libraryShelf(show, today)).toBe('Watching');
+    expect(statusLabel(show, today)).toBe('S1E2 releases in 1 day');
     expect(libraryShelf(show, new Date(2026, 10, 18, 12))).toBe('Watching');
+    expect(statusLabel(show, new Date(2026, 10, 18, 12))).toBe('Watching');
   });
   it('keeps a running series caught up with no next date on Up to date, out of Finished', () => {
     const waiting: WatchlistItem = { ...show, seasons: [{ season_number: 1, episodes: [show.seasons![0].episodes[0]] }] };
@@ -62,7 +120,7 @@ describe('library shelves', () => {
     // the pill agree, whatever the time zone.
     const watchedOpener: WatchlistItem = { ...premiere, seasons: [{ ...show.seasons![0], episodes: [show.seasons![0].episodes[0]] }, { ...premiere.seasons![1], episodes: [{ ...premiere.seasons![1].episodes[0], watched: true }, premiere.seasons![1].episodes[1]] }] };
     expect(nextRelease(watchedOpener, new Date(2026, 10, 17, 1))).toEqual({ date: '2026-11-24', season: 2, episode: 2 });
-    expect(libraryShelf(watchedOpener, new Date(2026, 10, 17, 1))).toBe('Upcoming');
+    expect(libraryShelf(watchedOpener, new Date(2026, 10, 17, 1))).toBe('Watching');
   });
   it('counts a caught-up series to its next episode, anything else to a premiere or release', () => {
     expect(countdownRelease(show, today)).toEqual({ date: '2026-11-18', season: 1, episode: 2 });
@@ -78,6 +136,21 @@ describe('library shelves', () => {
     const film: WatchlistItem = { id: '9', title: 'Film', category: 'Movies', created_at: '', release_date: '2026-11-20' };
     expect(countdownRelease(film, today)).toEqual({ date: '2026-11-20' });
     expect(countdownRelease({ ...film, release_date: '2026-11-17' }, today)).toBeNull();
+  });
+  it('labels films and season premieres with a countdown, and settled titles plainly', () => {
+    const film: WatchlistItem = { id: '9', title: 'Film', category: 'Movies', created_at: '', release_date: '2026-11-20' };
+    expect(statusLabel(film, today)).toBe('releases in 3 days');
+    expect(statusLabel({ ...film, release_date: '2026-11-01' }, today)).toBe('Released');
+    expect(statusLabel({ ...film, release_date: '2026-11-01', watched: true }, today)).toBe('Watched');
+    const waiting: WatchlistItem = { ...show, seasons: [{ season_number: 1, episodes: [show.seasons![0].episodes[0]] }, { season_number: 2, release_date: '2027-03-01', episodes: [] }] };
+    expect(statusLabel(waiting, today)).toBe('S2 releases in 104 days');
+    expect(statusLabel({ ...waiting, seasons: [waiting.seasons![0]] }, today)).toBe('Caught up');
+    expect(statusLabel({ ...show, library_state: 'stopped' }, today)).toBe('Stopped watching');
+    expect(statusLabel({ ...show, library_state: 'hidden' }, today)).toBe('Hidden');
+    expect(statusLabel({ ...show, seasons: [] }, today)).toBe('Returning Series');
+    const notStarted: WatchlistItem = { ...show, seasons: [{ season_number: 1, episodes: [{ title: 'One', episode_number: 1, release_date: '2026-11-01' }] }] };
+    expect(statusLabel(notStarted, today)).toBe('To Watch');
+    expect(statusLabel({ ...notStarted, series_status: 'Ended', seasons: [{ season_number: 1, episodes: [{ title: 'One', episode_number: 1, watched: true, release_date: '2026-11-01' }] }] }, today)).toBe('Completed');
   });
   it('writes the pill in local calendar days', () => {
     expect(releaseCountdown({ date: '2026-11-18', season: 1, episode: 2 }, today)).toBe('S1E2 releases in 1 day');

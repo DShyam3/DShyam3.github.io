@@ -66,7 +66,9 @@ export function discoverySeeds(
     .sort((a, b) => (b.watched_at ?? '').localeCompare(a.watched_at ?? ''))
     .map((item) => seed(item, `Because you watched ${item.title}`));
   const watching = usable
-    .filter((item) => libraryShelf(item, today) === 'Watching')
+    // Any started show with episodes in play: mid-season, kept up with, or
+    // between seasons on To watch.
+    .filter((item) => ['Watching', 'Between seasons'].includes(libraryStatus(item, today)))
     .sort((a, b) => a.title.localeCompare(b.title))
     .map((item) => seed(item, `Because you’re watching ${item.title}`));
   const awaited = usable

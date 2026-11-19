@@ -33,15 +33,69 @@ export function libraryStatus(item: WatchlistItem, today = new Date()): string {
   if (item.category === 'Movies') return item.watched ? 'Watched' : 'To Watch';
   const date = isoDay(today);
   const episodes = (item.seasons ?? []).filter((season) => season.season_number > 0).flatMap((season) => season.episodes);
-  const released = episodes.filter((episode) => episode.release_date && episode.release_date.slice(0, 10) <= date);
-  const watched = released.filter((episode) => episode.watched).length;
-  if (released.length > 0 && watched === released.length) {
+  if (!episodes.some((episode) => episode.watched)) return 'To Watch';
+  const { midSeason, keptUp } = currentSeasons(item, today);
+  // Watching: part-way through a season, or keeping up with one as it airs.
+  if (midSeason || keptUp) return 'Watching';
+  const released = episodes.filter((episode) => airedBy(episode.release_date, date));
+  if (released.every((episode) => episode.watched)) {
     const ended = ['Ended', 'Canceled', 'Cancelled'].includes(item.series_status ?? '');
     // An ended show's undated episode will never air and cannot be marked
     // one by one, so it must not hold the show off Completed.
-    return ended && episodes.every((episode) => episode.watched || !episode.release_date) ? 'Completed' : 'Caught up';
+    if (ended && released.length > 0 && episodes.every((episode) => episode.watched || !episode.release_date)) return 'Completed';
+    return 'Caught up';
   }
-  return episodes.some((episode) => episode.watched) ? 'Watching' : 'To Watch';
+  // Started, with aired episodes left, but in no season under way: at a
+  // season boundary, or with only some seasons ticked. It waits on To watch
+  // and says where it picks up (nextSeasonToWatch).
+  return 'Between seasons';
+}
+
+/** How far ahead a next episode counts as keeping up, rather than a break. */
+const KEEPING_UP_DAYS = 14;
+
+/** True when a TMDB date has come out by the local calendar day `date`. */
+const airedBy = (releaseDate: string | null | undefined, date: string) => !!releaseDate && releaseDate.slice(0, 10) <= date;
+
+/**
+ * The seasons behind Watching. A season is part-way through when it has a
+ * watched episode and an aired one not watched. It is being kept up with
+ * when it has a watched episode, every aired one watched, and its next
+ * episode due within KEEPING_UP_DAYS; `keptUp` is the soonest such episode.
+ * A longer wait is a break: the series is caught up, and its next episode
+ * goes on Upcoming.
+ */
+function currentSeasons(item: WatchlistItem, today: Date): { midSeason: boolean; keptUp: NextRelease | null } {
+  const date = isoDay(today);
+  const limit = isoDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() + KEEPING_UP_DAYS));
+  let midSeason = false;
+  let keptUp: NextRelease | null = null;
+  for (const season of item.seasons ?? []) {
+    if (season.season_number <= 0 || !season.episodes.some((episode) => episode.watched)) continue;
+    if (season.episodes.some((episode) => !episode.watched && airedBy(episode.release_date, date))) {
+      midSeason = true;
+      continue;
+    }
+    for (const episode of season.episodes) {
+      const day = episode.release_date?.slice(0, 10);
+      if (episode.watched || !day || day <= date || day > limit) continue;
+      if (!keptUp || day < keptUp.date) keptUp = { date: day, season: season.season_number, episode: episode.episode_number };
+    }
+  }
+  return { midSeason, keptUp };
+}
+
+/**
+ * Where a series between seasons picks up: the first season after the last
+ * one with a watched episode that has an aired episode left, or failing that
+ * the first season with one left. Null when nothing aired is left.
+ */
+export function nextSeasonToWatch(item: WatchlistItem, today = new Date()): number | null {
+  const date = isoDay(today);
+  const seasons = (item.seasons ?? []).filter((season) => season.season_number > 0).sort((a, b) => a.season_number - b.season_number);
+  const left = seasons.filter((season) => season.episodes.some((episode) => !episode.watched && airedBy(episode.release_date, date)));
+  const lastWatched = Math.max(0, ...seasons.filter((season) => season.episodes.some((episode) => episode.watched)).map((season) => season.season_number));
+  return (left.find((season) => season.season_number > lastWatched) ?? left[0])?.season_number ?? null;
 }
 
 
@@ -49,11 +103,14 @@ export function libraryStatus(item: WatchlistItem, today = new Date()): string {
  * The one shelf a title sits on. Status is the primary axis; films and
  * series share every shelf and are split by a separate type filter.
  *
- * - Watching: a series with released episodes still to watch.
- * - To watch: released and not started.
+ * - Watching: a series part-way through a season, or keeping up with one
+ *   as it airs.
+ * - To watch: released and not started, or a series between seasons with
+ *   the next one out (or only some seasons ticked).
  * - Upcoming: nothing to watch until a dated release: a title not out yet,
- *   or the next episode of a series you are caught up on. When it comes out
- *   a caught-up series moves to Watching, anything else to To watch.
+ *   or the return of a series you are caught up on (a new season, or an
+ *   episode after a break of more than KEEPING_UP_DAYS). When it comes out a
+ *   new season puts the series on To watch, a returning episode on Watching.
  * - Up to date: a running series with every released episode watched and
  *   no next date known.
  * - Finished: a watched film, or an ended series watched to the end.
@@ -98,6 +155,7 @@ export function libraryShelf(item: WatchlistItem, today = new Date()): LibrarySh
   // was started; only an open-ended wait is Up to date.
   if (status === 'Caught up') return futureDates(item, today).length > 0 ? 'Upcoming' : 'Up to date';
   if (status === 'Watching') return 'Watching';
+  if (status === 'Between seasons') return 'To watch';
   return isUnreleased(item, today) ? 'Upcoming' : 'To watch';
 }
 
@@ -156,12 +214,38 @@ export function releaseDay(release: NextRelease): Date {
 }
 
 /**
- * The release a title's status pill counts down to. A caught-up series
- * counts to its next episode, since that is what moves it off Upcoming;
- * anything else counts to its release or next season premiere.
+ * The release a title's status pill counts down to. A series being kept up
+ * with counts to its next episode; a series part-way through a season or
+ * between seasons has something to watch now, so no countdown.
  */
 export function countdownRelease(item: WatchlistItem, today = new Date()): NextRelease | null {
-  return nextRelease(item, today, libraryStatus(item, today) === 'Caught up');
+  const status = libraryStatus(item, today);
+  if (status === 'Between seasons') return null;
+  if (status === 'Watching') {
+    const { midSeason, keptUp } = currentSeasons(item, today);
+    return midSeason ? null : keptUp;
+  }
+  // A caught-up series counts to its return, which may be an episode after
+  // a break; anything else to its release or next season premiere.
+  return nextRelease(item, today, status === 'Caught up');
+}
+
+/**
+ * A card's status pill: "Watching", "S5 next" for a series between seasons,
+ * a countdown such as "S2E6 releases in 3 days", or the status itself.
+ */
+export function statusLabel(item: WatchlistItem, today = new Date()): string {
+  const status = libraryStatus(item, today);
+  if (status === 'Between seasons') {
+    const season = nextSeasonToWatch(item, today);
+    return season ? `S${season} next` : 'To Watch';
+  }
+  if (['Hidden', 'Stopped watching', 'Watched', 'Completed'].includes(status)) return status;
+  const next = countdownRelease(item, today);
+  if (status === 'Watching') return next ? releaseCountdown(next, today) : 'Watching';
+  if (item.category === 'Movies') return next ? releaseCountdown(next, today) : 'Released';
+  if (!item.seasons || item.seasons.length === 0) return 'Returning Series';
+  return next ? releaseCountdown(next, today) : status;
 }
 
 /** The pill text, e.g. "S2E6 releases in 3 days", "S3 releases in 1 day", "releases in 9 days". */

@@ -4,6 +4,7 @@ Updated 2026-11-19 · `main` at `332a7ad` (this branch, merging `origin/main` `b
 
 ## Closed 2026-11-19
 
+- **Library Watching shelf narrowed (`library-state.ts`, branch `feat/watching-mid-season`):** Watching holds only series part-way through a season, or kept up with as they air (next episode due within 14 days; earlier seasons skipped or not). A started series at a season boundary, or with only some seasons ticked, sits on To watch with a pill naming where you pick up (`S5 next`), and its detail opens on that season. A longer mid-season break sits on Upcoming with its countdown. The pill text is the pure, tested `statusLabel`, shared with the shelf rule. Discover's watching seed keeps any started show. Signed-out dev preview against live data: Watching 2 (Dan Da Dan; Tulsa King `S4E6 in 1d`), Bridgerton `S4 next`, Stranger Things `S5 next`, Up to date 23, Upcoming 38, clean console.
 - **Travel double-load & visual flash elimination (`TravelPage.tsx`):** removed destructive `key={`${session?.user.id ?? 'public'}-${isAdmin}`}` on `<TravelContent />` that was causing React to completely unmount and remount the Three.js globe and page tree once auth state resolved.
 - **Finance internal tab switching & re-entry latency (`FinancePage.tsx`):**
   1. Kept `FinanceView` mounted in a persistent DOM container in `FinanceHost` across route transitions, eliminating the heavy remount, un-suspending, and tab reset when navigating away from Finance and back.
@@ -44,7 +45,7 @@ Updated 2026-11-19 · `main` at `332a7ad` (this branch, merging `origin/main` `b
 
 ## Still unverified & blockers
 
-- **Unverified (not browser-checked):** Discover "Seen it" dating, IndexedDB public cache hydration and privacy boundary, staged warmup, Watchlist ↔ Finance switching, Travel batched signed URLs, `TitleScores` badges, Watchlist Discover/News/Franchise/Library flows, signed-in admin flows, `S{n}E{e}` live countdown pill, light mode, phone viewport, and show creator/cast dialog.
+- **Unverified (not browser-checked):** Discover "Seen it" dating, IndexedDB public cache hydration and privacy boundary, staged warmup, Watchlist ↔ Finance switching, Travel batched signed URLs, `TitleScores` badges, Watchlist Discover/News/Franchise/Library flows, signed-in admin flows, the narrowed Watching / To watch shelves signed in, `S{n}E{e}` live countdown pill, light mode, phone viewport, and show creator/cast dialog.
 - **Unverified (not yet run):** the weekly OMDb refresh.
 - **Blocker:** the 2026-11-19 finance sync reported "Revolut: bank access needs renewing; reconnect this bank". Not yet reconnected.
-- **Carried forward from 2026-11-18, not re-checked:** untracked drafts (`SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md`) and `.claude/launch.json` in the local main checkout; worktrees `.claude/worktrees/caught-up` and `.claude/worktrees/affectionate-lamarr-f2d2cb`.
+- **Carried forward from 2026-11-18, not re-checked:** untracked drafts (`SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md`) and `.claude/launch.json` in the local main checkout; worktree `.claude/worktrees/affectionate-lamarr-f2d2cb` (owner unknown). `.claude/worktrees/caught-up` was removed 2026-11-19; `.claude/launch.json` on `main` still carries its stale `caught-up-worktree` entry.

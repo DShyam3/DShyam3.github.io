@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CreditsList, DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
 import { currentSeasonNumber, displayTitle, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 import { detailTrailer } from '@/features/watchlist/trailer';
-import { countdownRelease, releaseDay } from '@/features/watchlist/library-state';
+import { countdownRelease, libraryStatus, nextSeasonToWatch, releaseDay } from '@/features/watchlist/library-state';
 import { PlatformBadge } from './PlatformLogo';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
@@ -133,7 +133,8 @@ export function WatchlistDetailDialog({
   const selectedSeason =
     pickedSeason !== null && seasons.some((season) => season.season_number === pickedSeason)
       ? pickedSeason
-      : currentSeasonNumber(seasons, (season) => isSeasonWatched(item.id, season));
+      // Between seasons, open where the card says you pick up ("S5 next").
+      : (libraryStatus(item) === 'Between seasons' ? nextSeasonToWatch(item) : null) ?? currentSeasonNumber(seasons, (season) => isSeasonWatched(item.id, season));
   const trailer = detailTrailer(
     item,
     seasons.find((season) => season.season_number === selectedSeason),
