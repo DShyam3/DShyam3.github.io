@@ -1680,8 +1680,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const withTmdbId = favourites.filter((f) => f.tmdb_id);
     const stale = withTmdbId.filter(
       (f) =>
-        f.facts.original_language == null &&
-        f.facts.origin_country == null &&
+        f.facts.origin_country == null ||
         f.facts.genre_ids == null,
     );
 

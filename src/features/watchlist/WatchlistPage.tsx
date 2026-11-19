@@ -21,10 +21,11 @@ import { newItemFromDetails } from '@/features/watchlist/new-item';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
 import { LIBRARY_CATEGORIES, libraryCategories, type LibraryCategory } from '@/features/watchlist/library-categories';
 import {
-  FAVOURITE_CATEGORIES,
   resolveFavouriteCategory,
   type TmdbFacts,
 } from '@/features/watchlist/favourite-category';
+import { groupByLanguage } from '@/features/watchlist/language-groups';
+import { LanguageGroupedSections } from '@/features/watchlist/components/LanguageGroupedSections';
 import { useAuth } from '@/contexts/AuthContext';
 import { titleKey, type TitleRef } from './title-ref';
 import {
@@ -734,6 +735,26 @@ const Watchlist = () => {
     [favourites, libraryType, selectedAutoCategory],
   );
 
+  const favouriteGroups = useMemo(
+    () =>
+      groupByLanguage(typedFavourites, (fav) => ({
+        original_language: fav.facts.original_language,
+        genre_ids: fav.facts.genre_ids,
+        mediaType: fav.media_type,
+      })),
+    [typedFavourites],
+  );
+
+  const finishedGroups = useMemo(() => {
+    if (selectedCategory !== 'Finished') return [];
+    return groupByLanguage(filteredWatchlist, (item) => ({
+      original_language: item.original_language,
+      genre_ids: item.genre_ids,
+      genres: item.genres,
+      mediaType: item.category === 'Movies' ? 'movie' : 'tv',
+    }));
+  }, [selectedCategory, filteredWatchlist]);
+
   const categoryCounts = useMemo(() => {
     const counts = Object.fromEntries(SHELVES.map((shelf) => [shelf, 0])) as Record<Shelf, number>;
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -1340,152 +1361,62 @@ const Watchlist = () => {
                 {selectedAutoCategory ? `No favourites in ${selectedAutoCategory}` : 'No favourites yet'}
               </p>
             ) : (
-              <>
-                {/* Category Sections */}
-                {FAVOURITE_CATEGORIES.map((cat) => {
-                  const catFavs = typedFavourites.filter((f) => f.category === cat);
-                  if (catFavs.length === 0) return null;
-
-                  const catMovies = catFavs.filter(
-                    (f) => f.media_type === 'movie',
-                  );
-                  const catTVShows = catFavs.filter(
-                    (f) => f.media_type === 'tv',
-                  );
-
-                  return (
-                    <div
-                      key={cat}
-                      className="space-y-4 border-b border-border/40 pb-6 last:border-b-0"
-                    >
-                      <div className="flex items-center gap-2">
-                        <DotMatrixText text={cat.toUpperCase()} size="xs" />
-                        <DotMatrixText text={`(${catFavs.length})`} size="xs" />
+              <LanguageGroupedSections
+                groups={favouriteGroups}
+                forceExpand={Boolean(selectedAutoCategory)}
+                renderGrid={(items) => (
+                  <CardGrid>
+                    {items.map((fav) => (
+                      <div key={fav.id} className="item-card group">
+                        <div className="aspect-[2/3] bg-muted relative overflow-hidden">
+                          {fav.poster ? (
+                            <img
+                              src={fav.poster}
+                              alt={fav.title}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-secondary/30">
+                              <Heart className="h-8 w-8 text-muted-foreground/30" />
+                            </div>
+                          )}
+                          {isAdmin && (
+                            <div
+                              className="card-actions absolute top-2 right-2"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Button
+                                variant="secondary"
+                                size="icon"
+                                className="h-11 w-11 bg-background/80 backdrop-blur-sm"
+                                onClick={() =>
+                                  askDelete({
+                                    name: fav.title,
+                                    onConfirm: () => removeFavourite(fav.id),
+                                  })
+                                }
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-3">
+                          <h3 className="font-serif text-sm font-medium leading-tight">
+                            <span
+                              className="line-clamp-2"
+                              style={{ textWrap: 'balance' }}
+                            >
+                              {fav.title}
+                            </span>
+                          </h3>
+                        </div>
                       </div>
-
-                      {catMovies.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80 font-medium pl-1">
-                            <Film className="h-3.5 w-3.5" />
-                            <span>Movies ({catMovies.length})</span>
-                          </div>
-                          <CardGrid>
-                            {catMovies.map((fav) => (
-                              <div key={fav.id} className="item-card group">
-                                <div className="aspect-[2/3] bg-muted relative overflow-hidden">
-                                  {fav.poster ? (
-                                    <img
-                                      src={fav.poster}
-                                      alt={fav.title}
-                                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                      loading="lazy"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-secondary/30">
-                                      <Heart className="h-8 w-8 text-muted-foreground/30" />
-                                    </div>
-                                  )}
-                                  {isAdmin && (
-                                    <div
-                                      className="card-actions absolute top-2 right-2"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <Button
-                                        variant="secondary"
-                                        size="icon"
-                                        className="h-11 w-11 bg-background/80 backdrop-blur-sm"
-                                        onClick={() =>
-                                          askDelete({
-                                            name: fav.title,
-                                            onConfirm: () =>
-                                              removeFavourite(fav.id),
-                                          })
-                                        }
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="p-3">
-                                  <h3 className="font-serif text-sm font-medium leading-tight">
-                                    <span
-                                      className="line-clamp-2"
-                                      style={{ textWrap: 'balance' }}
-                                    >
-                                      {fav.title}
-                                    </span>
-                                  </h3>
-                                </div>
-                              </div>
-                            ))}
-                          </CardGrid>
-                        </div>
-                      )}
-
-                      {catTVShows.length > 0 && (
-                        <div className="space-y-2 pt-2">
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80 font-medium pl-1">
-                            <Tv className="h-3.5 w-3.5" />
-                            <span>TV Shows ({catTVShows.length})</span>
-                          </div>
-                          <CardGrid>
-                            {catTVShows.map((fav) => (
-                              <div key={fav.id} className="item-card group">
-                                <div className="aspect-[2/3] bg-muted relative overflow-hidden">
-                                  {fav.poster ? (
-                                    <img
-                                      src={fav.poster}
-                                      alt={fav.title}
-                                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                      loading="lazy"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-secondary/30">
-                                      <Heart className="h-8 w-8 text-muted-foreground/30" />
-                                    </div>
-                                  )}
-                                  {isAdmin && (
-                                    <div
-                                      className="card-actions absolute top-2 right-2"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <Button
-                                        variant="secondary"
-                                        size="icon"
-                                        className="h-11 w-11 bg-background/80 backdrop-blur-sm"
-                                        onClick={() =>
-                                          askDelete({
-                                            name: fav.title,
-                                            onConfirm: () =>
-                                              removeFavourite(fav.id),
-                                          })
-                                        }
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="p-3">
-                                  <h3 className="font-serif text-sm font-medium leading-tight">
-                                    <span
-                                      className="line-clamp-2"
-                                      style={{ textWrap: 'balance' }}
-                                    >
-                                      {fav.title}
-                                    </span>
-                                  </h3>
-                                </div>
-                              </div>
-                            ))}
-                          </CardGrid>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </>
+                    ))}
+                  </CardGrid>
+                )}
+              />
             )}
           </div>
         ) : (
@@ -1515,10 +1446,16 @@ const Watchlist = () => {
                   );
                 })}
               </div>
+            ) : selectedCategory === 'Finished' ? (
+              <LanguageGroupedSections
+                groups={finishedGroups}
+                forceExpand={searching || activeFilterCount > 0}
+                renderGrid={(items) => <CardGrid>{items.map(renderCard)}</CardGrid>}
+              />
             ) : (
               <CardGrid>{visibleWatchlist.map(renderCard)}</CardGrid>
             )}
-            {visibleCount < filteredWatchlist.length && (
+            {selectedCategory !== 'Finished' && visibleCount < filteredWatchlist.length && (
               <div ref={observerTarget} className="h-20 w-full" />
             )}
           </div>
