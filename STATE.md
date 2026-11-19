@@ -1,6 +1,6 @@
 # State
 
-Updated 2026-11-19 · `main` (About wide-screen layout fix pushed on top of `22998cc7`). Payslip code `d5120557` and row-logo change `234eeba2` were pushed. Migration `20261119150000_payslip_reimbursement_links.sql` is recorded as applied on the site’s linked Supabase project `yvtiybyuifkiwyrnjebe` (local and remote history match). Pages run `44587364754` for `27ea7450` succeeded and includes the payslip changes; signed-in browser behavior and live Pages deployment of the About layout fix remain unverified.
+Updated 2026-11-19 · `main` at `0763a04b`. Travel double-flash (`37bae8a9`, `0763a04b`) and Finance tab/Home latency (`194093c2`, `22998cc7`) fixes are pushed and user-verified live. Payslip code `d5120557` and row-logo change `234eeba2` were pushed; migration `20261119150000_payslip_reimbursement_links.sql` is recorded as applied on the linked Supabase project `yvtiybyuifkiwyrnjebe`. Signed-in browser verification of the payslip/reimbursement UI and live Pages deployment of the About layout fix (`76a56f9a`) remain open.
 
 ## About wide-screen layout fix
 
@@ -23,7 +23,7 @@ Updated 2026-11-19 · `main` (About wide-screen layout fix pushed on top of `229
 | `npm run lint` | 0 errors, 0 warnings |
 | `npm run typecheck` | pass |
 | `npm run typecheck:functions` | pass |
-| Targeted Vitest (reimbursement, payslip reconciliation, RLS) | 3 files, 17 tests pass |
+| `npm run test` (Vitest) | 109 files, 2,818 tests pass |
 | `npm run build` | pass |
 | `graphify update .` | pass after the row-logo edit |
 | `npm run ship-check` | command passed; scan verdict **Do not launch yet** (93/100, one reported critical finding later inspected as a false positive; Semgrep skipped) |
@@ -32,7 +32,7 @@ Updated 2026-11-19 · `main` (About wide-screen layout fix pushed on top of `229
 ## Earlier landed work
 
 - `feat/watching-mid-season` narrowed Watching to series mid-season or current as episodes air; signed-out live-data preview was checked. Signed-in shelves remain unverified.
-- Travel remount flash and Finance re-entry/tab switching latency were addressed. Watchlist News cards were aligned. The Pages build/deploy artifact race was addressed; the last recorded manual re-run deployed.
+- Travel double-flash (`37bae8a9`, `0763a04b`: module-cached globe projections & country list, removed delayed `animate-in`) and Finance re-entry/tab/Home latency (`194093c2`, `22998cc7`: `FinanceTargetContext` decoupling `FinanceDataProvider`, memoized derived ledger/totals, paginated Home review queue without Framer Motion `layout` thrashing) are landed on `main` and user-verified live. Watchlist News cards were aligned and Pages build/deploy artifact race was addressed.
 - Discover “Seen it” now asks when; the affected ~54 films were set to “date unknown” on 2026-11-18.
 - Watchlist Discover, News, Franchises, Library, Diary and Import changes, TitleScores/TMDB score, staged warmup, public IndexedDB cache and deduplicated Supabase calls were recorded as landed previously. Browser checks remain open.
 - OMDb first pass completed on 2026-11-19: films 1,064/1,070 checked (1,008 IMDb ratings); series 393/395 checked (354 IMDb ratings; 3 RT ratings).
