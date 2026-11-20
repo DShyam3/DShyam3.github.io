@@ -3129,3 +3129,13 @@ Discover's "Because you're watching X" seed keeps the broad meaning: any started
 The pill text is now the pure, tested `statusLabel`, which the shelf rule shares, so a card's pill and its shelf cannot disagree. The shelf hints say what each shelf holds.
 
 Closure: `src/features/watchlist/library-state.ts` (`libraryStatus`, `nextSeasonToWatch`, `statusLabel`).
+
+### Travel globe renders with WebGL2, not Canvas2D — 2026-11-20
+
+Canvas 2D rebuilt a `Path2D` of about 45,000 points (roughly 7,500 front-facing hexes) every frame. In the dev preview those native path calls cost about 40 ms per frame, against about 1 ms for the rotation maths. The 3D loop also never stopped, so the page ran at 9-18 fps whenever Travel was open, and moving into and out of Travel was laggy.
+
+The globe now uploads its geometry once and the shader does the rotation and the morph. A drag frame costs 0.4 ms median and 1.1 ms max. Those figures come from calling the draw loop directly in the preview, because the preview throttled requestAnimationFrame; they are not a real-time fps measurement. The loop now stops when nothing is moving and while the map is off screen. Canvas 2D stays as the fallback for browsers without WebGL2 and for a dropped GPU context. It is the slow path, and it does not idle-spin.
+
+Not measured: the lag entering and leaving Travel, before or after the change, and frame rate on a real phone.
+
+Closure: `src/components/dot-matrix/hexGlRenderer.ts`, `src/components/dot-matrix/DotMatrixGlobe.tsx`.

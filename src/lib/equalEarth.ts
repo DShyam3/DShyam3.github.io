@@ -74,6 +74,31 @@ export function projectEqualEarth(lon: number, lat: number): EqualEarthPoint {
     };
 }
 
+/**
+ * The inverse of `projectEqualEarth`: the radian lon/lat under a point of the
+ * unit square, or null outside the map's outline. Newton's method on the
+ * parametric latitude, which the forward polynomial cannot be solved for in
+ * closed form; it converges in three or four steps.
+ */
+export function unprojectEqualEarth(nx: number, ny: number): { lon: number; lat: number } | null {
+    const y = HALF_HEIGHT - ny * 2 * HALF_HEIGHT;
+    if (Math.abs(y) > HALF_HEIGHT) return null;
+
+    let theta = y / A1;
+    for (let i = 0; i < 8; i++) {
+        const step = (yOfTheta(theta) - y) / dydtheta(theta);
+        theta -= step;
+        if (Math.abs(step) < 1e-12) break;
+    }
+
+    // |θ| <= π/3 here, so cos θ >= 0.5 and the division is safe.
+    const x = nx * 2 * HALF_WIDTH - HALF_WIDTH;
+    const lon = (3 * x * dydtheta(theta)) / (2 * Math.sqrt(3) * Math.cos(theta));
+    if (Math.abs(lon) > Math.PI) return null;
+    const lat = Math.asin(Math.max(-1, Math.min(1, Math.sin(theta) / SIN_SCALE)));
+    return { lon, lat };
+}
+
 export interface RowScale {
     /** Column spacing at this latitude, relative to the equator. */
     hScale: number;

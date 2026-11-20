@@ -3,8 +3,10 @@ import {
     cellToLatLng,
     cellsToDirectedEdge,
     directedEdgeToBoundary,
+    getHexagonEdgeLengthAvg,
     gridDisk,
     latLngToCell,
+    UNITS,
 } from 'h3-js';
 import { projectEqualEarth, type EqualEarthPoint } from '@/lib/equalEarth';
 
@@ -15,6 +17,8 @@ export interface UnitVector {
 }
 
 export interface HexCell {
+    /** Position in `HexTierData.cells`, which is also its slot in the style texture. */
+    index: number;
     h3Index: string;
     code: string;
     lat: number;
@@ -43,6 +47,8 @@ export interface HexTierData {
     res: 3 | 4;
     cells: HexCell[];
     cellCodes: Map<string, string>;
+    /** Where each land cell sits in `cells`. */
+    cellIndexByH3: Map<string, number>;
     borderSegments: HexBorderSegment[];
     countryCentroids: Map<string, { lon: number; lat: number }>;
     /** 2D Equal Earth spatial buckets (`by * BUCKET_COLS + bx`) for fast viewport culling. */
@@ -50,7 +56,7 @@ export interface HexTierData {
     borderBuckets: HexBorderSegment[][];
 }
 
-interface RawHexMapJson {
+export interface RawHexMapJson {
     res: 3 | 4;
     cells: [string, string][];
 }
@@ -78,11 +84,29 @@ function bucketIndex(nx: number, ny: number): number {
     return by * BUCKET_COLS + bx;
 }
 
+/**
+ * Hands the main thread back between chunks of the build. A message rather
+ * than a timer: nested timers are clamped to 4ms each, and a background tab
+ * throttles them to one a second, which would stretch an idle warm-up to
+ * several seconds.
+ */
 function yieldToMain(): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, 0));
+    return new Promise((resolve) => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => {
+            channel.port1.close();
+            resolve();
+        };
+        channel.port2.postMessage(null);
+    });
 }
 
-async function buildHexTierAsync(raw: RawHexMapJson, chunked: boolean): Promise<HexTierData> {
+/**
+ * Builds a tier from the raw cell list. Chunked, it yields every couple of
+ * thousand cells, so neither the idle warm-up nor opening Travel freezes the
+ * page for the ~150ms the whole build takes.
+ */
+export async function buildHexTier(raw: RawHexMapJson, chunked = false): Promise<HexTierData> {
     const cellCodes = new Map<string, string>();
     for (const [h3Index, code] of raw.cells) {
         cellCodes.set(h3Index, code);
@@ -93,9 +117,10 @@ async function buildHexTierAsync(raw: RawHexMapJson, chunked: boolean): Promise<
     const borderBuckets: HexBorderSegment[][] = Array.from({ length: totalBuckets }, () => []);
 
     const cells: HexCell[] = [];
+    const cellIndexByH3 = new Map<string, number>();
     const countrySums = new Map<string, { ux: number; uy: number; uz: number; count: number }>();
 
-    const CHUNK = 4000;
+    const CHUNK = 2000;
     for (let idx = 0; idx < raw.cells.length; idx++) {
         if (chunked && idx > 0 && idx % CHUNK === 0) {
             await yieldToMain();
@@ -120,6 +145,7 @@ async function buildHexTierAsync(raw: RawHexMapJson, chunked: boolean): Promise<
         }
 
         const cell: HexCell = {
+            index: cells.length,
             h3Index,
             code,
             lat: center.lat,
@@ -130,6 +156,7 @@ async function buildHexTierAsync(raw: RawHexMapJson, chunked: boolean): Promise<
             verts2d,
             crossesAntimeridian: maxLon - minLon > Math.PI,
         };
+        cellIndexByH3.set(h3Index, cell.index);
         cells.push(cell);
         if (!cell.crossesAntimeridian) {
             cellBuckets[bucketIndex(center2d.nx, center2d.ny)].push(cell);
@@ -199,7 +226,7 @@ async function buildHexTierAsync(raw: RawHexMapJson, chunked: boolean): Promise<
         }
     }
 
-    return { res: raw.res, cells, cellCodes, borderSegments, countryCentroids, cellBuckets, borderBuckets };
+    return { res: raw.res, cells, cellCodes, cellIndexByH3, borderSegments, countryCentroids, cellBuckets, borderBuckets };
 }
 
 export async function loadHexTier(res: 3 | 4): Promise<HexTierData> {
@@ -213,7 +240,7 @@ export async function loadHexTier(res: 3 | 4): Promise<HexTierData> {
             if (!response.ok) throw new Error(`Hex map tier r${res} unavailable`);
             const data = (await response.json()) as RawHexMapJson;
             if (!Array.isArray(data.cells)) throw new Error(`Invalid hex map data r${res}`);
-            const built = await buildHexTierAsync(data, res === 4);
+            const built = await buildHexTier(data, true);
             tierCache.set(res, built);
             return built;
         })().catch((err) => {
@@ -255,6 +282,48 @@ export function resolveCityHex(
         if (dist < bestDist) {
             bestDist = dist;
             best = cell.h3Index;
+        }
+    }
+    return best;
+}
+
+/** Mean Earth radius H3 measures against, in km. */
+const EARTH_RADIUS_KM = 6371.007180918475;
+
+/** Angle between neighbouring cell centres at `res`, in radians. */
+export function hexSpacingRad(res: 3 | 4): number {
+    return (getHexagonEdgeLengthAvg(res, UNITS.km) / EARTH_RADIUS_KM) * Math.sqrt(3);
+}
+
+/**
+ * The land cell under a point, in degrees. Over the sea, the nearest land
+ * cell within `ring` steps, so a small island stays grabbable when its cell is
+ * only a pixel or two across. Null over open water. `drawn` leaves out cells
+ * the map is not showing, so the pointer never lands on one it cannot see.
+ */
+export function hexAtPoint(
+    latDeg: number,
+    lonDeg: number,
+    tier: HexTierData,
+    ring: number,
+    drawn: (cell: HexCell) => boolean = () => true,
+): string | null {
+    const exact = latLngToCell(latDeg, lonDeg, tier.res);
+    const exactIndex = tier.cellIndexByH3.get(exact);
+    if (exactIndex !== undefined && drawn(tier.cells[exactIndex])) return exact;
+    if (ring <= 0) return null;
+
+    const { ux, uy, uz } = degToUnit(latDeg, lonDeg).unit;
+    let best: string | null = null;
+    let bestDot = -Infinity;
+    for (const candidate of gridDisk(exact, ring)) {
+        const index = tier.cellIndexByH3.get(candidate);
+        if (index === undefined || !drawn(tier.cells[index])) continue;
+        const c = tier.cells[index].center3d;
+        const dot = c.ux * ux + c.uy * uy + c.uz * uz;
+        if (dot > bestDot) {
+            bestDot = dot;
+            best = candidate;
         }
     }
     return best;
