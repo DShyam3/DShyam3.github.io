@@ -27,7 +27,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       .from('movies')
       .select(
         `id, title, platform, genre, genre_ids, original_language, origin_country, release_year, poster, release_date, tmdb_id, runtime,
-          watched, watched_at, library_state, collection_id, collection_name,
+          watched, watched_at, library_state, collection_id, collection_name, franchise,
           imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes`,
         { count: 'exact' },
       )
@@ -51,7 +51,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       // As above: no `overview` (62 kB of tv_shows' 108 kB).
       .select(
         `
-                id, title, platform, genre, genre_ids, original_language, origin_country, status, poster, release_date, tmdb_id, library_state,
+                id, title, platform, genre, genre_ids, original_language, origin_country, status, poster, release_date, tmdb_id, library_state, franchise,
                 imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes,
                 tv_show_seasons (
                   id, season_number, release_date, watched,
@@ -134,6 +134,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       metascore: movie.metascore ?? undefined,
       collection_id: movie.collection_id ?? undefined,
       collection_name: movie.collection_name ?? undefined,
+      franchise: (('franchise' in movie ? movie.franchise : null) as string | null) ?? undefined,
     }),
   );
 
@@ -141,6 +142,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
     (show) => ({
       id: show.id.toString(),
       library_state: show.library_state as LibraryState,
+      franchise: (('franchise' in show ? show.franchise : null) as string | null) ?? undefined,
       watched_at: lastWatched.get(String(show.id)) ?? null,
       title: show.title,
       category: 'TV Shows' as const,

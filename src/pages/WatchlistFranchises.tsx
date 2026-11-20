@@ -6,7 +6,8 @@ import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
 import { CollectionCard } from '@/features/watchlist/components/franchise/CollectionCard';
-import { POSTER_BASE } from '@/features/watchlist/components/franchise/EntryList';
+import { FranchiseCard } from '@/features/watchlist/components/franchise/FranchiseCard';
+import { EntryList, POSTER_BASE } from '@/features/watchlist/components/franchise/EntryList';
 import { EntryPreviewDialog } from '@/features/watchlist/components/franchise/EntryPreviewDialog';
 import { NewOrderForm } from '@/features/watchlist/components/franchise/NewOrderForm';
 import { OrderCard, type OrderActions } from '@/features/watchlist/components/franchise/OrderCard';
@@ -15,6 +16,7 @@ import { useAddToLibrary } from '@/features/watchlist/components/franchise/useAd
 import {
   buildOrderView,
   collectionsFromLibrary,
+  customFranchisesFromLibrary,
   libraryLookup,
   tvFranchisesFromLinks,
   type OrderEntryView,
@@ -153,10 +155,43 @@ export default function WatchlistFranchises() {
   const selectedItem = selected && watchlist.find((i) => i.category === selected.category && i.id === selected.id);
 
   const loading = libraryLoading || orders.isPending;
+  const customFranchises = useMemo(() => customFranchisesFromLibrary(watchlist, lookup), [watchlist, lookup]);
+  const [openCustomFranchises, setOpenCustomFranchises] = useState<Set<string>>(() => new Set());
 
   return (
     <AppShell title="Watchlist" subtitle="Franchises" toolbar={<WatchlistNav current="franchises" />}>
     <div className="space-y-6">
+
+      {customFranchises.length > 0 && (
+        <section aria-labelledby="custom-franchises-heading" className="min-w-0 space-y-3">
+          <h2 id="custom-franchises-heading"><DotMatrixText text="LIBRARY FRANCHISES" size="xs" /></h2>
+          <p className="text-sm text-muted-foreground">
+            Films and series grouped by the franchise field stored in your library.
+          </p>
+          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+            {customFranchises.map((group) => (
+              <FranchiseCard
+                key={group.name}
+                name={group.name}
+                summary={`${group.view.watched} of ${group.view.total} watched`}
+                nextUp={group.view.nextUp?.title}
+                strip={group.view.entries.map((e) => ({ key: e.key, poster: e.poster, mediaType: e.mediaType, watched: e.state === 'watched' }))}
+                open={openCustomFranchises.has(group.name)}
+                onToggle={() =>
+                  setOpenCustomFranchises((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(group.name)) next.delete(group.name);
+                    else next.add(group.name);
+                    return next;
+                  })
+                }
+              >
+                <EntryList view={group.view} onOpen={openEntry} />
+              </FranchiseCard>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section aria-labelledby="orders-heading" className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">

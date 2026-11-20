@@ -11,10 +11,18 @@ import { PersonalRating } from './PersonalRating';
 
 export function LibraryActions({ item }: { item: WatchlistItem }) {
   const { isAdmin } = useAuth();
-  const { setMovieWatched, setLibraryState, setPersonalRating, ratingsStatus, favourites, addFavourite, removeFavourite } = useWatchlist();
+  const { watchlist, setMovieWatched, setLibraryState, setFranchise, setPersonalRating, ratingsStatus, favourites, addFavourite, removeFavourite } = useWatchlist();
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const [skipped, setSkipped] = useState(false);
+  const [franchiseDraft, setFranchiseDraft] = useState(item.franchise ?? '');
+  const franchiseOptions = Array.from(
+    new Set(
+      watchlist
+        .map((w) => w.franchise?.trim())
+        .filter((f): f is string => Boolean(f)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
   if (!isAdmin) return null;
   const isMovie = item.category === 'Movies';
   const unrated = item.personal_rating == null;
@@ -97,6 +105,55 @@ export function LibraryActions({ item }: { item: WatchlistItem }) {
             <option value="stopped">Stopped watching</option>
           </NativeSelect>
         </label>
+        <form
+          className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save(() => setFranchise(item, franchiseDraft));
+          }}
+        >
+          <label htmlFor={`franchise-${item.category}-${item.id}`}>Franchise</label>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <input
+              id={`franchise-${item.category}-${item.id}`}
+              list="watchlist-franchise-options"
+              value={franchiseDraft}
+              onChange={(event) => setFranchiseDraft(event.target.value)}
+              placeholder="None"
+              disabled={saving}
+              className="h-8 w-44 rounded-lg border border-border bg-background px-2 text-xs text-foreground"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              variant="outline"
+              className="h-8 px-2.5 text-xs"
+              disabled={saving || (franchiseDraft.trim() || null) === (item.franchise?.trim() || null)}
+            >
+              Save
+            </Button>
+            {item.franchise ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 text-xs"
+                disabled={saving}
+                onClick={() => {
+                  setFranchiseDraft('');
+                  void save(() => setFranchise(item, null));
+                }}
+              >
+                Clear
+              </Button>
+            ) : null}
+          </div>
+          <datalist id="watchlist-franchise-options">
+            {franchiseOptions.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        </form>
         {item.category === 'Movies' && item.watched && (
           <p className="text-xs text-muted-foreground">{describeWatchedAt(item.watched_at, true)}</p>
         )}

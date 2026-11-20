@@ -4,6 +4,7 @@ import {
   buildOrderView,
   collectionPartsToEntries,
   collectionsFromLibrary,
+  customFranchisesFromLibrary,
   entryState,
   hasWatchGap,
   libraryLookup,
@@ -254,5 +255,46 @@ describe('hasWatchGap', () => {
       },
     );
     expect(hasWatchGap(noGapView)).toBe(false);
+  });
+});
+
+describe('customFranchisesFromLibrary', () => {
+  it('groups movies and TV shows by their stored franchise name in release order', () => {
+    const items: WatchlistItem[] = [
+      {
+        id: '1',
+        title: 'Tulsa King',
+        category: 'TV Shows',
+        tmdb_id: 101,
+        release_date: '2022-11-13',
+        franchise: 'Sheridan Universe',
+        created_at: '2022-11-13T00:00:00Z',
+        seasons: [{ id: 1, season_number: 1, episodes: [{ id: 1, episode_number: 1, title: 'Ep 1', watched: true }] }],
+      },
+      {
+        id: '2',
+        title: 'Wind River',
+        category: 'Movies',
+        tmdb_id: 202,
+        release_date: '2017-08-04',
+        watched: true,
+        franchise: 'Sheridan Universe',
+        created_at: '2017-08-04T00:00:00Z',
+      },
+      {
+        id: '3',
+        title: 'Hidden Entry',
+        category: 'Movies',
+        tmdb_id: 303,
+        library_state: 'hidden',
+        franchise: 'Sheridan Universe',
+        created_at: '2020-01-01T00:00:00Z',
+      },
+    ];
+
+    const groups = customFranchisesFromLibrary(items, libraryLookup(items, new Date('2026-11-20T00:00:00Z')));
+    expect(groups).toHaveLength(1);
+    expect(groups[0].name).toBe('Sheridan Universe');
+    expect(groups[0].view.entries.map((e) => e.title)).toEqual(['Wind River', 'Tulsa King']);
   });
 });

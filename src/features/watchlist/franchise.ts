@@ -315,6 +315,53 @@ export function tvFranchisesFromLinks(
   return groups.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export interface CustomFranchiseGroup {
+  name: string;
+  view: OrderView;
+}
+
+/**
+ * Group movies and TV shows tagged with a custom `franchise` name in Supabase
+ * into release-ordered franchise cards (zero TMDB or Wikidata calls).
+ */
+export function customFranchisesFromLibrary(
+  items: WatchlistItem[],
+  lookup: LibraryLookup,
+): CustomFranchiseGroup[] {
+  const byName = new Map<string, WatchlistItem[]>();
+  for (const item of items) {
+    if (item.library_state === 'hidden') continue;
+    const name = item.franchise?.trim();
+    if (!name) continue;
+    const list = byName.get(name) ?? [];
+    list.push(item);
+    byName.set(name, list);
+  }
+
+  return [...byName.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, members]) => {
+      const sorted = members.slice().sort(
+        (a, b) =>
+          (a.release_date ?? '9999-99-99').localeCompare(b.release_date ?? '9999-99-99') ||
+          a.title.localeCompare(b.title),
+      );
+      const entries: OrderEntryInput[] = sorted.map((item, position) => {
+        const mediaType = item.category === 'Movies' ? 'movie' : 'tv';
+        return {
+          key: item.tmdb_id ? `${mediaType}:${item.tmdb_id}` : `lib:${item.category}:${item.id}`,
+          tmdbId: item.tmdb_id ?? Number(item.id),
+          mediaType,
+          title: item.title,
+          releaseDate: item.release_date ?? null,
+          poster: item.image_url ?? null,
+          position,
+        };
+      });
+      return { name, view: buildOrderView(entries, lookup) };
+    });
+}
+
 /**
  * True when an earlier entry in release order is unwatched or missing from
  * the library while a later entry is already watched or in progress (e.g.

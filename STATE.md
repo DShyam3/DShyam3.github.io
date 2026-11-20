@@ -1,6 +1,6 @@
 # State
 
-Updated 2026-11-20 · `main` at `2977e585`. The Travel H3 res-3 hexagon map (`2977e585`) is pushed to `main` (live Pages deployment unverified); the shared checkout still contains other owners' uncommitted local work.
+Updated 2026-11-20 · `main` at `c41add8a`. Uncommitted local work: `CollectionCard` same-`queryKey` stall fix + instant in-library display, and `franchise` column on `movies` and `tv_shows` (`20261120074000_watchlist_franchise.sql` applied on `yvtiybyuifkiwyrnjebe`, `LibraryActions` input, `WatchlistFranchises` Library Franchises section).
 
 ## In the tree, still local
 
@@ -28,7 +28,7 @@ Updated 2026-11-20 · `main` at `2977e585`. The Travel H3 res-3 hexagon map (`29
 | `npm run typecheck:functions` | pass |
 | `npm run build` | pass |
 | `graphify update .` | pass |
-| Watchlist Vitest (`src/features/watchlist/`) | 35 files, 485 tests pass (2026-11-20) |
+| Watchlist Vitest (`src/features/watchlist/`) | 35 files, 486 tests pass (2026-11-20) |
 | `npm run ship-check` | command passed; **Do not launch yet**, 93/100. The reported AWS key at `airport-countries.data.ts:226` was previously inspected as an encoded lookup-string false positive; other findings remain open. |
 | Browser | Discover search, H3 map, dot-matrix chrome, payslip/reimbursement and other signed-in flows not verified this session |
 

@@ -187,6 +187,8 @@ export interface WatchlistItem {
   /** Films only: the TMDB collection (film series) it belongs to. */
   collection_id?: number;
   collection_name?: string;
+  /** Custom franchise name stored directly in Supabase (movies + tv_shows). */
+  franchise?: string | null;
 }
 
 export type { FavouriteCategory } from './favourite-category';
@@ -295,6 +297,7 @@ interface WatchlistContextType {
   /** `when` says when it was watched (see set_watched); absent means now. */
   setMovieWatched: (item: WatchlistItem, watched: boolean, when?: WatchedWhen) => Promise<void>;
   setLibraryState: (item: WatchlistItem, state: LibraryState) => Promise<void>;
+  setFranchise: (item: WatchlistItem, franchise: string | null) => Promise<void>;
   setPersonalRating: (item: WatchlistItem, rating: number | null, seasonNumber?: number, episodeNumber?: number) => Promise<void>;
   /**
    * Whether the owner's scores are in. `ready` too when there are none to
@@ -1103,6 +1106,17 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) { reportPersonalUpdateError(error); }
   };
 
+  const setFranchise = async (item: WatchlistItem, rawFranchise: string | null) => {
+    try {
+      if (!isAdmin) throw new Error('Library update unavailable');
+      const franchise = rawFranchise?.trim() || null;
+      const table = item.category === 'Movies' ? 'movies' : 'tv_shows';
+      const { data, error } = await supabase.from(table).update({ franchise }).eq('id', Number(item.id)).select('id').single();
+      if (error || !data) throw error ?? new Error('Franchise update failed');
+      setWatchlist((prev) => prev.map((row) => row.category === item.category && row.id === item.id ? { ...row, franchise } : row));
+    } catch (error) { reportPersonalUpdateError(error); }
+  };
+
   // Scores live in the owner-only watchlist_ratings table, one row per
   // title, season or episode. The library itself never carries them; they
   // are laid on at render (applyRatings) from their own query, so they are
@@ -1812,6 +1826,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const stableIsAddPending = useStableCallback(isAddPending);
   const stableSetMovieWatched = useStableCallback(setMovieWatched);
   const stableSetLibraryState = useStableCallback(setLibraryState);
+  const stableSetFranchise = useStableCallback(setFranchise);
   const stableSetPersonalRating = useStableCallback(setPersonalRating);
   const stableRemoveWatchlistItem = useStableCallback(removeWatchlistItem);
   const stableAddFavourite = useStableCallback(addFavourite);
@@ -1856,6 +1871,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       removeWatchlistItem: stableRemoveWatchlistItem,
       setMovieWatched: stableSetMovieWatched,
       setLibraryState: stableSetLibraryState,
+      setFranchise: stableSetFranchise,
       setPersonalRating: stableSetPersonalRating,
       ratingsStatus,
       addFavourite: stableAddFavourite,
@@ -1891,6 +1907,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       stableRemoveWatchlistItem,
       stableSetMovieWatched,
       stableSetLibraryState,
+      stableSetFranchise,
       stableSetPersonalRating,
       ratingsStatus,
       stableAddFavourite,
