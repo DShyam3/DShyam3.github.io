@@ -2,6 +2,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { buildMemberships, countMembers, assertTotals, countPlaces } from '@/features/travel/memberships';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixGlobe } from '@/components/dot-matrix/DotMatrixGlobe';
+import { latLngToCell } from 'h3-js';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVisitedCountries } from '@/features/travel/useVisitedCountries';
 import { useVisitedCities } from '@/features/travel/useVisitedCities';
@@ -295,8 +296,17 @@ const TravelContent = () => {
 
     const hoveredCities = useMemo(() => {
         if (!hovered?.dotKey || viewMode !== 'cities') return [];
-        return visitedCities.filter(c => `${c.dot_col},${c.dot_row}` === hovered.dotKey);
+        const key = hovered.dotKey;
+        return visitedCities.filter(c =>
+            `${c.dot_col},${c.dot_row}` === key ||
+            latLngToCell(c.lat, c.lon, 3) === key
+        );
     }, [hovered?.dotKey, visitedCities, viewMode]);
+
+    const visitedCitiesForMap = useMemo(
+        () => visitedCities.map(c => ({ lat: c.lat, lon: c.lon, countryCode: c.country_code })),
+        [visitedCities],
+    );
 
     const tooltipText = useMemo(() => {
         if (!hovered) return selectedCountry ? `${selectedCountry.name.toUpperCase()} · SELECTED` : isMobile ? 'TAP TO EXPLORE' : 'HOVER TO EXPLORE';
@@ -768,6 +778,7 @@ const TravelContent = () => {
                                 <DotMatrixGlobe
                                     visitedCountryCodes={visitedCodes}
                                     visitedCityDots={viewMode === 'cities' ? visitedDotKeys : undefined}
+                                    visitedCities={viewMode === 'cities' ? visitedCitiesForMap : undefined}
                                     viewMode={viewMode}
                                     focusedCountryCode={selectedCountry?.code}
                                     focusTrigger={focusTrigger}

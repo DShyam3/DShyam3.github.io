@@ -1,15 +1,22 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Globe, Map as MapIcon } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { ASSETS_URL } from '@/lib/constants';
+import { latLngToCell } from 'h3-js';
 import {
     EQUAL_EARTH_ASPECT,
     EQUAL_EARTH_LABEL,
     EQUAL_EARTH_NOTE,
-    EQUAL_EARTH_ROW_UNIT,
-    equalEarthRowScale,
     projectEqualEarth,
 } from '@/lib/equalEarth';
+import {
+    BUCKET_COLS,
+    BUCKET_ROWS,
+    buildCityHexSet,
+    getRegionHoverLabel,
+    loadHexTier,
+    resolveCityHex,
+    type HexTierData,
+} from './hexMapData';
 
 // Removed d3-geo and topojson
 import './DotMatrixGlobe.css';
@@ -18,15 +25,10 @@ export interface CountryRegion {
     code: string;
 }
 
-interface DotData {
-    cols: number;
-    rows: number;
-    dots: [number, number, string][]; // [col, row, countryCode]
-}
-
 interface DotMatrixGlobeProps {
     visitedCountryCodes: string[];
-    visitedCityDots?: Set<string>;       // set of "col,row" keys for city-level dots
+    visitedCityDots?: Set<string>;       // legacy set of "col,row" keys
+    visitedCities?: { lat: number; lon: number; countryCode: string }[];
     viewMode?: 'countries' | 'cities';   // which highlighting layer to use
     size?: number;
     className?: string;
@@ -38,6 +40,22 @@ interface DotMatrixGlobeProps {
     focusedCity?: { lat: number; lon: number; countryCode: string; dotKey?: string } | null;
     /** Where to turn, in degrees, for a selected country too small to have dots of its own. */
     focusedCountryPoint?: { lat: number; lon: number } | null;
+}
+
+interface ProjectedDot {
+    x: number;
+    y: number;
+    rx: number;
+    ry: number;
+    code: string;
+    dotKey: string;
+    isBack: boolean;
+    opacity: number;
+}
+
+interface ProjectedHex extends ProjectedDot {
+    vertsX: number[];
+    vertsY: number[];
 }
 
 /**
@@ -96,98 +114,9 @@ const DOT_PALETTE = {
     },
 } as const;
 
-interface OptimizedDot {
-    code: string;
-    dotKey: string;
-    col: number;
-    stride: number;
-    cosLat: number;
-    fx: number;
-    fy: number;
-    hScale: number;
-    vScale: number;
-    ux: number;
-    uy: number;
-    uz: number;
-}
-
-// Cache the loaded data and derived projections globally so re-entering /travel
-// renders the globe on frame 1 without re-fetching or re-projecting ~15k dots.
-let cachedDotData: DotData | null = null;
-let cachedOptimizedDots: OptimizedDot[] | null = null;
-let cachedDotCodes: Map<string, string> | null = null;
-let dotDataPromise: Promise<DotData> | null = null;
-
 // Country name lookup - loaded from REST Countries API
 let cachedCountryNames: Record<string, string> = {};
 let countryNamesPromise: Promise<Record<string, string>> | null = null;
-
-function buildOptimizedDots(data: DotData): { optimizedDots: OptimizedDot[]; dotCodes: Map<string, string> } {
-    if (cachedDotData === data && cachedOptimizedDots && cachedDotCodes) {
-        return { optimizedDots: cachedOptimizedDots, dotCodes: cachedDotCodes };
-    }
-    const { cols, rows, dots } = data;
-    const dotCodes = new Map<string, string>();
-    const optimizedDots = dots.map(([col, row, code]) => {
-        const dotKey = `${col},${row}`;
-        dotCodes.set(dotKey, code);
-        const lon = ((col + 0.5) / cols) * 2 * Math.PI - Math.PI;
-        const lat = Math.PI / 2 - ((row + 0.5) / rows) * Math.PI;
-        // Only the flat position comes from the projection -- the grid is
-        // still lon/lat, so the globe below reads the very same dots.
-        const flat = projectEqualEarth(lon, lat);
-        const { hScale, vScale } = equalEarthRowScale(lat);
-        // Longitudes converge at the poles, so an evenly-spaced lat/lon
-        // grid piles every column onto nearly the same screen position
-        // there -- which is what made Antarctica render as a bright ring
-        // with a hot spot at the pole.
-        //
-        // Only the extreme polar caps need thinning. Beyond 78 degrees there
-        // is almost no populated land, so the correction is invisible except
-        // where it is needed.
-        const cosLat = Math.cos(lat);
-        const stride = cosLat < 0.12
-            ? Math.min(8, Math.max(1, Math.round(1 / Math.max(0.05, cosLat))))
-            : 1;
-
-        return {
-            code,
-            dotKey,
-            col,
-            stride,
-            cosLat,
-            fx: flat.nx,
-            fy: flat.ny,
-            hScale,
-            vScale,
-            ux: Math.cos(lat) * Math.sin(lon),
-            uy: -Math.sin(lat),
-            uz: Math.cos(lat) * Math.cos(lon),
-        };
-    });
-    cachedOptimizedDots = optimizedDots;
-    cachedDotCodes = dotCodes;
-    return { optimizedDots, dotCodes };
-}
-
-async function loadDotData(): Promise<DotData> {
-    if (cachedDotData) return cachedDotData;
-    if (!dotDataPromise) {
-        dotDataPromise = (async () => {
-            const res = await fetch(`${ASSETS_URL}/dot-world-map.json`);
-            if (!res.ok) throw new Error('Map unavailable');
-            const data = await res.json();
-            if (!Array.isArray(data.dots) || !Number.isFinite(data.cols) || !Number.isFinite(data.rows) || data.cols <= 0 || data.rows <= 0) throw new Error('Invalid map data');
-            cachedDotData = data;
-            buildOptimizedDots(data);
-            return cachedDotData!;
-        })().catch((err) => {
-            dotDataPromise = null;
-            throw err;
-        });
-    }
-    return dotDataPromise;
-}
 
 async function loadCountryNames(): Promise<Record<string, string>> {
     if (Object.keys(cachedCountryNames).length > 0) return cachedCountryNames;
@@ -210,9 +139,9 @@ async function loadCountryNames(): Promise<Record<string, string>> {
     return countryNamesPromise;
 }
 
-/** Prefetches globe dots + country names in the background so Travel paints on frame 1. */
+/** Prefetches base H3 hex map + country names in the background so Travel paints on frame 1. */
 export function warmGlobeData(): void {
-    void Promise.all([loadDotData(), loadCountryNames()]).catch(() => {});
+    void Promise.all([loadHexTier(3), loadCountryNames()]).catch(() => {});
 }
 
 /**
@@ -263,6 +192,7 @@ function settlePan(pan: number, limit: number): number {
 export function DotMatrixGlobe({
     visitedCountryCodes,
     visitedCityDots,
+    visitedCities,
     viewMode = 'countries',
     size = 800,
     className = '',
@@ -276,11 +206,11 @@ export function DotMatrixGlobe({
     const focusLat = focusedCity?.lat;
     const focusLon = focusedCity?.lon;
     const focusCityCountry = focusedCity?.countryCode;
-    const focusCityDotKey = focusedCity?.dotKey;
     const countryPointLat = focusedCountryPoint?.lat;
     const countryPointLon = focusedCountryPoint?.lon;
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [dotData, setDotData] = useState<DotData | null>(() => cachedDotData);
+    const [baseTier, setBaseTier] = useState<HexTierData | null>(null);
+    const activeTier = baseTier;
     const { resolvedTheme } = useTheme();
     const [mapError, setMapError] = useState(false);
     const [countryNames, setCountryNames] = useState<Record<string, string>>(() => cachedCountryNames);
@@ -345,25 +275,7 @@ export function DotMatrixGlobe({
     });
     const requestRef = useRef<number>();
 
-    interface ProjectedDot {
-        x: number;
-        y: number;
-        /** Dots are elliptical on a flat map: see the radii in `draw`. */
-        rx: number;
-        ry: number;
-        code: string;
-        dotKey: string;
-        isBack: boolean;
-        opacity: number;
-    }
     const projectedDotsRef = useRef<ProjectedDot[]>([]);
-
-    /** A point on the unit sphere, as `get3D` returns it. */
-    interface UnitVector {
-        ux: number;
-        uy: number;
-        uz: number;
-    }
 
     // `draw` is declared further down the component, so it cannot go in the
     // dependency array of the focus effect above it without a TDZ error. This
@@ -382,13 +294,12 @@ export function DotMatrixGlobe({
 
     const shootingStarRef = useRef({ active: false, x: 0, y: 0, length: 0, speed: 0, angle: 0, progress: 0 });
 
-    // Load data (skipped if module cache is already populated)
+    // Load base H3 tier (res 3) + country names (res 4 loads lazily when zooming in)
     useEffect(() => {
-        if (cachedDotData && Object.keys(cachedCountryNames).length > 0) return;
         let active = true;
-        Promise.all([loadDotData(), loadCountryNames()]).then(([dots, names]) => {
+        Promise.all([loadHexTier(3), loadCountryNames()]).then(([tier, names]) => {
             if (!active) return;
-            setDotData(dots);
+            setBaseTier(tier);
             setCountryNames(names);
         }).catch(() => {
             if (active) setMapError(true);
@@ -396,64 +307,28 @@ export function DotMatrixGlobe({
         return () => { active = false; };
     }, []);
 
-    const { optimizedDots, dotCodes } = useMemo(() => {
-        if (!dotData) return { optimizedDots: [] as OptimizedDot[], dotCodes: new Map<string, string>() };
-        return buildOptimizedDots(dotData);
-    }, [dotData]);
+    const visitedCityHexes = useMemo(
+        () => buildCityHexSet(visitedCities, activeTier),
+        [visitedCities, activeTier],
+    );
 
-    // The selected country's centre, in radians: the mean of its dots or, for a
-    // country too small for the grid (Cyprus, Luxembourg), the caller's point.
+    // The selected country's centre, in radians: the mean of its hexes or, for a
+    // country too small for the active tier (e.g. Liechtenstein), the caller's point.
     const countryFocus = useMemo(() => {
-        if (!focusedCountryCode || !dotData) return null;
-        let sumCol = 0;
-        let sumRow = 0;
-        let count = 0;
-        for (const [col, row, code] of dotData.dots) {
-            if (code !== focusedCountryCode) continue;
-            sumCol += col;
-            sumRow += row;
-            count++;
-        }
-        if (count > 0) {
-            const avgCol = (sumCol / count) + 0.5;
-            const avgRow = (sumRow / count) + 0.5;
-            return {
-                lon: (avgCol / dotData.cols) * 2 * Math.PI - Math.PI,
-                lat: Math.PI / 2 - (avgRow / dotData.rows) * Math.PI,
-                dotless: false,
-            };
-        }
+        if (!focusedCountryCode || !activeTier) return null;
+        const centroid = activeTier.countryCentroids.get(focusedCountryCode);
+        if (centroid) return { lon: centroid.lon, lat: centroid.lat, dotless: false };
         if (countryPointLat === undefined || countryPointLon === undefined) return null;
         return { lon: (countryPointLon * Math.PI) / 180, lat: (countryPointLat * Math.PI) / 180, dotless: true };
-    }, [focusedCountryCode, dotData, countryPointLat, countryPointLon]);
+    }, [focusedCountryCode, activeTier, countryPointLat, countryPointLon]);
 
-    // The chosen city's dot: the caller's when its own country owns it,
-    // otherwise that country's dot nearest the city. A stored dot can belong to
-    // a neighbour -- a city in a country with no dots was snapped to the
-    // nearest dot anywhere, a border city sometimes across the line -- and
-    // ringing that would mark the wrong country. Null where the country has no dots.
+    // The chosen city's hex in the active tier.
     const focusedDotKey = useMemo(() => {
-        if (focusLat === undefined || focusLon === undefined || !dotData) return null;
-        if (focusCityDotKey && dotCodes.get(focusCityDotKey) === focusCityCountry) return focusCityDotKey;
-        const col = ((focusLon + 180) / 360) * dotData.cols - 0.5;
-        const row = ((90 - focusLat) / 180) * dotData.rows - 0.5;
-        let best: string | null = null;
-        let bestDistance = Infinity;
-        for (const [dotCol, dotRow, code] of dotData.dots) {
-            if (code !== focusCityCountry) continue;
-            // Columns wrap at the antimeridian (Fiji, Chukotka).
-            const colGap = Math.abs(dotCol - col);
-            const distance = Math.min(colGap, dotData.cols - colGap) ** 2 + (dotRow - row) ** 2;
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = `${dotCol},${dotRow}`;
-            }
-        }
-        return best;
-    }, [focusCityDotKey, focusLat, focusLon, focusCityCountry, dotData, dotCodes]);
+        if (focusLat === undefined || focusLon === undefined || !activeTier) return null;
+        return resolveCityHex(focusLat, focusLon, activeTier, focusCityCountry);
+    }, [focusLat, focusLon, focusCityCountry, activeTier]);
 
-    // With no dot of its own to light, the place itself, in radians: a city in
-    // a country with no dots, or such a country with no city chosen.
+    // With no hex of its own to light, the place itself, in radians.
     const markerPoint = useMemo(() => {
         if (focusLat !== undefined && focusLon !== undefined) {
             return focusedDotKey ? null : { lon: (focusLon * Math.PI) / 180, lat: (focusLat * Math.PI) / 180 };
@@ -461,30 +336,23 @@ export function DotMatrixGlobe({
         return countryFocus?.dotless ? { lon: countryFocus.lon, lat: countryFocus.lat } : null;
     }, [focusLat, focusLon, focusedDotKey, countryFocus]);
 
-    // A place with no dot of its own -- Gibraltar, a city in a country too
-    // small for the grid -- lights the dot of the grid cell it falls in, or a
-    // dot drawn there in open sea. That cell's dot is usually a neighbour's
-    // (Gibraltar's is Spain's): at one dot per degree, that is where the place
-    // is. Marked at its true position it fell between dots.
     const markerCell = useMemo(() => {
-        if (!markerPoint || !dotData) return null;
-        const { cols, rows } = dotData;
-        const col = Math.min(cols - 1, Math.max(0, Math.floor(((markerPoint.lon + Math.PI) / (2 * Math.PI)) * cols)));
-        const row = Math.min(rows - 1, Math.max(0, Math.floor(((Math.PI / 2 - markerPoint.lat) / Math.PI) * rows)));
-        const key = `${col},${row}`;
-        return dotCodes.has(key)
+        if (!markerPoint || !activeTier) return null;
+        const latDeg = (markerPoint.lat * 180) / Math.PI;
+        const lonDeg = (markerPoint.lon * 180) / Math.PI;
+        const key = latLngToCell(latDeg, lonDeg, activeTier.res);
+        return activeTier.cellCodes.has(key)
             ? { key, lon: 0, lat: 0, hasDot: true }
-            : { key, lon: ((col + 0.5) / cols) * 2 * Math.PI - Math.PI, lat: Math.PI / 2 - ((row + 0.5) / rows) * Math.PI, hasDot: false };
-    }, [markerPoint, dotData, dotCodes]);
+            : { key, lon: markerPoint.lon, lat: markerPoint.lat, hasDot: false };
+    }, [markerPoint, activeTier]);
     const selectedKey = focusedDotKey ?? (markerCell?.hasDot ? markerCell.key : null);
 
     // Turn to the selected city, or else the selected country, and hold there.
-    // Clearing the selection zooms back out; the idle spin then eases in later.
     const countryLon = countryFocus?.lon;
     const countryLat = countryFocus?.lat;
     const wasFocusedRef = useRef(false);
     useEffect(() => {
-        if (!dotData) return;
+        if (!activeTier) return;
         let lon: number | null = null;
         let lat: number | null = null;
         let zoom = 1;
@@ -497,9 +365,6 @@ export function DotMatrixGlobe({
             lat = countryLat;
             zoom = FOCUS_ZOOM.country[mode];
         } else if (focusedCountryCode) {
-            // Selected, but too small for the grid and its point not in yet
-            // (or never coming, for an uninhabited island): stay put and
-            // hold, rather than reading it as a deselect and zooming out.
             dragRef.current.holding = true;
             return;
         }
@@ -512,16 +377,11 @@ export function DotMatrixGlobe({
 
         drag.targetZoom = zoom;
         drag.lastInteractionTime = performance.now();
-        // A selection zooms about the middle of the view, so the per-frame
-        // zoom correction has to anchor there, not wherever the wheel last was.
         drag.zoomCursorX = 0;
         drag.zoomCursorY = 0;
         if (lon !== null && lat !== null) {
             drag.targetRotation = lon;
             drag.targetOffsetLat = -lat;
-            // The flat map is not a straight col/row scale, so the pan
-            // target has to go through the projection too or 2D focus
-            // lands beside the country instead of on it.
             const flatCentre = projectEqualEarth(lon, lat);
             drag.targetPanXNorm = flatCentre.nx;
             drag.targetPanYNorm = flatCentre.ny;
@@ -532,94 +392,17 @@ export function DotMatrixGlobe({
             drag.targetPanYNorm = null;
         }
 
-        // Cancel the pending frame before asking for another: two requests
-        // would leave two loops running, and every easing would run twice.
         if (requestRef.current) cancelAnimationFrame(requestRef.current);
         requestRef.current = requestAnimationFrame((t) => {
             animRef.current.lastTime = t;
             drawRef.current(t);
         });
-    }, [focusTrigger, focusLat, focusLon, countryLon, countryLat, focusedCountryCode, dotData, mode]);
-
-    const borderSegments = useMemo(() => {
-        if (!dotData) return [];
-        const { cols, rows, dots } = dotData;
-        const grid = dotCodes;
-
-        const segments = [];
-
-        const getLonLat = (x: number, y: number) => {
-            const lon = (x / cols) * 2 * Math.PI - Math.PI;
-            const lat = Math.PI / 2 - (y / rows) * Math.PI;
-            const flat = projectEqualEarth(lon, lat);
-            return { lon, lat, fx: flat.nx, fy: flat.ny };
-        };
-
-        const get3D = (lon: number, lat: number) => {
-            return {
-                ux: Math.cos(lat) * Math.sin(lon),
-                uy: -Math.sin(lat),
-                uz: Math.cos(lat) * Math.cos(lon),
-            };
-        };
-
-        for (const [col, row, code] of dots) {
-            // Right edge
-            const rightCode = grid.get(`${col + 1},${row}`);
-            if (rightCode !== code) {
-                const p1 = getLonLat(col + 1, row);
-                const p2 = getLonLat(col + 1, row + 1);
-                segments.push({
-                    p1: get3D(p1.lon, p1.lat),
-                    p2: get3D(p2.lon, p2.lat),
-                    fx1: p1.fx, fy1: p1.fy,
-                    fx2: p2.fx, fy2: p2.fy,
-                });
-            }
-            // Bottom edge
-            const bottomCode = grid.get(`${col},${row + 1}`);
-            if (bottomCode !== code) {
-                const p1 = getLonLat(col, row + 1);
-                const p2 = getLonLat(col + 1, row + 1);
-                segments.push({
-                    p1: get3D(p1.lon, p1.lat),
-                    p2: get3D(p2.lon, p2.lat),
-                    fx1: p1.fx, fy1: p1.fy,
-                    fx2: p2.fx, fy2: p2.fy,
-                });
-            }
-            // Left edge
-            const leftCode = grid.get(`${col - 1},${row}`);
-            if (!leftCode) {
-                const p1 = getLonLat(col, row);
-                const p2 = getLonLat(col, row + 1);
-                segments.push({
-                    p1: get3D(p1.lon, p1.lat),
-                    p2: get3D(p2.lon, p2.lat),
-                    fx1: p1.fx, fy1: p1.fy,
-                    fx2: p2.fx, fy2: p2.fy,
-                });
-            }
-            // Top edge
-            const topCode = grid.get(`${col},${row - 1}`);
-            if (!topCode) {
-                const p1 = getLonLat(col, row);
-                const p2 = getLonLat(col + 1, row);
-                segments.push({
-                    p1: get3D(p1.lon, p1.lat),
-                    p2: get3D(p2.lon, p2.lat),
-                    fx1: p1.fx, fy1: p1.fy,
-                    fx2: p2.fx, fy2: p2.fy,
-                });
-            }
-        }
-        return segments;
-    }, [dotData, dotCodes]);
+    }, [focusTrigger, focusLat, focusLon, countryLon, countryLat, focusedCountryCode, activeTier, mode]);
 
     // Draw the map
     const draw = useCallback((time: number) => {
         const canvas = canvasRef.current;
-        if (!canvas || !dotData) return;
+        if (!canvas || !baseTier) return;
 
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
@@ -837,35 +620,13 @@ export function DotMatrixGlobe({
             ctx.globalAlpha = 1;
         }
 
-        const { cols, rows } = dotData;
-        // Measured against the canvas, not the fitted map, so that the globe's
-        // dots are not quietly resized by whichever flat projection happens to
-        // be selected behind it. The flat spacings below carry the projection;
-        // this only sets the unit they are expressed in, and it cancels out.
-        const dotSpacingX = W / cols;
-        const dotSpacingY = H / rows;
         const W_half = W / 2;
         const H_half = H / 2;
         const W_zoom = mapW * curZoom;
         const H_zoom = mapH * curZoom;
         const W_offset = W_half - (mapW * curZoom) / 2 + panX;
         const H_offset = H_half - (mapH * curZoom) / 2 + panY;
-
-        // Anti-clutter tuning on Mobile
         const isMobile = W < 600;
-        const radiusMultiplier = isMobile ? 0.32 : 0.38;
-        const baseRadius = Math.min(dotSpacingX, dotSpacingY) * radiusMultiplier * curZoom;
-        // On the globe a column is 2piR/cols wide, not W/cols. On a phone the
-        // canvas measure gave dots under a pixel across, so the globe washed
-        // out to grey; there they are sized to the globe's own spacing.
-        const sphereRadius = isMobile ? Math.max(baseRadius, ((2 * Math.PI * R) / cols) * 0.3) : baseRadius;
-
-        // Equal Earth does not leave the grid even -- it squeezes towards the
-        // poles -- so a dot sized for the equator is wrong everywhere else.
-        // These are the equatorial spacings each dot's own is measured against.
-        const flatSpacingX = mapW / cols;
-        const flatSpacingY = (mapH * EQUAL_EARTH_ROW_UNIT) / rows;
-        const flatUnit = Math.min(dotSpacingX, dotSpacingY);
 
         const cosRot = Math.cos(rotation);
         const sinRot = Math.sin(rotation);
@@ -873,7 +634,7 @@ export function DotMatrixGlobe({
         const sinLatOffset = Math.sin(dragRef.current.offsetLat);
 
         /** A point on the unit sphere, turned and tilted onto the globe. `z` is -1 (back) to 1 (front). */
-        const toGlobe = (p: UnitVector) => {
+        const toGlobe = (p: { ux: number; uy: number; uz: number }) => {
             const x3d = R * p.ux;
             const y3d = R * p.uy;
             const z3d = R * p.uz;
@@ -884,253 +645,451 @@ export function DotMatrixGlobe({
             return { x: W_half + x_rot, y: H_half + y_tilt, z: z_tilt / R };
         };
 
-        // --- Render Grid-Based Borders ---
-        if (borderSegments.length > 0) {
-            let borderAlpha = BORDER_ALPHA;
-            let drawHemisphere = false;
+        const palette = isDark ? DOT_PALETTE.dark : DOT_PALETTE.light;
+        const safetyMargin = 80;
+        const isInteracting = dragRef.current.isDragging || Math.abs(dragRef.current.targetZoom - curZoom) > 0.04;
+        let focusedProjected: ProjectedHex | null = null;
+        let hemisphereDrawn = false;
 
-            if (progress === 1) {
-                drawHemisphere = true;
-            } else if (progress > 0) {
-                const threshold = 0.15;
-                if (progress > 1 - threshold) {
-                    drawHemisphere = true;
-                    borderAlpha = BORDER_ALPHA * ((progress - (1 - threshold)) / threshold);
-                } else if (progress < threshold) {
-                    borderAlpha = BORDER_ALPHA * (1 - (progress / threshold));
-                } else {
-                    borderAlpha = 0;
-                }
+        const traceHexIntoPath = (cx: number, cy: number, vertsX: number[], vertsY: number[], scale: number) => {
+            for (let i = 0; i < vertsX.length; i++) {
+                const px = cx + (vertsX[i] - cx) * scale;
+                const py = cy + (vertsY[i] - cy) * scale;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
             }
+            ctx.closePath();
+        };
 
-            // Dynamically increase alpha when zooming in 2D so borders remain highly visible
-            let dynamicAlpha = borderAlpha;
-            if (curZoom > 1.0 && progress === 0) {
-                dynamicAlpha = Math.min(BORDER_ALPHA_ZOOMED, borderAlpha + (curZoom - 1.0) * 0.1);
-            }
+        const renderTier = (tier: HexTierData, tierAlpha: number, collectHitMap: boolean) => {
+            if (tierAlpha <= 0.01) return;
 
-            if (dynamicAlpha > 0.02) {
-                ctx.globalAlpha = dynamicAlpha;
-                ctx.beginPath();
-                for (const seg of borderSegments) {
-                    let x1 = seg.fx1 * W_zoom + W_offset;
-                    let y1 = seg.fy1 * H_zoom + H_offset;
-                    let x2 = seg.fx2 * W_zoom + W_offset;
-                    let y2 = seg.fy2 * H_zoom + H_offset;
-                    let zNorm1 = 1, zNorm2 = 1;
+            const isCityMode = viewMode === 'cities';
+            const approxHexRadius = (mapW / (tier.res === 4 ? 340 : 135)) * curZoom;
+            const shouldUpdateHitMap = collectHitMap && !isInteracting;
 
-                    if (progress > 0) {
-                        const p1Proj = toGlobe(seg.p1);
-                        const p2Proj = toGlobe(seg.p2);
-                        
-                        x1 = x1 + (p1Proj.x - x1) * progress;
-                        y1 = y1 + (p1Proj.y - y1) * progress;
-                        x2 = x2 + (p2Proj.x - x2) * progress;
-                        y2 = y2 + (p2Proj.y - y2) * progress;
-                        zNorm1 = p1Proj.z;
-                        zNorm2 = p2Proj.z;
-                    }
+            // --- Fast 2D Path: spatial-bucket viewport culling + color-batched Path2D ---
+            if (progress === 0) {
+                const nxMin = (-safetyMargin - W_offset) / W_zoom;
+                const nxMax = (W + safetyMargin - W_offset) / W_zoom;
+                const nyMin = (-safetyMargin - H_offset) / H_zoom;
+                const nyMax = (H + safetyMargin - H_offset) / H_zoom;
 
-                    // 3D back-face culling
-                    if (progress > 0.5 && zNorm1 < 0 && zNorm2 < 0) continue;
+                const bxMin = Math.max(0, Math.min(BUCKET_COLS - 1, Math.floor(nxMin * BUCKET_COLS) - 1));
+                const bxMax = Math.max(0, Math.min(BUCKET_COLS - 1, Math.floor(nxMax * BUCKET_COLS) + 1));
+                const byMin = Math.max(0, Math.min(BUCKET_ROWS - 1, Math.floor(nyMin * BUCKET_ROWS) - 1));
+                const byMax = Math.max(0, Math.min(BUCKET_ROWS - 1, Math.floor(nyMax * BUCKET_ROWS) + 1));
 
-                    // 2D viewport culling - use generous margins to prevent clipping
-                    const margin = 100;
-                    if (progress === 0 && 
-                       ((x1 < -margin && x2 < -margin) || 
-                        (x1 > W + margin && x2 > W + margin) || 
-                        (y1 < -margin && y2 < -margin) || 
-                        (y1 > H + margin && y2 > H + margin))) {
-                        continue;
-                    }
-
-                    ctx.moveTo(x1, y1);
-                    ctx.lineTo(x2, y2);
-                }
-                
-                ctx.strokeStyle = isDark ? '#ffffff' : '#000000';
-                // Scale line width up gently with zoom to ensure borders stay thick and prominent
-                const baseWidth = isMobile ? 0.6 : 0.9;
-                const borderWidth = Math.min(3.0, baseWidth * Math.pow(curZoom, 0.5)) * dpr;
-                ctx.lineWidth = borderWidth;
-                ctx.stroke();
-
-                // Hemisphere outline (only in 3D)
-                if (drawHemisphere) {
-                    ctx.globalAlpha = (borderAlpha / BORDER_ALPHA) * 0.05;
+                // 1. Borders in visible buckets only
+                const dynamicAlpha = Math.min(BORDER_ALPHA_ZOOMED, BORDER_ALPHA + Math.max(0, curZoom - 1.0) * 0.1);
+                const finalBorderAlpha = dynamicAlpha * tierAlpha;
+                if (finalBorderAlpha > 0.015) {
+                    ctx.globalAlpha = finalBorderAlpha;
                     ctx.beginPath();
-                    ctx.arc(W / 2, H / 2, R, 0, Math.PI * 2);
+                    for (let by = byMin; by <= byMax; by++) {
+                        const rowOffset = by * BUCKET_COLS;
+                        for (let bx = bxMin; bx <= bxMax; bx++) {
+                            const bucket = tier.borderBuckets[rowOffset + bx];
+                            for (let s = 0; s < bucket.length; s++) {
+                                const seg = bucket[s];
+                                const x1 = seg.fx1 * W_zoom + W_offset;
+                                const y1 = seg.fy1 * H_zoom + H_offset;
+                                const x2 = seg.fx2 * W_zoom + W_offset;
+                                const y2 = seg.fy2 * H_zoom + H_offset;
+                                if (
+                                    (x1 < -safetyMargin && x2 < -safetyMargin) ||
+                                    (x1 > W + safetyMargin && x2 > W + safetyMargin) ||
+                                    (y1 < -safetyMargin && y2 < -safetyMargin) ||
+                                    (y1 > H + safetyMargin && y2 > H + safetyMargin)
+                                ) {
+                                    continue;
+                                }
+                                ctx.moveTo(x1, y1);
+                                ctx.lineTo(x2, y2);
+                            }
+                        }
+                    }
                     ctx.strokeStyle = isDark ? '#ffffff' : '#000000';
-                    ctx.lineWidth = 1 * dpr;
+                    const baseWidth = isMobile ? 0.6 : 0.9;
+                    ctx.lineWidth = Math.min(2.6, baseWidth * Math.pow(curZoom, 0.45)) * dpr;
                     ctx.stroke();
                 }
+
+                // 2. Hexes in visible buckets only, batched by color (4-5 draw calls total)
+                const colorPaths = new Map<string, Path2D>();
+                const newProjected: ProjectedDot[] = [];
+
+                for (let by = byMin; by <= byMax; by++) {
+                    const rowOffset = by * BUCKET_COLS;
+                    for (let bx = bxMin; bx <= bxMax; bx++) {
+                        const bucket = tier.cellBuckets[rowOffset + bx];
+                        for (let c = 0; c < bucket.length; c++) {
+                            const cell = bucket[c];
+                            const cx = cell.center2d.nx * W_zoom + W_offset;
+                            const cy = cell.center2d.ny * H_zoom + H_offset;
+                            if (cx < -safetyMargin || cx > W + safetyMargin || cy < -safetyMargin || cy > H + safetyMargin) {
+                                continue;
+                            }
+
+                            if (shouldUpdateHitMap) {
+                                newProjected.push({
+                                    x: cx,
+                                    y: cy,
+                                    rx: approxHexRadius,
+                                    ry: approxHexRadius,
+                                    code: cell.code,
+                                    dotKey: cell.h3Index,
+                                    isBack: false,
+                                    opacity: 1,
+                                });
+                            }
+
+                            const isSelected = cell.h3Index === selectedKey;
+                            if (collectHitMap && isSelected) {
+                                const vertsX: number[] = [];
+                                const vertsY: number[] = [];
+                                for (let i = 0; i < cell.verts2d.length; i++) {
+                                    vertsX.push(cell.verts2d[i].nx * W_zoom + W_offset);
+                                    vertsY.push(cell.verts2d[i].ny * H_zoom + H_offset);
+                                }
+                                focusedProjected = {
+                                    x: cx,
+                                    y: cy,
+                                    rx: approxHexRadius,
+                                    ry: approxHexRadius,
+                                    code: cell.code,
+                                    dotKey: cell.h3Index,
+                                    isBack: false,
+                                    opacity: tierAlpha,
+                                    vertsX,
+                                    vertsY,
+                                };
+                            }
+
+                            const isCountryVisited = visitedSet.has(cell.code);
+                            const isCityDot = visitedCityHexes.has(cell.h3Index) || (visitedCityDots?.has(cell.h3Index) ?? false);
+                            const isHovered = cell.code === hoveredCountry;
+
+                            let color: string;
+                            let fillScale = 0.84;
+
+                            if (isSelected) {
+                                color = palette.selected;
+                                fillScale = 0.92;
+                            } else if (isCityMode && (isCityDot || cell.h3Index === focusedDotKey)) {
+                                color = isHovered ? palette.visitedHovered : palette.city;
+                                fillScale = isHovered ? 0.96 : 0.92;
+                            } else if (isCountryVisited) {
+                                color = isCityMode
+                                    ? (isHovered ? palette.visited : palette.visitedTint)
+                                    : (isHovered ? palette.visitedHovered : palette.visited);
+                                fillScale = isHovered ? 0.94 : isCityMode ? 0.84 : 0.9;
+                            } else if (isHovered) {
+                                color = palette.unvisitedHovered;
+                                fillScale = 0.9;
+                            } else {
+                                color = palette.unvisited;
+                            }
+
+                            let path = colorPaths.get(color);
+                            if (!path) {
+                                path = new Path2D();
+                                colorPaths.set(color, path);
+                            }
+
+                            const v2 = cell.verts2d;
+                            for (let i = 0; i < v2.length; i++) {
+                                const vx = v2[i].nx * W_zoom + W_offset;
+                                const vy = v2[i].ny * H_zoom + H_offset;
+                                const px = cx + (vx - cx) * fillScale;
+                                const py = cy + (vy - cy) * fillScale;
+                                if (i === 0) path.moveTo(px, py);
+                                else path.lineTo(px, py);
+                            }
+                            path.closePath();
+                        }
+                    }
+                }
+
+                ctx.globalAlpha = tierAlpha;
+                for (const [color, path] of colorPaths) {
+                    ctx.fillStyle = color;
+                    ctx.fill(path);
+                }
+                ctx.globalAlpha = 1;
+                if (shouldUpdateHitMap) {
+                    projectedDotsRef.current = newProjected;
+                }
+                return;
+            }
+
+            // --- 3D / Morph Path (inlined rotation math, zero per-vertex allocations) ---
+            const { borderSegments, cells } = tier;
+            if (borderSegments.length > 0) {
+                let borderAlpha = BORDER_ALPHA;
+                let drawHemisphere = false;
+
+                if (progress === 1) {
+                    drawHemisphere = true;
+                } else if (progress > 0) {
+                    const threshold = 0.15;
+                    if (progress > 1 - threshold) {
+                        drawHemisphere = true;
+                        borderAlpha = BORDER_ALPHA * ((progress - (1 - threshold)) / threshold);
+                    } else if (progress < threshold) {
+                        borderAlpha = BORDER_ALPHA * (1 - (progress / threshold));
+                    } else {
+                        borderAlpha = 0;
+                    }
+                }
+
+                const finalBorderAlpha = borderAlpha * tierAlpha;
+                if (finalBorderAlpha > 0.015) {
+                    ctx.globalAlpha = finalBorderAlpha;
+                    ctx.beginPath();
+                    for (let s = 0; s < borderSegments.length; s++) {
+                        const seg = borderSegments[s];
+                        if (progress < 0.5 && seg.crossesAntimeridian) continue;
+
+                        const p1 = seg.p1;
+                        const x1_3 = R * p1.ux;
+                        const y1_3 = R * p1.uy;
+                        const z1_3 = R * p1.uz;
+                        const x1_r = x1_3 * cosRot - z1_3 * sinRot;
+                        const z1_r = x1_3 * sinRot + z1_3 * cosRot;
+                        const y1_t = y1_3 * cosLatOffset - z1_r * sinLatOffset;
+                        const z1_t = y1_3 * sinLatOffset + z1_r * cosLatOffset;
+
+                        const p2 = seg.p2;
+                        const x2_3 = R * p2.ux;
+                        const y2_3 = R * p2.uy;
+                        const z2_3 = R * p2.uz;
+                        const x2_r = x2_3 * cosRot - z2_3 * sinRot;
+                        const z2_r = x2_3 * sinRot + z2_3 * cosRot;
+                        const y2_t = y2_3 * cosLatOffset - z2_r * sinLatOffset;
+                        const z2_t = y2_3 * sinLatOffset + z2_r * cosLatOffset;
+
+                        if (progress > 0.5 && z1_t < 0 && z2_t < 0) continue;
+
+                        let x1 = W_half + x1_r;
+                        let y1 = H_half + y1_t;
+                        let x2 = W_half + x2_r;
+                        let y2 = H_half + y2_t;
+
+                        if (progress < 1) {
+                            const fx1 = seg.fx1 * W_zoom + W_offset;
+                            const fy1 = seg.fy1 * H_zoom + H_offset;
+                            const fx2 = seg.fx2 * W_zoom + W_offset;
+                            const fy2 = seg.fy2 * H_zoom + H_offset;
+                            x1 = fx1 + (x1 - fx1) * progress;
+                            y1 = fy1 + (y1 - fy1) * progress;
+                            x2 = fx2 + (x2 - fx2) * progress;
+                            y2 = fy2 + (y2 - fy2) * progress;
+                        }
+
+                        if (
+                            (x1 < -safetyMargin && x2 < -safetyMargin) ||
+                            (x1 > W + safetyMargin && x2 > W + safetyMargin) ||
+                            (y1 < -safetyMargin && y2 < -safetyMargin) ||
+                            (y1 > H + safetyMargin && y2 > H + safetyMargin)
+                        ) {
+                            continue;
+                        }
+
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                    }
+
+                    ctx.strokeStyle = isDark ? '#ffffff' : '#000000';
+                    const baseWidth = isMobile ? 0.6 : 0.9;
+                    ctx.lineWidth = Math.min(2.6, baseWidth * Math.pow(curZoom, 0.45)) * dpr;
+                    ctx.stroke();
+
+                    if (drawHemisphere && !hemisphereDrawn) {
+                        hemisphereDrawn = true;
+                        ctx.globalAlpha = (borderAlpha / BORDER_ALPHA) * 0.05;
+                        ctx.beginPath();
+                        ctx.arc(W / 2, H / 2, R, 0, Math.PI * 2);
+                        ctx.strokeStyle = isDark ? '#ffffff' : '#000000';
+                        ctx.lineWidth = 1 * dpr;
+                        ctx.stroke();
+                    }
+                }
+                ctx.globalAlpha = 1;
+            }
+
+            const newProjected: ProjectedDot[] = [];
+            const batches = new Map<string, { color: string; alpha: number; path: Path2D }>();
+
+            for (let c = 0; c < cells.length; c++) {
+                const cell = cells[c];
+                if (progress < 0.5 && cell.crossesAntimeridian) continue;
+
+                const c3 = cell.center3d;
+                const cx3 = R * c3.ux;
+                const cy3 = R * c3.uy;
+                const cz3 = R * c3.uz;
+                const cxr = cx3 * cosRot - cz3 * sinRot;
+                const czr = cx3 * sinRot + cz3 * cosRot;
+                const cyt = cy3 * cosLatOffset - czr * sinLatOffset;
+                const czt = cy3 * sinLatOffset + czr * cosLatOffset;
+                const isBack = czt < 0;
+                if (isBack && progress > 0.85) continue;
+
+                let cx = W_half + cxr;
+                let cy = H_half + cyt;
+                if (progress < 1) {
+                    const cx2d = cell.center2d.nx * W_zoom + W_offset;
+                    const cy2d = cell.center2d.ny * H_zoom + H_offset;
+                    cx = cx2d + (cx - cx2d) * progress;
+                    cy = cy2d + (cy - cy2d) * progress;
+                }
+
+                if (cx < -safetyMargin || cx > W + safetyMargin || cy < -safetyMargin || cy > H + safetyMargin) {
+                    continue;
+                }
+
+                const zNorm = czt / R;
+                const rawOpacity = 1 * (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
+
+                if (shouldUpdateHitMap) {
+                    newProjected.push({
+                        x: cx,
+                        y: cy,
+                        rx: approxHexRadius,
+                        ry: approxHexRadius,
+                        code: cell.code,
+                        dotKey: cell.h3Index,
+                        isBack,
+                        opacity: rawOpacity,
+                    });
+                }
+
+                const isSelected = cell.h3Index === selectedKey;
+                if (collectHitMap && isSelected) {
+                    const vertsX: number[] = [];
+                    const vertsY: number[] = [];
+                    for (let i = 0; i < cell.verts3d.length; i++) {
+                        const vp = toGlobe(cell.verts3d[i]);
+                        if (progress < 1) {
+                            const vx2 = cell.verts2d[i].nx * W_zoom + W_offset;
+                            const vy2 = cell.verts2d[i].ny * H_zoom + H_offset;
+                            vertsX.push(vx2 + (vp.x - vx2) * progress);
+                            vertsY.push(vy2 + (vp.y - vy2) * progress);
+                        } else {
+                            vertsX.push(vp.x);
+                            vertsY.push(vp.y);
+                        }
+                    }
+                    focusedProjected = {
+                        x: cx,
+                        y: cy,
+                        rx: approxHexRadius,
+                        ry: approxHexRadius,
+                        code: cell.code,
+                        dotKey: cell.h3Index,
+                        isBack,
+                        opacity: rawOpacity * tierAlpha,
+                        vertsX,
+                        vertsY,
+                    };
+                }
+
+                const isCountryVisited = visitedSet.has(cell.code);
+                const isCityDot = visitedCityHexes.has(cell.h3Index) || (visitedCityDots?.has(cell.h3Index) ?? false);
+                const isHovered = cell.code === hoveredCountry;
+
+                let color: string;
+                let fillScale = 0.84;
+
+                if (isSelected) {
+                    color = palette.selected;
+                    fillScale = 0.92;
+                } else if (isCityMode && (isCityDot || cell.h3Index === focusedDotKey)) {
+                    color = isHovered ? palette.visitedHovered : palette.city;
+                    fillScale = isHovered ? 0.96 : 0.92;
+                } else if (isCountryVisited) {
+                    color = isCityMode
+                        ? (isHovered ? palette.visited : palette.visitedTint)
+                        : (isHovered ? palette.visitedHovered : palette.visited);
+                    fillScale = isHovered ? 0.94 : isCityMode ? 0.84 : 0.9;
+                } else if (isHovered) {
+                    color = palette.unvisitedHovered;
+                    fillScale = 0.9;
+                } else {
+                    color = palette.unvisited;
+                }
+
+                const bucketIdx = Math.max(0, Math.min(6, Math.round(rawOpacity * 6)));
+                const bucketAlpha = (bucketIdx / 6) * tierAlpha;
+                const batchKey = `${color}|${bucketIdx}`;
+                let batch = batches.get(batchKey);
+                if (!batch) {
+                    batch = { color, alpha: bucketAlpha, path: new Path2D() };
+                    batches.set(batchKey, batch);
+                }
+
+                const batchPath = batch.path;
+                const v3 = cell.verts3d;
+                const v2 = cell.verts2d;
+                for (let i = 0; i < v3.length; i++) {
+                    const u = v3[i];
+                    const vx3 = R * u.ux;
+                    const vy3 = R * u.uy;
+                    const vz3 = R * u.uz;
+                    const vxr = vx3 * cosRot - vz3 * sinRot;
+                    const vzr = vx3 * sinRot + vz3 * cosRot;
+                    const vyt = vy3 * cosLatOffset - vzr * sinLatOffset;
+                    let vx = W_half + vxr;
+                    let vy = H_half + vyt;
+                    if (progress < 1) {
+                        const vx2 = v2[i].nx * W_zoom + W_offset;
+                        const vy2 = v2[i].ny * H_zoom + H_offset;
+                        vx = vx2 + (vx - vx2) * progress;
+                        vy = vy2 + (vy - vy2) * progress;
+                    }
+                    const px = cx + (vx - cx) * fillScale;
+                    const py = cy + (vy - cy) * fillScale;
+                    if (i === 0) batchPath.moveTo(px, py);
+                    else batchPath.lineTo(px, py);
+                }
+                batchPath.closePath();
+            }
+
+            if (shouldUpdateHitMap) {
+                projectedDotsRef.current = newProjected;
+            }
+
+            for (const batch of batches.values()) {
+                if (batch.alpha <= 0.01) continue;
+                ctx.globalAlpha = batch.alpha;
+                ctx.fillStyle = batch.color;
+                ctx.fill(batch.path);
             }
             ctx.globalAlpha = 1;
-        }
-
-        const newProjected: ProjectedDot[] = [];
-        const backDots: ProjectedDot[] = [];
-        const frontDots: ProjectedDot[] = [];
-        let focusedProjected: ProjectedDot | null = null;
-
-        for (const dot of optimizedDots) {
-            // Drop dots only in the last few degrees, where even shrinking
-            // them cannot keep them apart.
-            if (progress > 0.5 && dot.stride > 1 && dot.col % dot.stride !== 0) {
-                continue;
-            }
-
-            const cx2d = dot.fx * W_zoom + W_offset;
-            const cy2d = dot.fy * H_zoom + H_offset;
-
-            // 2D Viewport culling optimization:
-            // Use a generous safety margin to prevent dots from popping out at edges
-            const safetyMargin = 100;
-            if (progress === 0 && (cx2d < -safetyMargin || cx2d > W + safetyMargin || cy2d < -safetyMargin || cy2d > H + safetyMargin)) {
-                continue;
-            }
-
-            let cx = cx2d;
-            let cy = cy2d;
-            let zNorm = 1;
-            let isBack = false;
-
-            if (progress > 0) {
-                const x3d = R * dot.ux;
-                const y3d = R * dot.uy;
-                const z3d = R * dot.uz;
-
-                // 1. Rotation around Y axis (longitude scroll)
-                const x_rot = x3d * cosRot - z3d * sinRot;
-                const z_rot = x3d * sinRot + z3d * cosRot;
-
-                // 2. Rotation around X axis (latitude tilt from manual drag)
-                const y_tilt = y3d * cosLatOffset - z_rot * sinLatOffset;
-                const z_tilt = y3d * sinLatOffset + z_rot * cosLatOffset;
-
-                const cx3d = W_half + x_rot;
-                const cy3d = H_half + y_tilt;
-
-                cx = cx2d + (cx3d - cx2d) * progress;
-                cy = cy2d + (cy3d - cy2d) * progress;
-                zNorm = z_tilt / R;
-                isBack = z_tilt < 0;
-            }
-
-            // On a sphere, dots in a row sit cos(lat) apart, so towards the
-            // poles they overlap and merge into solid arcs -- the banding
-            // across the Arctic and Antarctic. Shrinking them by the same
-            // factor keeps the gaps open. Doing it by size rather than by
-            // removing dots matters: thinning left visible grey holes across
-            // Russia and northern Canada, whereas this stays continuous and
-            // simply reads as finer detail towards the poles.
-            const polarScale = Math.max(0.32, Math.min(1, dot.cosLat / 0.55));
-            // Whichever of the two spacings is tighter is the one that decides
-            // whether this dot touches its neighbour. The floor keeps the last
-            // couple of degrees from fading out entirely -- they overlap a
-            // little there, which reads as solid ice rather than as a gap.
-            // A flat dot is an ellipse, because the projection does not
-            // stretch a grid cell equally in both directions: Equal Earth
-            // squeezes the rows harder than the columns, so a round dot sized
-            // to the rows leaves horizontal gaps. Sizing each axis to its own
-            // spacing leaves the same proportional gap both ways, which is what
-            // reads as an even matrix.
-            const flatScaleX = Math.max(0.25, (dot.hScale * flatSpacingX) / flatUnit);
-            const flatScaleY = Math.max(0.25, (dot.vScale * flatSpacingY) / flatUnit);
-            // A globe has no such stretch: the dots go back to round.
-            const sphereScale = Math.max(0.4, 0.6 + 0.4 * zNorm) * polarScale;
-            const activeRadiusX = baseRadius * flatScaleX * (1 - progress) + sphereRadius * sphereScale * progress;
-            const activeRadiusY = baseRadius * flatScaleY * (1 - progress) + sphereRadius * sphereScale * progress;
-            const activeOpacity = 1 * (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
-
-            const pDot: ProjectedDot = {
-                x: cx, y: cy,
-                rx: activeRadiusX,
-                ry: activeRadiusY,
-                code: dot.code,
-                dotKey: dot.dotKey,
-                isBack,
-                opacity: activeOpacity
-            };
-
-            newProjected.push(pDot);
-            if (dot.dotKey === selectedKey) focusedProjected = pDot;
-            if (isBack && progress > 0.5) {
-                backDots.push(pDot);
-            } else {
-                frontDots.push(pDot);
-            }
-        }
-
-        projectedDotsRef.current = newProjected;
-
-        const palette = isDark ? DOT_PALETTE.dark : DOT_PALETTE.light;
-        /** A dot's colour and size, before any selection. */
-        const dotStyle = (p: ProjectedDot) => {
-            const isCountryVisited = visitedSet.has(p.code);
-            const isCityDot = visitedCityDots?.has(p.dotKey) ?? false;
-            const isHovered = p.code === hoveredCountry;
-            const isCityMode = viewMode === 'cities';
-
-            let color: string;
-            let emphasis = 1;
-
-            if (isCityMode && (isCityDot || p.dotKey === focusedDotKey)) {
-                // A selected city is city-sized even when the dot it lands on is
-                // its country's nearest, not its own stored one.
-                color = isHovered ? palette.visitedHovered : palette.city;
-                emphasis = isHovered ? 1.55 : 1.4;
-            } else if (isCountryVisited) {
-                color = isCityMode ? (isHovered ? palette.visited : palette.visitedTint) : (isHovered ? palette.visitedHovered : palette.visited);
-                emphasis = isHovered ? 1.35 : isCityMode ? 1 : 1.2;
-            } else if (isHovered) {
-                color = palette.unvisitedHovered;
-                emphasis = 1.2;
-            } else {
-                color = palette.unvisited;
-            }
-            return { color, emphasis };
         };
 
-        const drawDot = (p: ProjectedDot) => {
-            const { color, emphasis } = dotStyle(p);
-            ctx.globalAlpha = p.opacity;
-            ctx.beginPath();
-            // The chosen place changes colour only: it keeps the size and shape
-            // it would have anyway. Drawn larger, it covered its neighbours.
-            ctx.fillStyle = p.dotKey === selectedKey ? palette.selected : color;
-            ctx.ellipse(p.x, p.y, p.rx * emphasis, p.ry * emphasis, 0, 0, Math.PI * 2);
-            ctx.fill();
-        };
+        if (baseTier) {
+            renderTier(baseTier, 1, true);
+        }
 
-        for (const p of backDots) drawDot(p);
-        for (const p of frontDots) drawDot(p);
-
-        // The selected dot again, on top of its neighbours and with a faint
-        // glow, so it can be found at the whole-world view, where a dot is a
-        // pixel or two across. Not when the globe has turned it away.
-        const drawSelected = (x: number, y: number, rx: number, ry: number, opacity: number) => {
+        const drawSelectedHex = (p: ProjectedHex) => {
             ctx.save();
-            ctx.globalAlpha = opacity;
+            ctx.globalAlpha = p.opacity;
             ctx.shadowColor = palette.selectedGlow;
-            // shadowBlur ignores the canvas transform, so it is set in device pixels.
-            ctx.shadowBlur = Math.max(4, Math.max(rx, ry) * 1.5) * dpr;
+            ctx.shadowBlur = Math.max(4, p.rx * 1.5) * dpr;
             ctx.fillStyle = palette.selected;
             ctx.beginPath();
-            ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+            traceHexIntoPath(p.x, p.y, p.vertsX, p.vertsY, 0.95);
             ctx.fill();
             ctx.restore();
         };
-        const selectedDot = focusedProjected;
-        if (selectedDot) {
-            if (!(selectedDot.isBack && progress > 0.5)) {
-                const { emphasis } = dotStyle(selectedDot);
-                drawSelected(selectedDot.x, selectedDot.y, selectedDot.rx * emphasis, selectedDot.ry * emphasis, selectedDot.opacity);
+
+        if (focusedProjected) {
+            if (!(focusedProjected.isBack && progress > 0.5)) {
+                drawSelectedHex(focusedProjected);
             }
         } else if (markerCell && !markerCell.hasDot) {
-            // The cell has no dot of its own (open sea round a small island),
-            // so one is drawn there: the same flat-to-globe morph the dots go
-            // through, for one point.
             const flat = projectEqualEarth(markerCell.lon, markerCell.lat);
             let x = flat.nx * W_zoom + W_offset;
             let y = flat.ny * H_zoom + H_offset;
@@ -1145,26 +1104,35 @@ export function DotMatrixGlobe({
                 y += (onGlobe.y - y) * progress;
                 zNorm = onGlobe.z;
             }
-            // Faded towards the globe's edge exactly as a dot there would be.
             const opacity = (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
             if (!(zNorm < 0 && progress > 0.5)) {
-                // Sized as the dot loop sizes a visited dot, flat and round.
-                const { hScale, vScale } = equalEarthRowScale(markerCell.lat);
-                const flatScale = Math.max(0.25, (hScale * flatSpacingX) / flatUnit, (vScale * flatSpacingY) / flatUnit);
-                const r = (baseRadius * flatScale * (1 - progress) + sphereRadius * progress) * MARKER_EMPHASIS;
-                drawSelected(x, y, r, r, opacity);
+                const r = Math.max(2.5, (mapW / 180) * 0.45 * curZoom) * MARKER_EMPHASIS;
+                ctx.save();
+                ctx.globalAlpha = opacity;
+                ctx.shadowColor = palette.selectedGlow;
+                ctx.shadowBlur = Math.max(4, r * 1.5) * dpr;
+                ctx.fillStyle = palette.selected;
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = (Math.PI / 3) * i;
+                    const px = x + r * Math.cos(angle);
+                    const py = y + r * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
             }
         }
 
         if (progress > 0 || animRef.current.progress !== target) {
             requestRef.current = requestAnimationFrame((t) => draw(t));
         } else if (mode === '2d' && (dragRef.current.isDragging || Math.abs(dragRef.current.targetZoom - curZoom) > 0.01 || !panSettled)) {
-            // Keep 2D drawing alive only while it is zooming, panning or
-            // springing back -- not for a selection that has come to rest.
             requestRef.current = requestAnimationFrame((t) => draw(t));
         }
 
-    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars, focusedDotKey, selectedKey, markerCell]);
+    }, [baseTier, visitedSet, visitedCityHexes, visitedCityDots, viewMode, hoveredCountry, mode, stars, focusedDotKey, selectedKey, markerCell]);
 
     drawRef.current = draw;
 
@@ -1232,15 +1200,16 @@ export function DotMatrixGlobe({
         // selecting it -- otherwise the map would jump with nothing highlighted.
         setHoveredCountry(code);
         dragRef.current.hoveredDotKey = dotKey;
-        const name = countryNames[code] ?? code;
-        onCountryHover?.(code, name, `https://flagcdn.com/w80/${code.toLowerCase()}.png`, dotKey);
-        onCountryClick?.(code, name);
+        const baseName = countryNames[code] ?? code;
+        const hoverLabel = getRegionHoverLabel(code, dotKey, baseName);
+        onCountryHover?.(code, hoverLabel, `https://flagcdn.com/w80/${code.toLowerCase()}.png`, dotKey);
+        onCountryClick?.(code, baseName);
     }, [countryAtPoint, countryNames, onCountryHover, onCountryClick]);
 
     // Mouse events
     useEffect(() => {
         const handleWheel = (e: WheelEvent) => {
-            if (!dotData) return;
+            if (!activeTier) return;
             e.preventDefault();
             dragRef.current.lastInteractionTime = performance.now();
             releaseTargets(dragRef.current);
@@ -1262,7 +1231,7 @@ export function DotMatrixGlobe({
         };
 
         const handleTouchStart = (e: TouchEvent) => {
-            if (!dotData) return;
+            if (!activeTier) return;
             // Not cancelled for one finger: that would stop the page scrolling
             // when the swipe turns out to be vertical. touch-action keeps the
             // browser from doing anything else with it.
@@ -1289,7 +1258,7 @@ export function DotMatrixGlobe({
         };
 
         const handleTouchMove = (e: TouchEvent) => {
-            if (!dotData) return;
+            if (!activeTier) return;
             const drag = dragRef.current;
             if (e.touches.length === 1 && drag.touchGesture === 'undecided') {
                 const dx = e.touches[0].clientX - drag.startX;
@@ -1387,10 +1356,10 @@ export function DotMatrixGlobe({
                 canvas.removeEventListener('touchcancel', handleTouchEnd);
             }
         };
-    }, [dotData, mode, draw, selectAtPoint]);
+    }, [activeTier, mode, draw, selectAtPoint]);
 
     const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!dotData) return;
+        if (!activeTier) return;
         dragRef.current.isDragging = true;
         dragRef.current.lastX = e.clientX;
         dragRef.current.lastY = e.clientY;
@@ -1400,7 +1369,7 @@ export function DotMatrixGlobe({
         dragRef.current.lastInteractionTime = performance.now();
         // A still click leaves a selection held; moving past the threshold
         // lets it go (see handleMouseMove).
-    }, [dotData]);
+    }, [activeTier]);
 
     const handleMouseUp = useCallback(() => {
         dragRef.current.isDragging = false;
@@ -1444,7 +1413,9 @@ export function DotMatrixGlobe({
             setHoveredCountry(foundCode);
             dragRef.current.hoveredDotKey = foundDotKey;
             const flagUrl = foundCode ? `https://flagcdn.com/w80/${foundCode.toLowerCase()}.png` : null;
-            onCountryHover?.(foundCode, foundCode ? (countryNames[foundCode] ?? foundCode) : null, flagUrl, foundDotKey);
+            const baseName = foundCode ? (countryNames[foundCode] ?? foundCode) : null;
+            const hoverLabel = foundCode && baseName ? getRegionHoverLabel(foundCode, foundDotKey, baseName) : null;
+            onCountryHover?.(foundCode, hoverLabel, flagUrl, foundDotKey);
         }
     }, [hoveredCountry, countryNames, onCountryHover, mode, countryAtPoint]);
 
@@ -1484,7 +1455,7 @@ export function DotMatrixGlobe({
         // slot, flat or globe, and never resizes underneath the drawing.
         <div className={`dot-matrix-map-slot ${className}`}>
             <div className="dot-matrix-map-container">
-            {!dotData && (
+            {!activeTier && (
                 <div className="dot-matrix-loading">
                     <div className="dot-matrix-loading-dots">
                         <span /><span /><span />
@@ -1503,7 +1474,7 @@ export function DotMatrixGlobe({
             />
             {/* One bar for both, so on a narrow map the toggle wraps onto a
                 line of its own instead of sliding over the label. */}
-            {dotData && (
+            {activeTier && (
                 <div className="absolute inset-x-3 bottom-3 sm:inset-x-4 sm:bottom-4 z-10 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
                     {/* What gold means, so visited and not visited never rest on
                         telling two shades apart unaided. */}
