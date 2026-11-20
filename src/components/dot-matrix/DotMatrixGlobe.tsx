@@ -486,12 +486,32 @@ function movedPastThreshold(drag: { startX: number; startY: number }, x: number,
     return Math.hypot(x - drag.startX, y - drag.startY) > DRAG_THRESHOLD;
 }
 
+/** A 60 Hz frame: the rate the easing constants below were tuned at. */
+const FRAME_MS = 1000 / 60;
+
+/**
+ * The share of the gap an ease closes in `dt` ms, given the share it closes
+ * per 60 Hz frame. Applied per frame as it stood, an ease ran twice as fast on
+ * a 120 Hz screen and four times as fast on a 240 Hz one.
+ */
+function easeOver(perFrame: number, dt: number): number {
+    return 1 - Math.pow(1 - perFrame, dt / FRAME_MS);
+}
+
 /** One frame of spring-back towards the allowed range; a no-op inside it. */
-function settlePan(pan: number, limit: number): number {
+function settlePan(pan: number, limit: number, dt: number): number {
     const inRange = Math.max(-limit, Math.min(limit, pan));
     const excess = pan - inRange;
-    return Math.abs(excess) < 0.5 ? inRange : inRange + excess * 0.82;
+    return Math.abs(excess) < 0.5 ? inRange : inRange + excess * (1 - easeOver(0.18, dt));
 }
+
+/**
+ * Zoom per pixel of wheel travel, as an exponent so a notch in and a notch
+ * out land back where they started. A 100 px mouse notch is ~7%.
+ */
+const WHEEL_ZOOM_PER_PX = 0.0007;
+/** One wheel event moves at most this far, so a free-spinning wheel cannot leap. */
+const WHEEL_MAX_PX = 240;
 
 const NO_HIT = { code: null as string | null, dotKey: null as string | null };
 
@@ -792,7 +812,7 @@ export function DotMatrixGlobe({
 
         // With reduced motion every easing lands in one step.
         const reduced = reducedMotionRef.current;
-        const step = reduced ? 1 : 0.08;
+        const step = reduced ? 1 : easeOver(0.08, dt);
         const gl = glRef.current;
         let spinning = false;
 
@@ -825,7 +845,7 @@ export function DotMatrixGlobe({
 
                 // Spring back latitude offset towards 0 gently, on the same ramp
                 if (Math.abs(drag.offsetLat) > 0.001) {
-                    drag.offsetLat -= drag.offsetLat * 0.015 * ease;
+                    drag.offsetLat -= drag.offsetLat * easeOver(0.015 * ease, dt);
                 } else {
                     drag.offsetLat = 0;
                 }
@@ -877,7 +897,7 @@ export function DotMatrixGlobe({
 
         // Smooth zoom interpolation with cursor-centered pan correction
         const prevZoom = drag.zoom;
-        drag.zoom += (drag.targetZoom - drag.zoom) * (reduced ? 1 : 0.1);
+        drag.zoom += (drag.targetZoom - drag.zoom) * (reduced ? 1 : easeOver(0.1, dt));
         // Land on the target rather than creep at it for ever, which would
         // keep the loop awake.
         if (Math.abs(drag.targetZoom - drag.zoom) < 0.0005) drag.zoom = drag.targetZoom;
@@ -924,8 +944,8 @@ export function DotMatrixGlobe({
                 drag.panX = Math.max(-hardX, Math.min(hardX, drag.panX));
                 drag.panY = Math.max(-hardY, Math.min(hardY, drag.panY));
             } else if (drag.targetPanXNorm === null && drag.targetPanYNorm === null) {
-                drag.panX = settlePan(drag.panX, maxPanX);
-                drag.panY = settlePan(drag.panY, maxPanY);
+                drag.panX = settlePan(drag.panX, maxPanX, dt);
+                drag.panY = settlePan(drag.panY, maxPanY, dt);
                 panSettled = Math.abs(drag.panX) <= maxPanX && Math.abs(drag.panY) <= maxPanY;
             }
         }
@@ -1322,9 +1342,11 @@ export function DotMatrixGlobe({
             dragRef.current.lastInteractionTime = performance.now();
             releaseTargets(dragRef.current);
 
-            const zoomDelta = e.deltaY * -0.001;
+            // Lines (Firefox) and pages arrive as counts, not pixels.
+            const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 800 : 1;
+            const px = Math.max(-WHEEL_MAX_PX, Math.min(WHEEL_MAX_PX, e.deltaY * unit));
             const minZ = mode === '2d' ? 1.0 : 0.98;
-            dragRef.current.targetZoom = Math.max(minZ, Math.min(10, dragRef.current.targetZoom + zoomDelta * dragRef.current.targetZoom));
+            dragRef.current.targetZoom = Math.max(minZ, Math.min(10, dragRef.current.targetZoom * Math.exp(-px * WHEEL_ZOOM_PER_PX)));
 
             // Store cursor position for cursor-centered zooming (applied per-frame in draw())
             if (mode === '2d' && canvasRef.current) {

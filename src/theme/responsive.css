@@ -367,9 +367,14 @@ html[data-wide-mode="centered"] {
     gap: 2rem;
     align-items: start;
   }
-  html:not([data-wide-mode="centered"]) .travel-sidebar-col {
-    flex: 0 0 26rem;
-    max-width: 26rem;
+}
+
+/* Travel: the list keeps a fixed track and the map takes the rest. Capping the
+   list item instead left its 30% track full width, an empty band beside it.
+   The height guard keeps the stacked layout Index.css gives short windows. */
+@media (min-width: 2200px) and (min-height: 600px) {
+  html:not([data-wide-mode="centered"]) .travel-layout {
+    grid-template-columns: 26rem minmax(0, 1fr);
   }
 }
 
