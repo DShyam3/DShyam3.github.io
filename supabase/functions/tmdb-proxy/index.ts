@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
 import { addressBlock, clientAddress } from '../_shared/client-address.ts'
+import { recordApiUsage } from '../_shared/api-usage.ts'
 
 const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY')
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
@@ -246,6 +247,7 @@ function cacheControlFor(endpoint: string): string {
 }
 
 serve(async (req) => {
+    const startedAt = Date.now()
     const corsHeaders = buildCorsHeaders(req)
 
     // Handle CORS
@@ -253,7 +255,16 @@ serve(async (req) => {
         return new Response('ok', { headers: corsHeaders })
     }
 
+    const reqEndpoint = new URL(req.url).searchParams.get('endpoint') || 'unknown'
+
     if (await isRateLimited(callerKey(req))) {
+        void recordApiUsage({
+            provider: reqEndpoint === 'wikidata/tv-spinoffs' ? 'wikidata' : 'tmdb',
+            endpoint: reqEndpoint,
+            statusCode: 429,
+            outcome: 'rate_limited',
+            durationMs: Date.now() - startedAt,
+        })
         return new Response(JSON.stringify({ error: 'Too many requests' }), {
             status: 429,
             headers: {
@@ -278,6 +289,13 @@ serve(async (req) => {
         if (endpoint === 'wikidata/tv-spinoffs') {
             const ids = parseSpinoffSeedIds(searchParams.get('ids'))
             const results = await fetchTvSpinoffs(ids)
+            void recordApiUsage({
+                provider: 'wikidata',
+                endpoint: 'tv-spinoffs',
+                statusCode: 200,
+                outcome: 'ok',
+                durationMs: Date.now() - startedAt,
+            })
             return new Response(JSON.stringify({ results }), {
                 status: 200,
                 headers: {
@@ -306,6 +324,12 @@ serve(async (req) => {
 
         const response = await fetch(`${TMDB_BASE_URL}/${endpoint}?${tmdbParams.toString()}`)
         const data = await response.json()
+        void recordApiUsage({
+            provider: 'tmdb',
+            endpoint,
+            statusCode: response.status,
+            durationMs: Date.now() - startedAt,
+        })
 
         // TMDB's own status, not a blanket 200. Its 404 and 429 bodies carry
         // no `id`, and a caller told "OK" reads that as "nothing changed"
@@ -319,6 +343,13 @@ serve(async (req) => {
             },
         })
     } catch (error) {
+        void recordApiUsage({
+            provider: reqEndpoint === 'wikidata/tv-spinoffs' ? 'wikidata' : 'tmdb',
+            endpoint: reqEndpoint,
+            statusCode: 502,
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+        })
         // Detail goes to the function log, not to the caller: `error.message`
         // here can carry the upstream URL, which has the TMDB key in it.
         console.error('tmdb-proxy failed:', error)

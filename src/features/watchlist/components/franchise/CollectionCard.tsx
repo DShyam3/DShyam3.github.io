@@ -21,6 +21,7 @@ export function CollectionCard({
   collection,
   lookup,
   getCollection,
+  prefetchedCollection,
   onOpen,
   onAddToLibrary,
   onSeenIt,
@@ -30,6 +31,7 @@ export function CollectionCard({
   collection: CollectionSummary;
   lookup: LibraryLookup;
   getCollection: (id: number) => Promise<TMDBCollection | null>;
+  prefetchedCollection?: TMDBCollection;
   onOpen: (entry: OrderEntryView) => void;
   onAddToLibrary?: (entry: OrderEntryView) => void;
   onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
@@ -46,10 +48,11 @@ export function CollectionCard({
       if (!found) throw new Error('Collection unavailable');
       return found;
     },
-    enabled: open,
+    enabled: open && !prefetchedCollection,
     staleTime: 24 * 60 * 60 * 1000,
     retry: false,
   });
+  const resolvedCollection = prefetchedCollection ?? query.data;
   const libraryView = useMemo(
     () =>
       buildOrderView(
@@ -67,8 +70,8 @@ export function CollectionCard({
     [collection.films, lookup],
   );
   const view = useMemo(
-    () => (query.data ? buildOrderView(collectionPartsToEntries(query.data.parts ?? [], POSTER_BASE), lookup) : null),
-    [query.data, lookup],
+    () => (resolvedCollection ? buildOrderView(collectionPartsToEntries(resolvedCollection.parts ?? [], POSTER_BASE), lookup) : null),
+    [resolvedCollection, lookup],
   );
   const activeView = view ?? libraryView;
 
@@ -85,8 +88,8 @@ export function CollectionCard({
       open={open}
       onToggle={() => setOpen((value) => !value)}
     >
-      {query.isPending && <p role="status" className="text-xs text-muted-foreground">Checking TMDB for any missing parts…</p>}
-      {query.isError && <SectionFailure>Could not load missing parts from TMDB</SectionFailure>}
+      {!prefetchedCollection && query.isPending && <p role="status" className="text-xs text-muted-foreground">Checking TMDB for any missing parts…</p>}
+      {!prefetchedCollection && query.isError && <SectionFailure>Could not load missing parts from TMDB</SectionFailure>}
       {onSave && view && (
         <Button
           type="button"

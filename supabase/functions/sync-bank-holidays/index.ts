@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { requireAdmin } from '../_shared/require-admin.ts'
 import { isServiceRoleRequest } from '../_shared/service-role.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
+import { recordApiUsage } from '../_shared/api-usage.ts'
 
 const GOV_UK_HOLIDAYS_URL = 'https://www.gov.uk/bank-holidays.json'
 const REGIONS = ['england-and-wales', 'scotland', 'northern-ireland'] as const
@@ -51,7 +52,15 @@ serve(async (req) => {
       }
     }
 
+    const fetchStartedAt = Date.now()
     const res = await fetch(GOV_UK_HOLIDAYS_URL)
+    void recordApiUsage({
+      provider: 'bank_holidays',
+      endpoint: 'bank-holidays.json',
+      source: isServiceRole ? 'cron' : 'edge',
+      statusCode: res.status,
+      durationMs: Date.now() - fetchStartedAt,
+    })
     if (!res.ok) {
       throw new Error(`gov.uk returned ${res.status}`)
     }

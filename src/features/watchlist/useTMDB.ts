@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type {
     TMDBCollection,
@@ -18,6 +19,22 @@ import { seriesStatus } from './discovery-add';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
 const TMDB_BACKDROP_BASE_URL = 'https://image.tmdb.org/t/p/w1280';
+
+/** tmdb-proxy's per-minute limit, which a busy Discover page can reach. */
+export const isRateLimited = (error: unknown) =>
+    error instanceof FunctionsHttpError && (error.context as Response | undefined)?.status === 429;
+/**
+ * Details back an add or "Seen it", so a rate-limited lookup waits for the
+ * proxy's window to roll over instead of failing: 5 s, 20 s, then 40 s. The
+ * window is a fixed clock minute and every retry counts against it, so the
+ * waits add up to more than a minute. Anything else (a title TMDB does not
+ * have) fails at once.
+ */
+const DETAIL_RETRY_DELAYS_MS = [5_000, 20_000, 40_000];
+export const detailRetry = (failures: number, error: unknown) =>
+    failures < DETAIL_RETRY_DELAYS_MS.length && isRateLimited(error);
+export const detailRetryDelay = (failures: number) =>
+    DETAIL_RETRY_DELAYS_MS[Math.min(failures, DETAIL_RETRY_DELAYS_MS.length - 1)];
 
 /** A search row, tagged with which endpoint it came back from. */
 export interface TMDBResult extends TMDBSearchItem {
@@ -63,12 +80,17 @@ export function useTMDB() {
         return `${TMDB_BACKDROP_BASE_URL}${path}`;
     }, []);
 
-    const getMovieDetails = useCallback(async (id: number, type: 'movie' | 'tv') => {
+    /**
+     * `retryRateLimit: false` is for a caller that already waits out the
+     * proxy limit itself (the watch-history import), so the waits don't stack.
+     */
+    const getMovieDetails = useCallback(async (id: number, type: 'movie' | 'tv', options?: { retryRateLimit?: boolean }) => {
         try {
             return await queryClient.fetchQuery({
                 queryKey: ['watchlist', 'tmdb-details', type, id],
                 staleTime: 30 * 60 * 1000,
-                retry: false,
+                retry: options?.retryRateLimit === false ? false : detailRetry,
+                retryDelay: detailRetryDelay,
                 queryFn: async () => {
                     const data = await fetchTMDB<TMDBDetails>(`${type}/${id}`, {
                         append_to_response: `watch/providers,videos,${CREDITS_APPEND[type]}${type === 'tv' ? ',external_ids' : ''}`,
@@ -144,8 +166,12 @@ export function useTMDB() {
         }
     }, [fetchTMDB, queryClient]);
 
-    /** TV spin-off and parent relationships from Wikidata via tmdb-proxy. */
-    const getTvSpinoffs = useCallback(async (tmdbIds: number[]): Promise<WikidataTvSpinoffLink[]> => {
+    /**
+     * TV spin-off and parent relationships from Wikidata via tmdb-proxy; []
+     * on failure unless `throwOnError`, for a caller that caches the answer
+     * and must not keep a failure as "no spin-offs".
+     */
+    const getTvSpinoffs = useCallback(async (tmdbIds: number[], options?: { throwOnError?: boolean }): Promise<WikidataTvSpinoffLink[]> => {
         const clean = [...new Set(tmdbIds.filter((id) => Number.isInteger(id) && id > 0))].sort((a, b) => a - b);
         if (clean.length === 0) return [];
         try {
@@ -162,6 +188,7 @@ export function useTMDB() {
             });
         } catch (error) {
             console.error('Wikidata TV Spin-offs Error:', error);
+            if (options?.throwOnError) throw error;
             return [];
         }
     }, [fetchTMDB, queryClient]);

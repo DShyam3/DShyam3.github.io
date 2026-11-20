@@ -60,6 +60,42 @@ export type Database = {
         }
         Relationships: []
       }
+      api_usage_events: {
+        Row: {
+          duration_ms: number | null
+          endpoint: string
+          id: number
+          occurred_at: string
+          outcome: string
+          provider: string
+          request_count: number
+          source: string
+          status_code: number | null
+        }
+        Insert: {
+          duration_ms?: number | null
+          endpoint: string
+          id?: number
+          occurred_at?: string
+          outcome?: string
+          provider: string
+          request_count?: number
+          source?: string
+          status_code?: number | null
+        }
+        Update: {
+          duration_ms?: number | null
+          endpoint?: string
+          id?: number
+          occurred_at?: string
+          outcome?: string
+          provider?: string
+          request_count?: number
+          source?: string
+          status_code?: number | null
+        }
+        Relationships: []
+      }
       articles: {
         Row: {
           author: string | null
@@ -3126,6 +3162,14 @@ export type Database = {
       check_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number }
         Returns: boolean
+      }
+      get_active_rate_limits: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          count: number
+          key: string
+          window_start: string
+        }[]
       }
       import_watch_history: {
         Args: {

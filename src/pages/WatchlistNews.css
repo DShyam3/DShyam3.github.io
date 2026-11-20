@@ -19,6 +19,22 @@
     overflow-y: auto;
     padding-right: 0.25rem;
   }
+  html:not([data-wide-mode="centered"]) .curated-news-following .news-calendar-pane {
+    max-height: 54%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  html:not([data-wide-mode="centered"]) .curated-news-following .news-calendar-pane .news-pane-your-week {
+    flex: 0 1 auto;
+    min-height: 0;
+  }
+  html:not([data-wide-mode="centered"]) .curated-news-following .news-calendar-pane .your-week-scroll {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
   html:not([data-wide-mode="centered"]) .curated-news-following .watchlist-updates-scroll {
     flex: 1 1 0%;
     min-height: 0;
@@ -35,17 +51,11 @@
 .curated-news .news-pane-heading { margin-bottom: .75rem; }
 .curated-news button { touch-action: manipulation; }
 
-/* An Updates row: poster, then title, line and date stacked beside it; the
-   platform column is hidden, the badge already sits in the line. */
 .curated-news .news-update-row { min-height: 4.5rem; }
-.news-update-row > :first-child { width: 44px; grid-row: 1 / 4; }
-.news-update-row > span:nth-child(2), .news-update-row > span:nth-child(3) { white-space: normal; overflow-wrap: anywhere; }
-.news-update-row > span:nth-child(4) { display: none; }
-.news-update-row > span:last-child { grid-column: 2; grid-row: 3; justify-self: start; text-align: left; }
 
 /* Updates: one column, two once there is room, so a row's short content
    does not leave the right half of the pane empty. */
-.curated-news .news-updates-grid { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 1.5rem; }
+.curated-news .news-updates-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; column-gap: 1.5rem; }
 .curated-news .news-updates-grid > * { border-bottom: 1px solid hsl(var(--border) / .5); }
 @media (min-width: 1024px) {
   .curated-news .news-updates-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

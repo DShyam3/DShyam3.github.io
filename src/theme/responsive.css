@@ -286,6 +286,28 @@ html[data-display="larger"] .app-shell[data-section="watchlist"] .card-grid { --
   .schedule-card-actions { margin-left: auto; }
 }
 
+/* Your Week's 7-day grid follows the calendar container's own width rather
+   than the viewport's, so sitting in the narrower right column of the
+   ultrawide News layout falls back to the horizontal agenda list instead of
+   squishing seven columns to ~100px each. */
+.your-week-container { container-type: inline-size; }
+@container (min-width: 68rem) {
+  .news-agenda-week {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .news-agenda-day {
+    display: block;
+  }
+  .news-agenda-day-head {
+    margin-bottom: 0.5rem;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+}
+
 /* From 1024px the holiday tracker sits beside the pay table, narrower than a
    phone, so its header and leave tiles follow the card's width rather than the
    viewport's: four tiles side by side need about 26rem before "Allowance" runs

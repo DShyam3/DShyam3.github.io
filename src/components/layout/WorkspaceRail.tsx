@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Columns3, Monitor, Terminal, Type } from 'lucide-react';
+import { Activity, Columns3, Monitor, Terminal, Type } from 'lucide-react';
 import { useSiteNavLinks } from './navLinks';
+import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 import { useDisplayMode } from '@/contexts/DisplayModeContext';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -8,9 +9,11 @@ import { cn } from '@/lib/utils';
 
 export function WorkspaceRail() {
   const links = useSiteNavLinks();
+  const { isAdmin } = useAuth();
   const location = useLocation();
   const { setCommandOpen } = useWorkspaceInspector();
   const { largerDisplay, toggleDisplaySize, wideMode, toggleWideMode } = useDisplayMode();
+  const devActive = location.pathname === '/dev' || location.pathname.startsWith('/dev/');
 
   return (
     <aside
@@ -70,6 +73,28 @@ export function WorkspaceRail() {
       </div>
 
       <div className="mt-4 pt-3 border-t border-border/50 space-y-2">
+        {isAdmin && (
+          <Link
+            to="/dev"
+            data-section="dev"
+            aria-current={devActive ? 'page' : undefined}
+            className={cn(
+              'w-full flex items-center justify-between gap-2 rounded-xl border px-2.5 py-2 text-xs transition-colors',
+              devActive
+                ? 'border-primary/40 bg-primary/10 text-foreground font-medium'
+                : 'border-border/60 bg-background/60 text-muted-foreground hover:text-foreground hover:border-primary/40',
+            )}
+          >
+            <span className="flex items-center gap-1.5 min-w-0 truncate">
+              <Activity className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
+              <DotMatrixText text="Dev" size="ui" wrap={false} />
+            </span>
+            {devActive ? (
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+            ) : null}
+          </Link>
+        )}
+
         <button
           type="button"
           onClick={toggleDisplaySize}

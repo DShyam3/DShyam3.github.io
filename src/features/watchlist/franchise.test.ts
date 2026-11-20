@@ -8,6 +8,8 @@ import {
   entryState,
   hasWatchGap,
   libraryLookup,
+  newestAdded,
+  orderByNewestAdded,
   sortByRelease,
   tvFranchisesFromLinks,
   type LibraryLookup,
@@ -290,11 +292,54 @@ describe('customFranchisesFromLibrary', () => {
         franchise: 'Sheridan Universe',
         created_at: '2020-01-01T00:00:00Z',
       },
+      {
+        id: '4',
+        title: 'Lone Wolf',
+        category: 'Movies',
+        tmdb_id: 404,
+        franchise: 'Singleton Franchise',
+        created_at: '2021-01-01T00:00:00Z',
+      },
     ];
 
     const groups = customFranchisesFromLibrary(items, libraryLookup(items, new Date('2026-11-20T00:00:00Z')));
     expect(groups).toHaveLength(1);
     expect(groups[0].name).toBe('Sheridan Universe');
     expect(groups[0].view.entries.map((e) => e.title)).toEqual(['Wind River', 'Tulsa King']);
+  });
+});
+
+describe('franchise ordering by newest add', () => {
+  const group = (name: string, media: 'movie' | 'tv', ids: string[]) => ({ name, media, added: newestAdded(ids.map((id) => ({ id }))) });
+
+  it('reads the newest row id, -1 with none', () => {
+    expect(newestAdded([{ id: '2544' }, { id: '2558' }, { id: '1400' }])).toBe(2558);
+    expect(newestAdded([])).toBe(-1);
+    expect(newestAdded([{ id: 'not-a-number' }])).toBe(-1);
+  });
+
+  it('puts the collection added to most recently first, whatever its release year', () => {
+    // Avengers has a 2027 entry; Harry Potter was added last.
+    const ordered = orderByNewestAdded([
+      group('The Avengers Collection', 'movie', ['2380', '2514']),
+      group('Harry Potter Collection', 'movie', ['2544', '2558']),
+      group('The Hangover Collection', 'movie', ['2304', '2539']),
+    ]);
+    expect(ordered.map((g) => g.name)).toEqual(['Harry Potter Collection', 'The Hangover Collection', 'The Avengers Collection']);
+  });
+
+  it('lets films and series take turns, each newest first, since their ids are not comparable', () => {
+    const ordered = orderByNewestAdded([
+      group('Old Spin-off', 'tv', ['100']),
+      group('Older Films', 'movie', ['1300']),
+      group('New Spin-off', 'tv', ['600']),
+      group('Newer Films', 'movie', ['2500']),
+      group('Oldest Films', 'movie', ['1290']),
+    ]);
+    expect(ordered.map((g) => g.name)).toEqual(['Newer Films', 'New Spin-off', 'Older Films', 'Old Spin-off', 'Oldest Films']);
+  });
+
+  it('breaks a tie by name', () => {
+    expect(orderByNewestAdded([group('B', 'movie', ['5']), group('A', 'movie', ['5'])]).map((g) => g.name)).toEqual(['A', 'B']);
   });
 });

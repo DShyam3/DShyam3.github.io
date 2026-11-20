@@ -59,6 +59,7 @@ const YearInHours = lazy(() => import('./pages/YearInHours'));
 const Watchlist = lazy(() => import('./features/watchlist/WatchlistPage'));
 const WatchlistDiary = lazy(() => import('./pages/WatchlistDiary'));
 const WatchlistFranchises = lazy(() => import('./pages/WatchlistFranchises'));
+const Dev = lazy(() => import('./pages/Dev'));
 
 /** Invisible component that warms every page's code and rows on idle (see useSiteWarmup). */
 function SiteWarmup() {
@@ -181,6 +182,7 @@ const App = () => {
                   <Route path="/photos" element={<Photos />} />
                   <Route path="/articles" element={<Articles />} />
                   <Route path="/recipes" element={<Recipes />} />
+                  <Route path="/dev" element={<Dev />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>

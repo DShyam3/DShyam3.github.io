@@ -6,9 +6,11 @@ import {
     getHexagonEdgeLengthAvg,
     gridDisk,
     latLngToCell,
+    uncompactCells,
     UNITS,
 } from 'h3-js';
-import { projectEqualEarth, type EqualEarthPoint } from '@/lib/equalEarth';
+import { projectEqualEarth } from '@/lib/equalEarth';
+import type { FlatPoint, MapProjection, MapProjectionId } from '@/lib/mapProjections';
 
 export interface UnitVector {
     ux: number;
@@ -24,13 +26,22 @@ export interface HexCell {
     lat: number;
     lon: number;
     center3d: UnitVector;
-    center2d: EqualEarthPoint;
+    center2d: FlatPoint;
     verts3d: UnitVector[];
-    verts2d: EqualEarthPoint[];
+    verts2d: FlatPoint[];
     crossesAntimeridian: boolean;
+    /**
+     * Below this morph progress the cell is not drawn; 0 when it always is.
+     * One that straddles the antimeridian would smear across the flat map;
+     * one past the projection's latitudes has its flat side squashed onto the
+     * cut, so it waits until the globe has nearly formed.
+     */
+    hideBelow: number;
 }
 
 export interface HexBorderSegment {
+    /** The cell this edge was found from, so a patch of cells can take its own borders. */
+    from: string;
     p1: UnitVector;
     p2: UnitVector;
     fx1: number;
@@ -38,33 +49,82 @@ export interface HexBorderSegment {
     fx2: number;
     fy2: number;
     crossesAntimeridian: boolean;
+    /** As for a cell. */
+    hideBelow: number;
+}
+
+/** `hideBelow` for a cell that straddles the antimeridian. */
+export const HIDE_ACROSS_ANTIMERIDIAN = 0.5;
+/** `hideBelow` for a cell past the projection's latitudes (Antarctica on Mercator). */
+export const HIDE_BEYOND_CUT = 0.85;
+
+/**
+ * A block of cells as the GPU takes them: flat arrays rather than an object
+ * per cell, which at level 5 would be a million objects. The base level is
+ * turned into one of these; the finer levels are built as these directly.
+ */
+export interface HexPatchData {
+    count: number;
+    /** Unit vectors, 3 per cell. */
+    centre3: Float32Array;
+    /** Flat-map positions in the patch's projection, 2 per cell. */
+    centre2: Float32Array;
+    /** Where each cell's corners start in `corner3` / `corner2`, count + 1 entries. */
+    cornerStart: Uint32Array;
+    corner3: Float32Array;
+    corner2: Float32Array;
+    /** `hideBelow` per cell. */
+    hide: Float32Array;
+    borderCount: number;
+    /** Both ends' unit vectors, 6 per segment. */
+    border3: Float32Array;
+    /** Both ends on the flat map, 4 per segment. */
+    border2: Float32Array;
+    borderHide: Float32Array;
 }
 
 export const BUCKET_COLS = 16;
 export const BUCKET_ROWS = 8;
 
 export interface HexTierData {
-    res: 3 | 4;
+    res: 3;
+    /** The projection `center2d`, `verts2d` and the border ends are in. */
+    projection: MapProjectionId;
     cells: HexCell[];
     cellCodes: Map<string, string>;
     /** Where each land cell sits in `cells`. */
     cellIndexByH3: Map<string, number>;
     borderSegments: HexBorderSegment[];
     countryCentroids: Map<string, { lon: number; lat: number }>;
-    /** 2D Equal Earth spatial buckets (`by * BUCKET_COLS + bx`) for fast viewport culling. */
+    /** Flat-map spatial buckets (`by * BUCKET_COLS + bx`) for fast viewport culling. */
     cellBuckets: HexCell[][];
     borderBuckets: HexBorderSegment[][];
 }
 
+/** A level's file: each country's land cells, compacted (see scripts/generate-hex-map.mjs). */
+export interface HexLevelJson {
+    res: number;
+    countries: Record<string, string[]>;
+}
+
+/** Every land cell of a level file, with its country. */
 export interface RawHexMapJson {
-    res: 3 | 4;
+    res: 3;
     cells: [string, string][];
 }
 
-const tierCache = new Map<3 | 4, HexTierData>();
-const tierPromises = new Map<3 | 4, Promise<HexTierData>>();
+export function expandLevel(json: HexLevelJson): [string, string][] {
+    const cells: [string, string][] = [];
+    for (const code of Object.keys(json.countries)) {
+        for (const cell of uncompactCells(json.countries[code], json.res)) cells.push([cell, code]);
+    }
+    return cells;
+}
 
-function degToUnit(latDeg: number, lonDeg: number): { lat: number; lon: number; unit: UnitVector } {
+const tierCache = new Map<3, HexTierData>();
+const tierPromises = new Map<3, Promise<HexTierData>>();
+
+export function degToUnit(latDeg: number, lonDeg: number): { lat: number; lon: number; unit: UnitVector } {
     const lat = (latDeg * Math.PI) / 180;
     const lon = (lonDeg * Math.PI) / 180;
     return {
@@ -90,7 +150,7 @@ function bucketIndex(nx: number, ny: number): number {
  * throttles them to one a second, which would stretch an idle warm-up to
  * several seconds.
  */
-function yieldToMain(): Promise<void> {
+export function yieldToMain(): Promise<void> {
     return new Promise((resolve) => {
         const channel = new MessageChannel();
         channel.port1.onmessage = () => {
@@ -132,7 +192,7 @@ export async function buildHexTier(raw: RawHexMapJson, chunked = false): Promise
 
         const boundary = cellToBoundary(h3Index);
         const verts3d: UnitVector[] = [];
-        const verts2d: EqualEarthPoint[] = [];
+        const verts2d: FlatPoint[] = [];
         let minLon = Infinity;
         let maxLon = -Infinity;
 
@@ -155,6 +215,7 @@ export async function buildHexTier(raw: RawHexMapJson, chunked = false): Promise
             verts3d,
             verts2d,
             crossesAntimeridian: maxLon - minLon > Math.PI,
+            hideBelow: maxLon - minLon > Math.PI ? HIDE_ACROSS_ANTIMERIDIAN : 0,
         };
         cellIndexByH3.set(h3Index, cell.index);
         cells.push(cell);
@@ -208,6 +269,7 @@ export async function buildHexTier(raw: RawHexMapJson, chunked = false): Promise
                 const f1 = projectEqualEarth(a.lon, a.lat);
                 const f2 = projectEqualEarth(b.lon, b.lat);
                 const seg: HexBorderSegment = {
+                    from: h3Index,
                     p1: a.unit,
                     p2: b.unit,
                     fx1: f1.nx,
@@ -215,6 +277,7 @@ export async function buildHexTier(raw: RawHexMapJson, chunked = false): Promise
                     fx2: f2.nx,
                     fy2: f2.ny,
                     crossesAntimeridian: Math.abs(a.lon - b.lon) > Math.PI,
+                    hideBelow: Math.abs(a.lon - b.lon) > Math.PI ? HIDE_ACROSS_ANTIMERIDIAN : 0,
                 };
                 borderSegments.push(seg);
                 if (!seg.crossesAntimeridian) {
@@ -226,21 +289,136 @@ export async function buildHexTier(raw: RawHexMapJson, chunked = false): Promise
         }
     }
 
-    return { res: raw.res, cells, cellCodes, cellIndexByH3, borderSegments, countryCentroids, cellBuckets, borderBuckets };
+    return {
+        res: raw.res,
+        // Built in Equal Earth whatever the default; `projectTier` makes the others.
+        projection: 'equal-earth',
+        cells,
+        cellCodes,
+        cellIndexByH3,
+        borderSegments,
+        countryCentroids,
+        cellBuckets,
+        borderBuckets,
+    };
 }
 
-export async function loadHexTier(res: 3 | 4): Promise<HexTierData> {
+function projectUnit(projection: MapProjection, p: UnitVector): FlatPoint {
+    return projection.project(Math.atan2(p.ux, p.uz), Math.asin(Math.max(-1, Math.min(1, -p.uy))));
+}
+
+function hideBelowIn(projection: MapProjection, crossesAntimeridian: boolean, points: UnitVector[]): number {
+    if (beyondLatitudes(projection, points)) return HIDE_BEYOND_CUT;
+    return crossesAntimeridian ? HIDE_ACROSS_ANTIMERIDIAN : 0;
+}
+
+/**
+ * The base level's cells and borders as one patch for the GPU: all of them,
+ * or the cells and border segments at the given indices.
+ */
+export function tierPatchData(tier: HexTierData, indices?: ArrayLike<number>, segmentIndices?: ArrayLike<number>): HexPatchData {
+    const picked = indices ? Array.from(indices, (i) => tier.cells[i]) : tier.cells;
+    const count = picked.length;
+    let corners = 0;
+    for (const cell of picked) corners += cell.verts3d.length;
+    const centre3 = new Float32Array(count * 3);
+    const centre2 = new Float32Array(count * 2);
+    const cornerStart = new Uint32Array(count + 1);
+    const corner3 = new Float32Array(corners * 3);
+    const corner2 = new Float32Array(corners * 2);
+    const hide = new Float32Array(count);
+    let k = 0;
+    picked.forEach((cell, i) => {
+        centre3.set([cell.center3d.ux, cell.center3d.uy, cell.center3d.uz], i * 3);
+        centre2.set([cell.center2d.nx, cell.center2d.ny], i * 2);
+        hide[i] = cell.hideBelow;
+        cornerStart[i] = k;
+        for (let j = 0; j < cell.verts3d.length; j++, k++) {
+            const v = cell.verts3d[j];
+            corner3.set([v.ux, v.uy, v.uz], k * 3);
+            corner2.set([cell.verts2d[j].nx, cell.verts2d[j].ny], k * 2);
+        }
+    });
+    cornerStart[count] = k;
+    const segments = indices ? Array.from(segmentIndices ?? [], (i) => tier.borderSegments[i]) : tier.borderSegments;
+    const border3 = new Float32Array(segments.length * 6);
+    const border2 = new Float32Array(segments.length * 4);
+    const borderHide = new Float32Array(segments.length);
+    segments.forEach((seg, i) => {
+        border3.set([seg.p1.ux, seg.p1.uy, seg.p1.uz, seg.p2.ux, seg.p2.uy, seg.p2.uz], i * 6);
+        border2.set([seg.fx1, seg.fy1, seg.fx2, seg.fy2], i * 4);
+        borderHide[i] = seg.hideBelow;
+    });
+    return { count, centre3, centre2, cornerStart, corner3, corner2, hide, borderCount: segments.length, border3, border2, borderHide };
+}
+
+function beyondLatitudes(projection: MapProjection, points: UnitVector[]): boolean {
+    // -uy is sin(lat), so the test needs no inverse trig.
+    const sinMin = Math.sin(projection.minLat);
+    const sinMax = Math.sin(projection.maxLat);
+    return points.some((p) => -p.uy < sinMin || -p.uy > sinMax);
+}
+
+const projectedTiers = new WeakMap<HexTierData, Map<MapProjectionId, HexTierData>>();
+
+/**
+ * `tier` with its flat-map positions in `projection`. The cells keep their
+ * indices, codes and globe positions, so styles, picking and the selection
+ * carry over; only the 2D side and the buckets are new. Built once per
+ * projection, in a few milliseconds.
+ */
+export function projectTier(tier: HexTierData, projection: MapProjection): HexTierData {
+    if (tier.projection === projection.id) return tier;
+    let byId = projectedTiers.get(tier);
+    if (!byId) {
+        byId = new Map();
+        projectedTiers.set(tier, byId);
+    }
+    const cached = byId.get(projection.id);
+    if (cached) return cached;
+
+    const totalBuckets = BUCKET_COLS * BUCKET_ROWS;
+    const cellBuckets: HexCell[][] = Array.from({ length: totalBuckets }, () => []);
+    const borderBuckets: HexBorderSegment[][] = Array.from({ length: totalBuckets }, () => []);
+
+    const cells = tier.cells.map((cell): HexCell => {
+        const hideBelow = hideBelowIn(projection, cell.crossesAntimeridian, cell.verts3d);
+        const projected: HexCell = {
+            ...cell,
+            center2d: projectUnit(projection, cell.center3d),
+            verts2d: cell.verts3d.map((v) => projectUnit(projection, v)),
+            hideBelow,
+        };
+        if (hideBelow === 0) cellBuckets[bucketIndex(projected.center2d.nx, projected.center2d.ny)].push(projected);
+        return projected;
+    });
+
+    const borderSegments = tier.borderSegments.map((seg): HexBorderSegment => {
+        const f1 = projectUnit(projection, seg.p1);
+        const f2 = projectUnit(projection, seg.p2);
+        const hideBelow = hideBelowIn(projection, seg.crossesAntimeridian, [seg.p1, seg.p2]);
+        const projected: HexBorderSegment = { ...seg, fx1: f1.nx, fy1: f1.ny, fx2: f2.nx, fy2: f2.ny, hideBelow };
+        if (hideBelow === 0) borderBuckets[bucketIndex((f1.nx + f2.nx) * 0.5, (f1.ny + f2.ny) * 0.5)].push(projected);
+        return projected;
+    });
+
+    const projected: HexTierData = { ...tier, projection: projection.id, cells, borderSegments, cellBuckets, borderBuckets };
+    byId.set(projection.id, projected);
+    return projected;
+}
+
+export async function loadHexTier(res: 3): Promise<HexTierData> {
     const cached = tierCache.get(res);
     if (cached) return cached;
 
     let promise = tierPromises.get(res);
     if (!promise) {
         promise = (async () => {
-            const response = await fetch(`/data/hex-world-map-r${res}.json`);
+            const response = await fetch(`/data/hex-map-v2-r${res}.json`);
             if (!response.ok) throw new Error(`Hex map tier r${res} unavailable`);
-            const data = (await response.json()) as RawHexMapJson;
-            if (!Array.isArray(data.cells)) throw new Error(`Invalid hex map data r${res}`);
-            const built = await buildHexTier(data, true);
+            const data = (await response.json()) as HexLevelJson;
+            if (data.res !== res || typeof data.countries !== 'object') throw new Error(`Invalid hex map data r${res}`);
+            const built = await buildHexTier({ res, cells: expandLevel(data) }, true);
             tierCache.set(res, built);
             return built;
         })().catch((err) => {
@@ -291,7 +469,7 @@ export function resolveCityHex(
 const EARTH_RADIUS_KM = 6371.007180918475;
 
 /** Angle between neighbouring cell centres at `res`, in radians. */
-export function hexSpacingRad(res: 3 | 4): number {
+export function hexSpacingRad(res: number): number {
     return (getHexagonEdgeLengthAvg(res, UNITS.km) / EARTH_RADIUS_KM) * Math.sqrt(3);
 }
 

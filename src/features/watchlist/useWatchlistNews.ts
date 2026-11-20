@@ -437,13 +437,6 @@ export function useWatchlistEvents(windowDays = WATCHLIST_EVENTS_WINDOW_DAYS) {
 // reader remembered a constant that nothing enforced.
 const ANNOUNCEMENT_WINDOW_DAYS = 7;
 
-// PostgREST stops at 1,000 rows whether asked to or not, and a show's whole
-// back catalogue lands at once when it is first added -- as the newest rows,
-// so any cut falls on older, genuine announcements. No order makes the cut
-// harmless; a capped result is reported as partial instead of passed off as
-// complete.
-const ANNOUNCEMENT_ROW_CAP = 1000;
-
 const NO_ANNOUNCEMENTS: AnnouncementCandidate[] = [];
 const NO_FIRST_SEEN = new Map<number, string | null>();
 
@@ -454,21 +447,39 @@ export const recentAnnouncementsQuery = (windowDays = ANNOUNCEMENT_WINDOW_DAYS) 
       try {
         const cutoff = new Date(Date.now() - windowDays * 86_400_000).toISOString();
 
+        // A show's whole back catalogue lands at once when it is first added,
+        // so 30 days of inserted episodes easily crosses PostgREST's 1,000-row
+        // cap. Page both tables through selectAllPages so older genuine
+        // announcements are never cut off or flagged as partial failures.
         const [seasonsResult, episodesResult] = await Promise.all([
-          supabase
-            .from('tv_show_seasons')
-            .select('id, tv_show_id, season_number, created_at, tv_shows!inner(title, poster, platform, library_state)')
-            .gt('created_at', cutoff)
-            .order('created_at', { ascending: false })
-            .limit(ANNOUNCEMENT_ROW_CAP),
-          supabase
-            .from('tv_show_episodes')
-            .select(
-              'id, episode_number, title, release_date, created_at, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform, library_state))',
-            )
-            .gt('created_at', cutoff)
-            .order('created_at', { ascending: false })
-            .limit(ANNOUNCEMENT_ROW_CAP),
+          selectAllPages(
+            (from, to) =>
+              supabase
+                .from('tv_show_seasons')
+                .select(
+                  'id, tv_show_id, season_number, created_at, tv_shows!inner(title, poster, platform, library_state)',
+                  { count: 'exact' },
+                )
+                .gt('created_at', cutoff)
+                .order('created_at', { ascending: false })
+                .order('id', { ascending: false })
+                .range(from, to),
+            (row) => String(row.id),
+          ),
+          selectAllPages(
+            (from, to) =>
+              supabase
+                .from('tv_show_episodes')
+                .select(
+                  'id, episode_number, title, release_date, created_at, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform, library_state))',
+                  { count: 'exact' },
+                )
+                .gt('created_at', cutoff)
+                .order('created_at', { ascending: false })
+                .order('id', { ascending: false })
+                .range(from, to),
+            (row) => String(row.id),
+          ),
         ]);
 
         if (seasonsResult.error) throw seasonsResult.error;
@@ -527,10 +538,6 @@ export const recentAnnouncementsQuery = (windowDays = ANNOUNCEMENT_WINDOW_DAYS) 
         return {
           announcements: candidates,
           firstSeenByShow: computeFirstSeenAt(allSeasonsResult.data || []),
-          // Partial, not failed: the rows are real but the cap cut some off.
-          capped:
-            (seasonsResult.data?.length ?? 0) >= ANNOUNCEMENT_ROW_CAP ||
-            (episodesResult.data?.length ?? 0) >= ANNOUNCEMENT_ROW_CAP,
         };
       } catch (error) {
         console.error('Error fetching watchlist announcements:', error);
@@ -555,7 +562,7 @@ export function useRecentAnnouncements(windowDays = ANNOUNCEMENT_WINDOW_DAYS) {
     announcements: data?.announcements ?? NO_ANNOUNCEMENTS,
     firstSeenByShow: data?.firstSeenByShow ?? NO_FIRST_SEEN,
     loading: isPending,
-    failed: isError || (data?.capped ?? false),
+    failed: isError,
   };
 }
 

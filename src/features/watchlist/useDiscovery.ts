@@ -8,6 +8,7 @@ import {
   SEEDS_PER_PAGE,
   curateDiscovery,
   discoveryKey,
+  dismissalHandover,
   discoverySeeds,
   interleaveBySeed,
   interleaveUpcoming,
@@ -23,6 +24,8 @@ import {
   collectionsFromLibrary,
   hasWatchGap,
   libraryLookup,
+  newestAdded,
+  orderByNewestAdded,
   tvFranchisesFromLinks,
   type OrderEntryInput,
   type OrderView,
@@ -121,9 +124,29 @@ export interface DiscoveryFranchiseGroup {
   view: OrderView;
   missingCount: number;
   hasGap: boolean;
+  /** Newest library row id in the franchise; see `newestAdded`. */
+  added: number;
 }
 
-const COLLECTIONS_PER_BATCH = 8;
+// tmdb-proxy allows 60 calls a minute per visitor. Opening Discover costs 25
+// (8 suggestion seeds, 2 coming soon, 2 likely seen, 12 collections, 1
+// spin-off lookup); the automatic top-ups below add at most 26 more (12
+// collections, 8 suggestions, 4 coming soon, 2 likely seen), once per visit
+// to Discover. That leaves 9 for the owner's clicks: an add or "Seen it" on a
+// film is one call, on a series one plus one per season, which a long series
+// can outrun; the details call waits out the limit (useTMDB `detailRetry`),
+// the season calls do not. Franchises lead the page, so they get the largest
+// share. Show more buttons are the owner's own call and are not budgeted.
+const COLLECTIONS_PER_BATCH = 12;
+const MAX_UPCOMING_PAGES = 5;
+const AUTO_UPCOMING_PAGES = 2;
+const LIKELY_SEEN_ROTATION_WEEKS = 15;
+const TARGET_RECOMMENDATIONS = 12;
+const TARGET_LIKELY_SEEN = 12;
+const TARGET_FRANCHISES = 6;
+const AUTO_PAGE_CAP = 1;
+const AUTO_COLLECTION_BATCH_CAP = 1;
+const AUTO_LIKELY_SEEN_PAGES = 1;
 
 export function useDiscovery(type: LibraryType) {
   const { watchlist, favourites, loading, ratingsStatus } = useWatchlist();
@@ -158,34 +181,31 @@ export function useDiscovery(type: LibraryType) {
 
   // Once the owner's table is reachable, this browser's own dismissals move
   // into it, so a reset on one device clears them on every device.
+  // A key stays in the browser copy, and so stays hidden, until a read of the
+  // table has it; see `dismissalHandover` for why a write alone is not enough.
   const remoteKeys = remote.data;
+  const sendingRef = useRef(new Set<string>());
   useEffect(() => {
     if (!ownerSynced || localDismissed.size === 0) return;
-    // Only the keys seen now are handed over; one dismissed while the write
-    // is in flight stays local until the next pass sends it.
-    const handed = new Set(localDismissed);
-    const pending = [...handed].filter((key) => !remoteKeys?.includes(key));
-    const rows = pending.map((key) => {
-      const [media, id] = key.split(':');
-      return { media, tmdb_id: Number(id) };
-    }).filter((row) => (row.media === 'movie' || row.media === 'tv') && Number.isInteger(row.tmdb_id) && row.tmdb_id > 0);
-    const releaseLocal = () => {
+    const { release, send } = dismissalHandover(localDismissed, remoteKeys, sendingRef.current);
+    if (release.size > 0) {
       setLocalDismissed((prev) => {
-        const next = new Set([...prev].filter((key) => !handed.has(key)));
+        const next = new Set([...prev].filter((key) => !release.has(key)));
         if (next.size > 0) writeDismissed(next);
         else { try { localStorage.removeItem(DISMISSED_KEY); } catch { /* Still works for this visit. */ } }
         return next;
       });
-    };
-    if (rows.length === 0) { releaseLocal(); return; }
-    void supabase.from('watchlist_dismissed_suggestions').upsert(rows, { onConflict: 'media,tmdb_id', ignoreDuplicates: true })
+    }
+    if (send.length === 0) return;
+    const keys = send.map((row) => discoveryKey(row.media, row.tmdb_id));
+    for (const key of keys) sendingRef.current.add(key);
+    void supabase.from('watchlist_dismissed_suggestions').upsert(send, { onConflict: 'media,tmdb_id', ignoreDuplicates: true })
       .then(({ error }) => {
-        if (error) return;
-        // Into the shared copy first, so the tile does not come back while
-        // the table is re-read.
-        const sent = rows.map((row) => discoveryKey(row.media as DiscoveryMedia, row.tmdb_id));
-        queryClient.setQueryData<string[]>(DISMISSED_QUERY_KEY, (old) => [...new Set([...(old ?? []), ...sent])]);
-        releaseLocal();
+        for (const key of keys) sendingRef.current.delete(key);
+        // Re-read, cancelling any read that started before this write; the
+        // next pass releases what the fresh read confirms. On an error the
+        // keys stay in the browser and go on the next visit.
+        if (!error) void queryClient.invalidateQueries({ queryKey: DISMISSED_QUERY_KEY });
       });
   }, [ownerSynced, localDismissed, remoteKeys, queryClient]);
 
@@ -250,15 +270,19 @@ export function useDiscovery(type: LibraryType) {
   const start = today.toLocaleDateString('en-CA');
   const endDate = new Date(today); endDate.setDate(endDate.getDate() + 180);
   const end = endDate.toLocaleDateString('en-CA');
-  const upcoming = useQuery({
+  const upcoming = useInfiniteQuery({
     queryKey: ['watchlist', 'discovery', 'upcoming', start],
     enabled: !loading,
     staleTime: 60 * 60 * 1000,
     retry: false,
-    queryFn: () => load([
-      { endpoint: 'discover/movie', params: { region: 'GB', 'release_date.gte': start, 'release_date.lte': end, with_release_type: '3', sort_by: 'popularity.desc', include_adult: 'false' }, media: 'movie' as const, reason: 'In UK cinemas soon', kind: 'upcoming' as const },
-      { endpoint: 'discover/tv', params: { 'first_air_date.gte': start, 'first_air_date.lte': end, sort_by: 'popularity.desc', include_adult: 'false' }, media: 'tv' as const, reason: 'New series', kind: 'upcoming' as const },
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) => load([
+      { endpoint: 'discover/movie', params: { region: 'GB', 'release_date.gte': start, 'release_date.lte': end, with_release_type: '3', sort_by: 'popularity.desc', include_adult: 'false', page: String(pageParam) }, media: 'movie' as const, reason: 'In UK cinemas soon', kind: 'upcoming' as const },
+      { endpoint: 'discover/tv', params: { 'first_air_date.gte': start, 'first_air_date.lte': end, sort_by: 'popularity.desc', include_adult: 'false', page: String(pageParam) }, media: 'tv' as const, reason: 'New series', kind: 'upcoming' as const },
     ]),
+    getNextPageParam: (_lastPage, _pages, lastParam) => (
+      lastParam < MAX_UPCOMING_PAGES ? lastParam + 1 : undefined
+    ),
   });
 
   const recommendationItems = useMemo(() => {
@@ -277,14 +301,57 @@ export function useDiscovery(type: LibraryType) {
   }, [type, movieRecommendations.data, tvRecommendations.data]);
 
   const upcomingItems = useMemo(
-    () => (upcoming.data?.items ?? []).filter((item) => type === 'all' || item.media === type),
-    [upcoming.data?.items, type],
+    () => (upcoming.data?.pages.flatMap((page) => page.items) ?? []).filter((item) => type === 'all' || item.media === type),
+    [upcoming.data?.pages, type],
   );
+
+  // Rotating pool of widely-watched released titles so "Have you already
+  // watched?" always has familiar films and series to log or dismiss.
+  const likelySeenStartPage = (week % LIKELY_SEEN_ROTATION_WEEKS) + 1;
+  const likelySeenPool = useInfiniteQuery({
+    queryKey: ['watchlist', 'discovery', 'likely-seen-pool', week],
+    enabled: !loading,
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+    initialPageParam: likelySeenStartPage,
+    queryFn: ({ pageParam }) => load([
+      {
+        endpoint: 'discover/movie',
+        params: { 'release_date.lte': start, sort_by: 'vote_count.desc', include_adult: 'false', page: String(pageParam) },
+        media: 'movie' as const,
+        reason: 'Widely watched on TMDB — have you seen this already?',
+        shortReason: 'Widely watched',
+        kind: 'recommendation' as const,
+      },
+      {
+        endpoint: 'discover/tv',
+        params: { 'first_air_date.lte': start, sort_by: 'vote_count.desc', include_adult: 'false', page: String(pageParam) },
+        media: 'tv' as const,
+        reason: 'Widely watched on TMDB — have you seen this already?',
+        shortReason: 'Widely watched',
+        kind: 'recommendation' as const,
+      },
+    ]),
+    getNextPageParam: (_lastPage, pages, lastParam) => (
+      pages.length < LIKELY_SEEN_ROTATION_WEEKS
+        ? (lastParam % LIKELY_SEEN_ROTATION_WEEKS) + 1
+        : undefined
+    ),
+  });
+
+  const likelySeenPoolItems = useMemo(() => {
+    const pages = likelySeenPool.data?.pages ?? [];
+    const items = pages.flatMap((page) => (type === 'all' ? interleaveUpcoming(page.items) : page.items));
+    return items.filter((item) => type === 'all' || item.media === type);
+  }, [likelySeenPool.data?.pages, type]);
 
   // --- "Have you already watched?" grouped franchises & spin-offs ----------
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
   const lookup = useMemo(() => libraryLookup(watchlist, today), [watchlist, week]);
 
+  // Fetched in this order, a batch at a time, so the collection added to most
+  // recently is looked up first. Never by release date: `created_at` on a
+  // library item is its release date.
   const libraryCollections = useMemo(() => {
     return collectionsFromLibrary(
       watchlist.flatMap((item) =>
@@ -303,7 +370,9 @@ export function useDiscovery(type: LibraryType) {
             }]
           : [],
       ),
-    ).sort((a, b) => (b.watched - a.watched) || (b.films.length - a.films.length) || a.name.localeCompare(b.name));
+    )
+      .map((collection) => ({ ...collection, added: newestAdded(collection.films) }))
+      .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name));
   }, [watchlist, isAdmin]);
 
   const activeCollectionIds = useMemo(
@@ -311,15 +380,21 @@ export function useDiscovery(type: LibraryType) {
     [libraryCollections, collectionLimit],
   );
 
-  // Per-collection queries share cache entries with CollectionCard and avoid
-  // re-fetching earlier collections when `collectionLimit` grows.
+  // `getCollection` caches under `['watchlist', 'tmdb-collection', id]`;
+  // using a distinct outer key avoids React Query's same-key fetchQuery deadlock.
   const collectionQueries = useQueries({
     queries: activeCollectionIds.map((collectionId) => ({
-      queryKey: ['watchlist', 'tmdb-collection', collectionId] as const,
+      queryKey: ['watchlist', 'discovery-collection', collectionId] as const,
       enabled: !loading && type !== 'tv',
       staleTime: 24 * 60 * 60 * 1000,
       retry: false,
-      queryFn: () => getCollection(collectionId),
+      // getCollection answers null on failure; thrown, so a rate-limited
+      // lookup is retried on the next visit instead of cached as empty.
+      queryFn: async () => {
+        const collection = await getCollection(collectionId);
+        if (!collection) throw new Error('Collection unavailable');
+        return collection;
+      },
     })),
   });
   const expandedCollectionsData = useMemo(
@@ -346,7 +421,9 @@ export function useDiscovery(type: LibraryType) {
     enabled: !loading && type !== 'movie' && tvSeedIds.length > 0,
     staleTime: 24 * 60 * 60 * 1000,
     retry: false,
-    queryFn: () => getTvSpinoffs(tvSeedIds),
+    // Thrown on failure: this key is persisted, and a failed lookup must not
+    // be kept for a day as "no spin-offs".
+    queryFn: () => getTvSpinoffs(tvSeedIds, { throwOnError: true }),
   });
   const tvFranchiseSummaries = useMemo(
     () => tvFranchisesFromLinks(tvSpinoffs.data ?? [], watchlist, POSTER_BASE),
@@ -359,23 +436,26 @@ export function useDiscovery(type: LibraryType) {
       return inLibrary || !dismissed.has(entry.key);
     });
 
+  // A franchise is two or more titles, and it shows once one of them is in
+  // the library and another is not.
   const franchiseGroups = useMemo((): DiscoveryFranchiseGroup[] => {
     const groups: DiscoveryFranchiseGroup[] = [];
     if (type !== 'tv') {
-      const nameById = new Map(libraryCollections.map((c) => [c.collectionId, c.name]));
+      const byId = new Map(libraryCollections.map((c) => [c.collectionId, c]));
       for (const item of expandedCollectionsData) {
         const filtered = filterDismissedEntries(item.entries);
         const view = buildOrderView(filtered, lookup);
         const missingCount = view.total - view.inLibrary;
-        if (missingCount > 0) {
+        if (view.total >= 2 && missingCount > 0) {
           groups.push({
             key: `collection:${item.collectionId}`,
-            name: nameById.get(item.collectionId) ?? `Collection ${item.collectionId}`,
+            name: byId.get(item.collectionId)?.name ?? `Collection ${item.collectionId}`,
             kind: 'collection',
             media: 'movie',
             view,
             missingCount,
             hasGap: hasWatchGap(view),
+            added: byId.get(item.collectionId)?.added ?? -1,
           });
         }
       }
@@ -385,7 +465,7 @@ export function useDiscovery(type: LibraryType) {
         const filtered = filterDismissedEntries(tvGroup.entries);
         const view = buildOrderView(filtered, lookup);
         const missingCount = view.total - view.inLibrary;
-        if (missingCount > 0) {
+        if (view.total >= 2 && missingCount > 0) {
           groups.push({
             key: `spinoff:${tvGroup.key}`,
             name: tvGroup.name,
@@ -394,18 +474,13 @@ export function useDiscovery(type: LibraryType) {
             view,
             missingCount,
             hasGap: hasWatchGap(view),
+            added: newestAdded(view.entries.flatMap((entry) => (entry.libraryId ? [{ id: entry.libraryId }] : []))),
           });
         }
       }
     }
-    return groups.sort(
-      (a, b) =>
-        Number(b.hasGap) - Number(a.hasGap) ||
-        b.view.watched - a.view.watched ||
-        b.view.inLibrary - a.view.inLibrary ||
-        a.name.localeCompare(b.name),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return orderByNewestAdded(groups);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `dismissed` is read through filterDismissedEntries.
   }, [type, libraryCollections, expandedCollectionsData, tvFranchiseSummaries, lookup, dismissed]);
 
   const franchiseEntryKeys = useMemo(
@@ -413,20 +488,20 @@ export function useDiscovery(type: LibraryType) {
     [franchiseGroups],
   );
 
-  // Multi-seed consensus: released titles independently recommended by 2+
-  // titles in the library surface under HAVE YOU ALREADY WATCHED? ("Likely seen")
-  // and are excluded from YOU MIGHT LIKE so they are not shown twice.
+  // Multi-seed consensus first, topped up with a weekly-rotating pool of
+  // widely-watched released titles so HAVE YOU ALREADY WATCHED? always has
+  // familiar titles to log or dismiss; excluded from YOU MIGHT LIKE.
   const likelySeen = useMemo(
     () =>
       curateDiscovery(
-        likelySeenConsensus(recommendationItems, today),
+        [...likelySeenConsensus(recommendationItems, today), ...likelySeenPoolItems],
         watchlist,
         favourites,
         dismissed,
         franchiseEntryKeys,
-      ).slice(0, 12),
+      ).slice(0, TARGET_LIKELY_SEEN),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
-    [recommendationItems, watchlist, favourites, dismissed, franchiseEntryKeys, week],
+    [recommendationItems, likelySeenPoolItems, watchlist, favourites, dismissed, franchiseEntryKeys, week],
   );
 
   const alreadyWatchedKeys = useMemo(
@@ -458,11 +533,14 @@ export function useDiscovery(type: LibraryType) {
   };
   const resettable = localDismissed.size + (ownerSynced ? remote.data?.length ?? 0 : 0);
 
-  const activeQueries = type === 'movie'
-    ? [movieRecommendations]
-    : type === 'tv'
-      ? [tvRecommendations]
-      : [movieRecommendations, tvRecommendations];
+  const activeQueries = useMemo(
+    () => (type === 'movie'
+      ? [movieRecommendations]
+      : type === 'tv'
+        ? [tvRecommendations]
+        : [movieRecommendations, tvRecommendations]),
+    [type, movieRecommendations, tvRecommendations],
+  );
   const isPending = activeQueries.every((q) => q.isPending);
   const isError = activeQueries.every((q) => q.isError);
   const partlyFailed = !isError && (
@@ -481,22 +559,96 @@ export function useDiscovery(type: LibraryType) {
     [upcomingItems, watchlist, favourites, dismissed],
   );
 
+  const collectionsAllFailed = activeCollectionIds.length > 0 && !collectionsPending && collectionQueries.every((q) => q.isError);
+  const hasMoreFranchises = type !== 'tv' && collectionLimit < libraryCollections.length;
+
+  // Automatic top-ups, counted once per visit to Discover and never re-armed
+  // (not by a target being met, a type switch or a click), so the request
+  // budget above holds for the whole visit.
+  const autoUpcomingRef = useRef(0);
+  const autoLikelySeenRef = useRef(0);
+  const autoFranchiseBatchesRef = useRef(0);
+  const autoRecPagesRef = useRef(0);
+
+  // If the current page of widely-watched titles is mostly logged/dismissed,
+  // rotate forward so HAVE YOU ALREADY WATCHED? stays populated.
+  const {
+    isPending: likelySeenPending,
+    isFetchingNextPage: likelySeenFetchingNext,
+    isError: likelySeenError,
+    hasNextPage: likelySeenHasNext,
+    fetchNextPage: fetchNextLikelySeen,
+  } = likelySeenPool;
+  useEffect(() => {
+    if (likelySeen.length >= TARGET_LIKELY_SEEN) return;
+    if (loading || likelySeenPending || likelySeenFetchingNext || likelySeenError || !likelySeenHasNext) return;
+    if (autoLikelySeenRef.current >= AUTO_LIKELY_SEEN_PAGES) return;
+    autoLikelySeenRef.current += 1;
+    void fetchNextLikelySeen();
+  }, [likelySeen.length, loading, likelySeenPending, likelySeenFetchingNext, likelySeenError, likelySeenHasNext, fetchNextLikelySeen]);
+
+  // If page 1 of Coming Soon is entirely in the library or dismissed, keep
+  // paging (up to AUTO_UPCOMING_PAGES more) so the column is not left empty.
+  const {
+    isPending: upcomingPending,
+    isFetchingNextPage: upcomingFetchingNext,
+    isError: upcomingError,
+    hasNextPage: upcomingHasNext,
+    fetchNextPage: fetchNextUpcoming,
+  } = upcoming;
+  useEffect(() => {
+    if (upcomingCurated.length > 0) return;
+    if (loading || upcomingPending || upcomingFetchingNext || upcomingError || !upcomingHasNext) return;
+    if (autoUpcomingRef.current >= AUTO_UPCOMING_PAGES) return;
+    autoUpcomingRef.current += 1;
+    void fetchNextUpcoming();
+  }, [upcomingCurated.length, loading, upcomingPending, upcomingFetchingNext, upcomingError, upcomingHasNext, fetchNextUpcoming]);
+
+  // Collections are fetched newest-added first, and most turn out to be
+  // complete already; scan ahead until a healthy set of incomplete ones turns
+  // up. Franchises lead this section, so "Likely seen" filling up never stops
+  // the scan. Waits for the spin-off lookup, whose groups count too.
+  const spinoffsPending = type !== 'movie' && tvSeedIds.length > 0 && tvSpinoffs.isPending;
+  useEffect(() => {
+    if (franchiseGroups.length >= TARGET_FRANCHISES) return;
+    if (loading || collectionsPending || spinoffsPending || collectionsAllFailed || !hasMoreFranchises) return;
+    if (autoFranchiseBatchesRef.current >= AUTO_COLLECTION_BATCH_CAP) return;
+    autoFranchiseBatchesRef.current += 1;
+    setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH);
+  }, [franchiseGroups.length, loading, collectionsPending, spinoffsPending, collectionsAllFailed, hasMoreFranchises]);
+
+  // With a large library, a whole page of seed recommendations can curate down
+  // to only a couple of titles; keep paging until a full grid is ready.
+  useEffect(() => {
+    if (recommendations.length >= TARGET_RECOMMENDATIONS) return;
+    if (loading || ratingsStatus === 'loading' || isPending || loadingMore || isError || !hasMore) return;
+    if (autoRecPagesRef.current >= AUTO_PAGE_CAP) return;
+    autoRecPagesRef.current += 1;
+    for (const q of activeQueries) {
+      if (q.isError && !q.isFetching) void q.refetch();
+      else if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
+    }
+  }, [recommendations.length, loading, ratingsStatus, isPending, loadingMore, isError, hasMore, activeQueries]);
+
+  const franchisesLoading =
+    loading ||
+    (type !== 'tv' && collectionsPending) ||
+    spinoffsPending;
+
   return {
     recommendations,
     likelySeen,
     upcoming: upcomingCurated,
     franchises: franchiseGroups,
-    franchisesLoading:
-      loading ||
-      (type !== 'tv' && collectionsPending) ||
-      (type !== 'movie' && tvSeedIds.length > 0 && tvSpinoffs.isPending),
-    hasMoreFranchises: type !== 'tv' && collectionLimit < libraryCollections.length,
+    franchisesLoading,
+    hasMoreFranchises,
     loadMoreFranchises: () => setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH),
     loading: loading || ratingsStatus === 'loading' || isPending,
     upcomingLoading: loading || upcoming.isPending,
+    upcomingLoadingMore: upcoming.isFetchingNextPage,
     failed: isError,
     partlyFailed,
-    upcomingFailed: upcoming.isError || Boolean(upcoming.data?.failed),
+    upcomingFailed: upcoming.isError || Boolean(upcoming.data?.pages.some((page) => page.failed)),
     hasMore,
     loadingMore,
     loadMore: () => {

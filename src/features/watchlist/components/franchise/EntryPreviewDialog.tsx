@@ -37,7 +37,10 @@ export function EntryPreviewDialog({
 }) {
   const { getMovieDetails } = useTMDB();
   const { data: detail = null, isPending: loading, isError: error } = useQuery<Detail>({
-    queryKey: ['watchlist', 'tmdb-details', entry.mediaType, entry.tmdbId],
+    // Not getMovieDetails' own key: a fetchQuery on the key this query is
+    // fetching joins its own in-flight promise and never settles, and the
+    // Add / Seen it lookup on that key would hang with it.
+    queryKey: ['watchlist', 'entry-preview-details', entry.mediaType, entry.tmdbId],
     staleTime: 30 * 60 * 1000,
     queryFn: async () => {
       const details = await getMovieDetails(entry.tmdbId, entry.mediaType);

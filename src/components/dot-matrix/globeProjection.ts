@@ -1,4 +1,4 @@
-import { unprojectEqualEarth } from '@/lib/equalEarth';
+import type { MapProjection } from '@/lib/mapProjections';
 import type { UnitVector } from './hexMapData';
 
 /**
@@ -70,10 +70,15 @@ export function globePointAt(view: GlobeView, x: number, y: number): { lon: numb
  * The place under a canvas point on whichever map is showing. Null mid-morph,
  * when a point on screen is between two places and stands for neither.
  */
-export function mapPointAt(view: GlobeView, x: number, y: number): { lon: number; lat: number } | null {
+export function mapPointAt(
+    view: GlobeView,
+    x: number,
+    y: number,
+    projection: Pick<MapProjection, 'unproject'>,
+): { lon: number; lat: number } | null {
     if (view.progress === 1) return globePointAt(view, x, y);
     if (view.progress === 0) {
-        return unprojectEqualEarth((x - view.flatX) / view.flatW, (y - view.flatY) / view.flatH);
+        return projection.unproject((x - view.flatX) / view.flatW, (y - view.flatY) / view.flatH);
     }
     return null;
 }

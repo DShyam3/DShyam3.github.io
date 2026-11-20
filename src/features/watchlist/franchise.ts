@@ -339,6 +339,7 @@ export function customFranchisesFromLibrary(
   }
 
   return [...byName.entries()]
+    .filter(([, members]) => members.length >= 2)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, members]) => {
       const sorted = members.slice().sort(
@@ -360,6 +361,41 @@ export function customFranchisesFromLibrary(
       });
       return { name, view: buildOrderView(entries, lookup) };
     });
+}
+
+/**
+ * When a franchise was last added to: the newest row id among its library
+ * titles, or -1 with none. Rows are numbered as they are added, so a higher
+ * id was added later. The tables carry no add time, and `created_at` on a
+ * library item is its release date, so this is the only add-order signal.
+ * Ids only compare within one table: films and series are ranked apart.
+ */
+export function newestAdded(items: Pick<WatchlistItem, 'id'>[]): number {
+  let newest = -1;
+  for (const item of items) {
+    const id = Number(item.id);
+    if (Number.isInteger(id) && id > newest) newest = id;
+  }
+  return newest;
+}
+
+/**
+ * The order "Have you already watched?" shows franchises in, in full: the
+ * film collection added to most recently first, and series spin-offs the
+ * same way, the two taking turns (film first) because their ids come from
+ * different tables. Release dates and watch dates never count. Name breaks
+ * a tie.
+ */
+export function orderByNewestAdded<T extends { media: 'movie' | 'tv'; name: string; added: number }>(groups: T[]): T[] {
+  const byAdded = (a: T, b: T) => b.added - a.added || a.name.localeCompare(b.name);
+  const films = groups.filter((g) => g.media === 'movie').sort(byAdded);
+  const series = groups.filter((g) => g.media === 'tv').sort(byAdded);
+  const ordered: T[] = [];
+  for (let index = 0; index < Math.max(films.length, series.length); index++) {
+    if (films[index]) ordered.push(films[index]);
+    if (series[index]) ordered.push(series[index]);
+  }
+  return ordered;
 }
 
 /**

@@ -133,17 +133,18 @@ export function YourWeek({ schedule, watchlist, loading, declined: controlledDec
 
   const renderAgenda = (dates: Date[], compact = false, month = false) => {
     if (!dates.some((date) => events.some((event) => event.date === calendarDateKey(date)))) return emptyMessage(month ? 'this month' : 'this week');
+    const weekGrid = !compact && !month;
     return (
-      <div className={cn('news-agenda grid grid-cols-1 gap-2', !compact && !month && 'xl:grid-cols-7 xl:gap-3')}>
+      <div className={cn('news-agenda grid grid-cols-1 gap-2', weekGrid && 'news-agenda-week')}>
         {dates.map((date) => {
           const key = calendarDateKey(date);
           const dayEvents = events.filter((event) => event.date === key);
           const isToday = key === todayKey;
           if ((compact && !isToday || month) && dayEvents.length === 0) return null;
           return (
-            <div key={key} className={cn('grid min-w-0 gap-2 rounded-lg border p-3', compact ? 'grid-cols-1' : 'grid-cols-[6rem_minmax(0,1fr)]', !compact && !month && 'xl:block', isToday ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card/40')}>
+            <div key={key} className={cn('grid min-w-0 gap-2 rounded-lg border p-3', compact ? 'grid-cols-1' : 'grid-cols-[6rem_minmax(0,1fr)]', weekGrid && 'news-agenda-day', isToday ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card/40')}>
               {/* Compact: "Wed 11 Nov" reads as one label, Today at the end. */}
-              <div className={cn('flex gap-1 text-sm', compact ? 'flex-row flex-wrap items-baseline gap-x-1.5' : 'flex-col', !compact && !month && 'xl:mb-2 xl:flex-row xl:flex-wrap xl:items-baseline xl:justify-between')}>
+              <div className={cn('flex gap-1 text-sm', compact ? 'flex-row flex-wrap items-baseline gap-x-1.5' : 'flex-col', weekGrid && 'news-agenda-day-head')}>
                 <span className="font-medium">{date.toLocaleDateString('en-GB', { weekday: 'short' })}{isToday && !compact && <>{' '}<span className="text-xs text-primary">Today</span></>}</span>
                 <span className="text-xs text-muted-foreground">{date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
                 {isToday && compact && <span className="ml-auto text-xs text-primary">Today</span>}
@@ -212,23 +213,26 @@ export function YourWeek({ schedule, watchlist, loading, declined: controlledDec
   );
 
   return (
-    <section id="your-week" className="news-pane news-pane-your-week col-span-full min-w-0 scroll-mt-4 space-y-3" tabIndex={0} role="region" aria-label="Your week calendar">
-      <div className="news-pane-heading flex flex-wrap items-center justify-between gap-2">
+    <section id="your-week" className="news-pane news-pane-your-week col-span-full flex min-h-0 min-w-0 flex-col scroll-mt-4 space-y-3" tabIndex={0} role="region" aria-label="Your week calendar">
+      <div className="news-pane-heading flex shrink-0 flex-wrap items-center justify-between gap-2">
         <DotMatrixText text="YOUR CALENDAR" size="xs" />
         <Button variant="outline" size="sm" onClick={() => setExpanded(true)}><CalendarDays className="h-4 w-4" />Full screen</Button>
       </div>
-      <details className="text-xs text-muted-foreground">
+      <details className="shrink-0 text-xs text-muted-foreground">
         <summary className="cursor-pointer">Plans and suggested releases</summary>
         <p className="mt-2">Your watching plans and suggested releases. Future weekly entries plan one episode per week and adjust with watched progress. Unknown release dates are not guessed.</p>
         <p className="mt-2">Declined suggestions are remembered in this browser.</p>
       </details>
-      {declined.length > 0 && <Button variant="link" size="sm" className="h-auto whitespace-normal px-0 text-xs" onClick={() => saveDeclined([])}>Restore declined suggestions ({declined.length})</Button>}
-      {declineError && <p role="alert" className="text-xs text-destructive">{declineError}</p>}
-      {calendarToolbar}
+      {declined.length > 0 && <Button variant="link" size="sm" className="h-auto shrink-0 self-start whitespace-normal px-0 text-xs" onClick={() => saveDeclined([])}>Restore declined suggestions ({declined.length})</Button>}
+      {declineError && <p role="alert" className="shrink-0 text-xs text-destructive">{declineError}</p>}
+      <div className="shrink-0">{calendarToolbar}</div>
       <div
         role="region"
         aria-label={`${view === 'week' ? 'Week' : 'Month'} calendar`}
-        className={view === 'month' ? 'max-h-[45dvh] overflow-y-auto app-scroll pr-1' : undefined}
+        className={cn(
+          'your-week-container your-week-scroll min-h-0',
+          view === 'month' && 'max-h-[45dvh] overflow-y-auto app-scroll pr-1',
+        )}
       >
         {calendarBody}
       </div>
@@ -239,7 +243,7 @@ export function YourWeek({ schedule, watchlist, loading, declined: controlledDec
             <DialogDescription>Future weekly entries plan one episode per week and adjust with watched progress. Suggestions are not scheduled until you add them. Unknown release dates are not guessed.</DialogDescription>
           </DialogHeader>
           <div className="shrink-0">{calendarToolbar}</div>
-          <div className="min-h-0 overflow-y-auto" role="region" aria-label={`${view === 'week' ? 'Week' : 'Month'} calendar`} tabIndex={0}>
+          <div className="your-week-container min-h-0 overflow-y-auto" role="region" aria-label={`${view === 'week' ? 'Week' : 'Month'} calendar`} tabIndex={0}>
             {calendarBody}
           </div>
         </DialogContent>

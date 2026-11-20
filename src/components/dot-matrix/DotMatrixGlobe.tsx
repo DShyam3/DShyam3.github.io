@@ -1,13 +1,21 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { Globe, Map as MapIcon } from 'lucide-react';
+import { ChevronDown, Globe, Map as MapIcon } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { latLngToCell } from 'h3-js';
+import { cellToLatLng, latLngToCell } from 'h3-js';
 import {
-    EQUAL_EARTH_ASPECT,
-    EQUAL_EARTH_LABEL,
-    EQUAL_EARTH_NOTE,
-    projectEqualEarth,
-} from '@/lib/equalEarth';
+    DEFAULT_MAP_PROJECTION,
+    MAP_PROJECTIONS,
+    getMapProjection,
+    isMapProjectionId,
+    type MapProjectionId,
+} from '@/lib/mapProjections';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
     BUCKET_COLS,
     BUCKET_ROWS,
@@ -16,12 +24,23 @@ import {
     hexAtPoint,
     hexSpacingRad,
     loadHexTier,
+    projectTier,
     resolveCityHex,
     type HexCell,
     type HexTierData,
 } from './hexMapData';
 import { mapPointAt, projectToGlobe, type GlobeView } from './globeProjection';
 import { createHexGlRenderer, type HexGlPalette, type HexGlRenderer } from './hexGlRenderer';
+import {
+    cellHideBelow,
+    codeOf,
+    detailHexAtPoint,
+    hexCellOf,
+    resolveDetailCityHex,
+    type DetailRes,
+    type HexDetailLookup,
+} from './hexDetail';
+import { HexLevels } from './hexLevels';
 
 import './DotMatrixGlobe.css';
 
@@ -31,7 +50,6 @@ export interface CountryRegion {
 
 interface DotMatrixGlobeProps {
     visitedCountryCodes: string[];
-    visitedCityDots?: Set<string>;       // legacy set of "col,row" keys
     visitedCities?: { lat: number; lon: number; countryCode: string }[];
     viewMode?: 'countries' | 'cities';   // which highlighting layer to use
     size?: number;
@@ -65,6 +83,19 @@ const IDLE_SPIN_RAMP_MS = 4000;
 
 /** How close each kind of selection is brought in. */
 const FOCUS_ZOOM = { country: { '3d': 2.5, '2d': 4 }, city: { '3d': 3.5, '2d': 6 } } as const;
+
+/**
+ * As far in as the wheel or a pinch goes. Deep enough for level 5's cells,
+ * ~17km apart, to be 30-40px across: towns a few miles apart get their own.
+ */
+const MAX_ZOOM = 32;
+
+/**
+ * How far the globe turns per pixel dragged, at 1x. Divided by the zoom, so
+ * zoomed in the land moves with the pointer instead of racing past it; at a
+ * fixed rate a drag at 10x swept a country off screen in a flick.
+ */
+const DRAG_RAD_PER_PX = 0.005;
 
 /**
  * A dot with no country of its own on the grid (open sea round a small
@@ -163,38 +194,37 @@ const STYLE_GL = { dark: glPalette(STYLE_CSS.dark), light: glPalette(STYLE_CSS.l
 
 interface StyleInputs {
     visited: Set<string>;
-    cityHexes: Set<string>;
-    cityDots?: Set<string>;
+    cityHexes: ReadonlySet<string>;
     cities: boolean;
     hovered: string | null;
     selected: string | null;
     focusedDot: string | null;
 }
 
+/** A cell's `CELL_STYLE`, at any level: `key` is its H3 index. */
+function cellStyle(key: string, code: string, s: StyleInputs): number {
+    const hovered = code === s.hovered;
+    if (key === s.selected) return CELL_STYLE.selected;
+    if (s.cities && (s.cityHexes.has(key) || key === s.focusedDot)) {
+        return hovered ? CELL_STYLE.cityHovered : CELL_STYLE.city;
+    }
+    if (s.visited.has(code)) {
+        return s.cities
+            ? (hovered ? CELL_STYLE.tintHovered : CELL_STYLE.tint)
+            : (hovered ? CELL_STYLE.visitedHovered : CELL_STYLE.visited);
+    }
+    return hovered ? CELL_STYLE.unvisitedHovered : CELL_STYLE.unvisited;
+}
+
 /** Writes each cell's `CELL_STYLE` into `out`, by `HexCell.index`. */
 function fillCellStyles(out: Uint8Array, tier: HexTierData, s: StyleInputs) {
-    for (const cell of tier.cells) {
-        const hovered = cell.code === s.hovered;
-        let style: number;
-        if (cell.h3Index === s.selected) {
-            style = CELL_STYLE.selected;
-        } else if (s.cities && (s.cityHexes.has(cell.h3Index) || (s.cityDots?.has(cell.h3Index) ?? false) || cell.h3Index === s.focusedDot)) {
-            style = hovered ? CELL_STYLE.cityHovered : CELL_STYLE.city;
-        } else if (s.visited.has(cell.code)) {
-            style = s.cities
-                ? (hovered ? CELL_STYLE.tintHovered : CELL_STYLE.tint)
-                : (hovered ? CELL_STYLE.visitedHovered : CELL_STYLE.visited);
-        } else {
-            style = hovered ? CELL_STYLE.unvisitedHovered : CELL_STYLE.unvisited;
-        }
-        out[cell.index] = style;
-    }
+    for (const cell of tier.cells) out[cell.index] = cellStyle(cell.h3Index, cell.code, s);
 }
 
 /** Where the selected cell sits this frame, or null where it is hidden (the back of the globe). */
 function placeSelectedHex(cell: HexCell, view: GlobeView, radius: number): SelectedHex | null {
     const { progress } = view;
-    if (cell.crossesAntimeridian && progress < 0.5) return null;
+    if (progress < cell.hideBelow) return null;
     const centre = projectToGlobe(view, cell.center3d);
     if (centre.z < 0 && progress > 0.5) return null;
 
@@ -317,7 +347,7 @@ function drawCellsCanvas(
         ctx.globalAlpha = borders.alpha;
         ctx.beginPath();
         for (const seg of tier.borderSegments) {
-            if (progress < 0.5 && seg.crossesAntimeridian) continue;
+            if (progress < seg.hideBelow) continue;
             const a = projectToGlobe(view, seg.p1);
             const b = projectToGlobe(view, seg.p2);
             if (progress > 0.5 && a.z < 0 && b.z < 0) continue;
@@ -354,7 +384,7 @@ function drawCellsCanvas(
 
     const batches: (Path2D | null)[] = new Array(CELL_STYLES.length * OPACITY_STEPS).fill(null);
     for (const cell of tier.cells) {
-        if (progress < 0.5 && cell.crossesAntimeridian) continue;
+        if (progress < cell.hideBelow) continue;
         const c3 = cell.center3d;
         const cx3 = R * c3.ux;
         const cy3 = R * c3.uy;
@@ -443,6 +473,18 @@ async function loadCountryNames(): Promise<Record<string, string>> {
     return countryNamesPromise;
 }
 
+/** Where the chosen flat-map projection is remembered, per browser. */
+const PROJECTION_STORAGE_KEY = 'travel-map-projection';
+
+function readStoredProjection(): MapProjectionId {
+    try {
+        const stored = window.localStorage.getItem(PROJECTION_STORAGE_KEY);
+        return isMapProjectionId(stored) ? stored : DEFAULT_MAP_PROJECTION;
+    } catch {
+        return DEFAULT_MAP_PROJECTION;
+    }
+}
+
 /** Prefetches base H3 hex map + country names in the background so Travel paints on frame 1. */
 export function warmGlobeData(): void {
     void Promise.all([loadHexTier(3), loadCountryNames()]).catch(() => {});
@@ -486,6 +528,18 @@ function movedPastThreshold(drag: { startX: number; startY: number }, x: number,
     return Math.hypot(x - drag.startX, y - drag.startY) > DRAG_THRESHOLD;
 }
 
+/**
+ * The flat map's size in a W x H canvas. It is fitted inside rather than the
+ * canvas resized to it, so the box never moves under the drawing. A phone's
+ * slot is far taller than the map, and fitting its width there left a thin
+ * strip of sub-pixel cells; a narrow slot fits the height and pans sideways.
+ */
+function fitFlatMap(W: number, H: number, aspect: number): { mapW: number; mapH: number } {
+    const fitHeight = W < 600 && H * aspect > W;
+    const mapW = fitHeight ? H * aspect : Math.min(W, H * aspect);
+    return { mapW, mapH: mapW / aspect };
+}
+
 /** A 60 Hz frame: the rate the easing constants below were tuned at. */
 const FRAME_MS = 1000 / 60;
 
@@ -514,10 +568,10 @@ const WHEEL_ZOOM_PER_PX = 0.0007;
 const WHEEL_MAX_PX = 240;
 
 const NO_HIT = { code: null as string | null, dotKey: null as string | null };
+const NO_CELLS: ReadonlySet<string> = new Set();
 
 export function DotMatrixGlobe({
     visitedCountryCodes,
-    visitedCityDots,
     visitedCities,
     viewMode = 'countries',
     size = 800,
@@ -537,7 +591,11 @@ export function DotMatrixGlobe({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const glCanvasRef = useRef<HTMLCanvasElement>(null);
     const glRef = useRef<HexGlRenderer | null>(null);
-    const [baseTier, setBaseTier] = useState<HexTierData | null>(null);
+    const [loadedTier, setLoadedTier] = useState<HexTierData | null>(null);
+    const [projectionId, setProjectionId] = useState<MapProjectionId>(readStoredProjection);
+    const projection = getMapProjection(projectionId);
+    // The tier with its flat-map side in the chosen projection; the globe side is the same in all of them.
+    const baseTier = useMemo(() => (loadedTier ? projectTier(loadedTier, projection) : null), [loadedTier, projection]);
     const activeTier = baseTier;
     const { resolvedTheme } = useTheme();
     const [mapError, setMapError] = useState(false);
@@ -556,6 +614,10 @@ export function DotMatrixGlobe({
     // One byte per cell (see CELL_STYLE), rebuilt only when what it depends on changes.
     const stylesRef = useRef(new Uint8Array(0));
     const stylesDirtyRef = useRef(true);
+    // Bumped whenever the style inputs change; each patch restyles itself when it next draws.
+    const styleVersionRef = useRef(0);
+    // The finer hex levels and their patches (see hexLevels.ts).
+    const [levels] = useState(() => new HexLevels());
     // The last frame's view, so a pointer can be worked back to a place.
     const viewRef = useRef<GlobeView | null>(null);
     // Off screen, the loop sleeps rather than drawing what nobody can see.
@@ -659,7 +721,7 @@ export function DotMatrixGlobe({
         let active = true;
         Promise.all([loadHexTier(3), loadCountryNames()]).then(([tier, names]) => {
             if (!active) return;
-            setBaseTier(tier);
+            setLoadedTier(tier);
             setCountryNames(names);
         }).catch(() => {
             if (active) setMapError(true);
@@ -673,7 +735,7 @@ export function DotMatrixGlobe({
         if (!baseTier || !canvas) return;
         let renderer: HexGlRenderer | null = null;
         try {
-            renderer = createHexGlRenderer(canvas, baseTier, CELL_STYLES.length, () => {
+            renderer = createHexGlRenderer(canvas, CELL_STYLES.length, () => {
                 glRef.current = null;
                 requestDraw();
             });
@@ -681,6 +743,7 @@ export function DotMatrixGlobe({
             // A shader the driver rejects is as good as no WebGL: fall back.
             renderer = null;
         }
+        levels.reset(renderer, baseTier, projection);
         glRef.current = renderer;
         stylesDirtyRef.current = true;
         requestDraw();
@@ -688,7 +751,13 @@ export function DotMatrixGlobe({
             glRef.current = null;
             renderer?.dispose();
         };
-    }, [baseTier, requestDraw]);
+    }, [baseTier, levels, projection, requestDraw]);
+
+    // A finer level loading, or a patch of one arriving from the worker, needs a frame.
+    useEffect(() => {
+        levels.setOnChange(requestDraw);
+        return () => levels.dispose();
+    }, [levels, requestDraw]);
 
     const visitedCityHexes = useMemo(
         () => buildCityHexSet(visitedCities, activeTier),
@@ -732,12 +801,56 @@ export function DotMatrixGlobe({
     }, [markerPoint, activeTier]);
     const selectedKey = focusedDotKey ?? (markerCell?.hasDot ? markerCell.key : null);
 
+    // The finer levels' visited cities and selection, worked out per level the
+    // first time it draws after any of these change.
+    const detailInputs = useMemo(
+        () => ({ visitedCities, focusLat, focusLon, focusCityCountry, markerPoint }),
+        [visitedCities, focusLat, focusLon, focusCityCountry, markerPoint],
+    );
+    const detailInfoRef = useRef(new Map<DetailRes, {
+        level: HexDetailLookup;
+        inputs: typeof detailInputs;
+        cities: Set<string>;
+        selected: string | null;
+    }>());
+    const detailInfo = useCallback((res: DetailRes) => {
+        const level = levels.level(res);
+        if (!level) return null;
+        const cached = detailInfoRef.current.get(res);
+        if (cached && cached.level === level && cached.inputs === detailInputs) return cached;
+        const cities = new Set<string>();
+        for (const city of detailInputs.visitedCities ?? []) {
+            const key = resolveDetailCityHex(city.lat, city.lon, level, city.countryCode);
+            if (key) cities.add(key);
+        }
+        let selected: string | null = null;
+        if (detailInputs.focusLat !== undefined && detailInputs.focusLon !== undefined) {
+            selected = resolveDetailCityHex(detailInputs.focusLat, detailInputs.focusLon, level, detailInputs.focusCityCountry);
+        } else if (detailInputs.markerPoint) {
+            const { lat, lon } = detailInputs.markerPoint;
+            const key = latLngToCell((lat * 180) / Math.PI, (lon * 180) / Math.PI, res);
+            selected = codeOf(level, key) !== undefined ? key : null;
+        }
+        const info = { level, inputs: detailInputs, cities, selected };
+        detailInfoRef.current.set(res, info);
+        return info;
+    }, [levels, detailInputs]);
+    // The selected cell's outline at a finer level, kept between frames.
+    const selectedCellRef = useRef<{ key: string; projection: string; cell: HexCell } | null>(null);
+
     // Turn to the selected city, or else the selected country, and hold there.
     const countryLon = countryFocus?.lon;
     const countryLat = countryFocus?.lat;
     const wasFocusedRef = useRef(false);
+    // Read by the focus effect without being one of its triggers: re-running
+    // the focus on a switch would reset a zoom the user chose. A switch moves
+    // the held pan target itself, in `chooseProjection`.
+    const projectionRef = useRef(projection);
     useEffect(() => {
-        if (!activeTier) return;
+        projectionRef.current = projection;
+    }, [projection]);
+    useEffect(() => {
+        if (!loadedTier) return;
         let lon: number | null = null;
         let lat: number | null = null;
         let zoom = 1;
@@ -774,9 +887,12 @@ export function DotMatrixGlobe({
         if (lon !== null && lat !== null) {
             drag.targetRotation = lon;
             drag.targetOffsetLat = -lat;
-            const flatCentre = projectEqualEarth(lon, lat);
-            drag.targetPanXNorm = flatCentre.nx;
-            drag.targetPanYNorm = flatCentre.ny;
+            // A place past the projection's cut (Antarctica on Mercator) has
+            // nowhere on the flat map to pan to; the zoom alone applies.
+            const flat = projectionRef.current;
+            const flatCentre = lat >= flat.minLat && lat <= flat.maxLat ? flat.project(lon, lat) : null;
+            drag.targetPanXNorm = flatCentre?.nx ?? null;
+            drag.targetPanYNorm = flatCentre?.ny ?? null;
         } else {
             drag.targetRotation = null;
             drag.targetOffsetLat = null;
@@ -784,7 +900,7 @@ export function DotMatrixGlobe({
             drag.targetPanYNorm = null;
         }
         requestDraw();
-    }, [focusTrigger, focusLat, focusLon, countryLon, countryLat, focusedCountryCode, activeTier, mode, requestDraw]);
+    }, [focusTrigger, focusLat, focusLon, countryLon, countryLat, focusedCountryCode, loadedTier, mode, requestDraw]);
 
     // Draw the map
     const draw = useCallback((time: number) => {
@@ -841,7 +957,8 @@ export function DotMatrixGlobe({
                 // drifts off rather than lurching away at full speed.
                 const ramp = Math.min(1, (time - drag.lastInteractionTime - IDLE_SPIN_DELAY_MS) / IDLE_SPIN_RAMP_MS);
                 const ease = ramp * ramp * (3 - 2 * ramp);
-                anim.rotation += dt * 0.00008 * anim.progress * ease;
+                // Slower as it zooms in, so the spin crosses the screen at the same pace.
+                anim.rotation += (dt * 0.00008 * anim.progress * ease) / drag.zoom;
 
                 // Spring back latitude offset towards 0 gently, on the same ramp
                 if (Math.abs(drag.offsetLat) > 0.001) {
@@ -870,15 +987,8 @@ export function DotMatrixGlobe({
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        // The flat map is fitted inside the canvas rather than the canvas
-        // being resized to it, so the box never moves underneath the drawing
-        // and the 2D/3D morph has nothing to keep step with.
-        // A phone's slot is far taller than the flat map, and fitting the whole
-        // width there left a thin strip of sub-pixel dots in an empty box. A
-        // narrow slot fits the height instead and pans sideways.
-        const fitHeight = W < 600 && H * EQUAL_EARTH_ASPECT > W;
-        const mapW = fitHeight ? H * EQUAL_EARTH_ASPECT : Math.min(W, H * EQUAL_EARTH_ASPECT);
-        const mapH = mapW / EQUAL_EARTH_ASPECT;
+        // Fitted inside the canvas, so the 2D/3D morph has nothing to keep step with.
+        const { mapW, mapH } = fitFlatMap(W, H, projection.aspect);
 
         // Opening the inspector beside the map narrows the canvas. Pan is in
         // pixels, so it scales with the map or the view slides off its place.
@@ -1061,13 +1171,12 @@ export function DotMatrixGlobe({
             fillCellStyles(styles, baseTier, {
                 visited: visitedSet,
                 cityHexes: visitedCityHexes,
-                cityDots: visitedCityDots,
                 cities: viewMode === 'cities',
                 hovered: hoveredCountryRef.current,
                 selected: selectedKey,
                 focusedDot: focusedDotKey,
             });
-            gl?.setCellStyles(styles);
+            styleVersionRef.current++;
             stylesDirtyRef.current = false;
         }
 
@@ -1091,7 +1200,7 @@ export function DotMatrixGlobe({
                 borderAlpha = 0;
             }
         }
-        const borderWidth = Math.min(2.6, (isMobile ? 0.6 : 0.9) * Math.pow(curZoom, 0.45)) * dpr;
+        const borderWidthCss = Math.min(2.6, (isMobile ? 0.6 : 0.9) * Math.pow(curZoom, 0.45));
 
         if (drawHemisphere && borderAlpha > 0.015) {
             ctx.globalAlpha = (borderAlpha / BORDER_ALPHA) * 0.05;
@@ -1103,17 +1212,41 @@ export function DotMatrixGlobe({
             ctx.globalAlpha = 1;
         }
 
+        let levelsFading = false;
         if (gl) {
+            const hovered = hoveredCountryRef.current;
+            const inputsByRes = new Map<DetailRes, StyleInputs>();
+            const frame = levels.frame(view, dt, progress >= 0.5 ? R : W_zoom / (2 * Math.PI), {
+                version: styleVersionRef.current,
+                base: styles,
+                detail: (res, key, code) => {
+                    let inputs = inputsByRes.get(res);
+                    if (!inputs) {
+                        const info = detailInfo(res);
+                        inputs = {
+                            visited: visitedSet,
+                            cityHexes: info?.cities ?? NO_CELLS,
+                            cities: viewMode === 'cities',
+                            hovered,
+                            selected: info?.selected ?? null,
+                            focusedDot: null,
+                        };
+                        inputsByRes.set(res, inputs);
+                    }
+                    return cellStyle(key, code, inputs);
+                },
+            });
+            levelsFading = frame.fading;
             gl.render(view, isDark ? STYLE_GL.dark : STYLE_GL.light, {
                 shade: isDark ? 1 : 0,
                 alpha: borderAlpha,
-                halfWidth: borderWidth / 2,
-            });
+                halfWidth: borderWidthCss / 2,
+            }, frame.draws);
         } else {
             drawCellsCanvas(ctx, baseTier, styles, isDark ? STYLE_CSS.dark : STYLE_CSS.light, view, {
                 color: isDark ? '#ffffff' : '#000000',
                 alpha: borderAlpha,
-                width: borderWidth,
+                width: borderWidthCss * dpr,
             });
         }
 
@@ -1141,10 +1274,25 @@ export function DotMatrixGlobe({
 
         const selectedIndex = selectedKey ? baseTier.cellIndexByH3.get(selectedKey) : undefined;
         if (selectedIndex !== undefined) {
-            const hex = placeSelectedHex(baseTier.cells[selectedIndex], view, (mapW / 135) * curZoom);
+            // Outlined at whichever level its part of the map is showing.
+            const baseCell = baseTier.cells[selectedIndex];
+            const res = gl ? levels.shownAt(baseCell.lat, baseCell.lon) : 3;
+            const detailKey = res > 3 ? detailInfo(res as DetailRes)?.selected ?? null : null;
+            let cell = baseCell;
+            if (detailKey) {
+                const kept = selectedCellRef.current;
+                if (kept && kept.key === detailKey && kept.projection === projection.id) {
+                    cell = kept.cell;
+                } else {
+                    cell = hexCellOf(detailKey, projection);
+                    selectedCellRef.current = { key: detailKey, projection: projection.id, cell };
+                }
+            }
+            const scale = detailKey ? hexSpacingRad(res) / hexSpacingRad(3) : 1;
+            const hex = placeSelectedHex(cell, view, (mapW / 135) * curZoom * scale);
             if (hex) drawSelectedHex(hex);
         } else if (markerCell && !markerCell.hasDot) {
-            const flat = projectEqualEarth(markerCell.lon, markerCell.lat);
+            const flat = projection.project(markerCell.lon, markerCell.lat);
             let x = flat.nx * W_zoom + view.flatX;
             let y = flat.ny * H_zoom + view.flatY;
             let zNorm = 1;
@@ -1182,6 +1330,7 @@ export function DotMatrixGlobe({
 
         // Ask for another frame only while something is still moving.
         const moving =
+            levelsFading ||
             anim.progress !== target ||
             (anim.progress > 0 && !drag.isDragging && (drag.targetRotation !== null || Math.abs(drag.velocityX) > 0.0001)) ||
             drag.zoom !== drag.targetZoom ||
@@ -1208,7 +1357,7 @@ export function DotMatrixGlobe({
             const wait = IDLE_SPIN_DELAY_MS - (time - drag.lastInteractionTime);
             spinTimerRef.current = window.setTimeout(requestDraw, Math.max(0, wait) + 16);
         }
-    }, [baseTier, visitedSet, visitedCityHexes, visitedCityDots, viewMode, mode, stars, focusedDotKey, selectedKey, markerCell, requestDraw]);
+    }, [baseTier, projection, levels, detailInfo, visitedSet, visitedCityHexes, viewMode, mode, stars, focusedDotKey, selectedKey, markerCell, requestDraw]);
 
     drawRef.current = draw;
 
@@ -1269,6 +1418,49 @@ export function DotMatrixGlobe({
     }, [requestDraw]);
 
     /**
+     * Switches the flat map's projection without moving what you are looking
+     * at. Pan is in pixels, and the same pixels are somewhere else in another
+     * projection, so a held selection's target is carried across, and
+     * otherwise the place in the middle of the view is.
+     */
+    const chooseProjection = useCallback((value: string) => {
+        if (!isMapProjectionId(value) || value === projectionId) return;
+        const next = getMapProjection(value);
+        const view = viewRef.current;
+        const drag = dragRef.current;
+        if (drag.targetPanXNorm !== null && drag.targetPanYNorm !== null) {
+            const place = projection.unproject(drag.targetPanXNorm, drag.targetPanYNorm);
+            const flat = place && place.lat >= next.minLat && place.lat <= next.maxLat
+                ? next.project(place.lon, place.lat)
+                : null;
+            drag.targetPanXNorm = flat?.nx ?? null;
+            drag.targetPanYNorm = flat?.ny ?? null;
+        } else if (view && view.progress === 0 && drag.zoom > 1.05) {
+            // Set outright rather than as a target, which would be held: the
+            // spring back inside the map's edge then runs as usual.
+            const centre = projection.unproject(
+                (view.width / 2 - view.flatX) / view.flatW,
+                (view.height / 2 - view.flatY) / view.flatH,
+            );
+            if (centre) {
+                const flat = next.project(centre.lon, centre.lat);
+                const { mapW, mapH } = fitFlatMap(view.width, view.height, next.aspect);
+                drag.panX = mapW * drag.zoom * (0.5 - flat.nx);
+                drag.panY = mapH * drag.zoom * (0.5 - flat.ny);
+                // Already in the new map's pixels: the next frame must not rescale it.
+                drag.lastMapW = mapW;
+            }
+        }
+        setProjectionId(value);
+        try {
+            window.localStorage.setItem(PROJECTION_STORAGE_KEY, value);
+        } catch {
+            // Storage refused (a private window): the choice lasts the visit.
+        }
+        requestDraw();
+    }, [projection, projectionId, requestDraw]);
+
+    /**
      * Which country's cell sits under a viewport point, if any. The pointer is
      * worked back through the projection to a place and H3 names its cell --
      * constant time, where scanning every drawn cell meant rebuilding a list
@@ -1281,20 +1473,41 @@ export function DotMatrixGlobe({
         if (!canvas || !view || !tier) return NO_HIT;
 
         const rect = canvas.getBoundingClientRect();
-        const place = mapPointAt(view, clientX - rect.left, clientY - rect.top);
+        const place = mapPointAt(view, clientX - rect.left, clientY - rect.top, projection);
         if (!place) return NO_HIT;
+        const latDeg = (place.lat * 180) / Math.PI;
+        const lonDeg = (place.lon * 180) / Math.PI;
+        const pxPerRad = view.progress === 1 ? view.radius : view.flatW / (2 * Math.PI);
 
-        const cellPx = hexSpacing * (view.progress === 1 ? view.radius : view.flatW / (2 * Math.PI));
+        // Picked from whichever level this part of the map is showing.
+        const res = glRef.current ? levels.shownAt(place.lat, place.lon) : 3;
+        const level = res > 3 ? levels.level(res as DetailRes) : undefined;
+        if (level) {
+            const px = hexSpacingRad(res) * pxPerRad;
+            const reach = Math.max(0, Math.min(3, Math.ceil(HIT_SLOP_PX / Math.max(px, 0.1)) - 1));
+            const shown = view.progress === 1
+                ? (cell: string) => {
+                    const [lat, lon] = cellToLatLng(cell);
+                    const la = (lat * Math.PI) / 180;
+                    const lo = (lon * Math.PI) / 180;
+                    return projectToGlobe(view, { ux: Math.cos(la) * Math.sin(lo), uy: -Math.sin(la), uz: Math.cos(la) * Math.cos(lo) }).z >= 0;
+                }
+                : (cell: string) => cellHideBelow(projection, cell) === 0;
+            const key = detailHexAtPoint(latDeg, lonDeg, level, reach, shown);
+            return key ? { code: codeOf(level, key) ?? null, dotKey: key } : NO_HIT;
+        }
+
+        const cellPx = hexSpacing * pxPerRad;
         const ring = Math.max(0, Math.min(3, Math.ceil(HIT_SLOP_PX / Math.max(cellPx, 0.1)) - 1));
         // Only a cell that is drawn: the globe hides its back, and the flat map
         // the cells that straddle the antimeridian.
         const drawn = view.progress === 1
             ? (cell: HexCell) => projectToGlobe(view, cell.center3d).z >= 0
-            : (cell: HexCell) => !cell.crossesAntimeridian;
-        const dotKey = hexAtPoint((place.lat * 180) / Math.PI, (place.lon * 180) / Math.PI, tier, ring, drawn);
+            : (cell: HexCell) => cell.hideBelow === 0;
+        const dotKey = hexAtPoint(latDeg, lonDeg, tier, ring, drawn);
         if (!dotKey) return NO_HIT;
         return { code: tier.cellCodes.get(dotKey) ?? null, dotKey };
-    }, [baseTier, hexSpacing]);
+    }, [baseTier, hexSpacing, levels, projection]);
 
     /**
      * Tells the page about a hover. Each report re-renders the Travel page, so
@@ -1346,7 +1559,7 @@ export function DotMatrixGlobe({
             const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 800 : 1;
             const px = Math.max(-WHEEL_MAX_PX, Math.min(WHEEL_MAX_PX, e.deltaY * unit));
             const minZ = mode === '2d' ? 1.0 : 0.98;
-            dragRef.current.targetZoom = Math.max(minZ, Math.min(10, dragRef.current.targetZoom * Math.exp(-px * WHEEL_ZOOM_PER_PX)));
+            dragRef.current.targetZoom = Math.max(minZ, Math.min(MAX_ZOOM, dragRef.current.targetZoom * Math.exp(-px * WHEEL_ZOOM_PER_PX)));
 
             // Store cursor position for cursor-centered zooming (applied per-frame in draw())
             if (mode === '2d' && canvasRef.current) {
@@ -1408,10 +1621,10 @@ export function DotMatrixGlobe({
                 dragRef.current.lastY = e.touches[0].clientY;
 
                 if (mode === '3d') {
-                    const rotDelta = -dx * 0.005;
+                    const rotDelta = -dx * DRAG_RAD_PER_PX / dragRef.current.zoom;
                     animRef.current.rotation += rotDelta;
                     dragRef.current.velocityX = rotDelta; // Save for momentum
-                    dragRef.current.offsetLat -= dy * 0.005;
+                    dragRef.current.offsetLat -= dy * DRAG_RAD_PER_PX / dragRef.current.zoom;
                     dragRef.current.offsetLat = Math.max(-1.2, Math.min(1.2, dragRef.current.offsetLat));
                 } else if (mode === '2d') {
                     dragRef.current.panX += rubberDelta(dragRef.current.panX, dx, dragRef.current.boundX);
@@ -1422,9 +1635,9 @@ export function DotMatrixGlobe({
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
                 const newDist = Math.sqrt(dx * dx + dy * dy);
                 if (dragRef.current.pinchDist) {
-                    const zoomDelta = (newDist - dragRef.current.pinchDist) * 0.01;
                     const minZ = mode === '2d' ? 1.0 : 0.98;
-                    dragRef.current.targetZoom = Math.max(minZ, Math.min(10, dragRef.current.targetZoom + zoomDelta));
+                    // Proportional, as the wheel is: at 20x an additive step would barely move.
+                    dragRef.current.targetZoom = Math.max(minZ, Math.min(MAX_ZOOM, dragRef.current.targetZoom * (newDist / dragRef.current.pinchDist)));
 
                     // Store pinch midpoint for cursor-centered zooming (applied per-frame in draw())
                     if (mode === '2d' && canvasRef.current) {
@@ -1526,12 +1739,12 @@ export function DotMatrixGlobe({
 
             if (mode === '3d') {
                 // Update rotation instantly (inverted dx)
-                const rotDelta = -dx * 0.005;
+                const rotDelta = -dx * DRAG_RAD_PER_PX / drag.zoom;
                 animRef.current.rotation += rotDelta;
                 drag.velocityX = rotDelta; // Save for momentum
 
                 // Update latitude tilt (inverted dy), limit range so we don't go upside down
-                drag.offsetLat -= dy * 0.005;
+                drag.offsetLat -= dy * DRAG_RAD_PER_PX / drag.zoom;
                 drag.offsetLat = Math.max(-1.2, Math.min(1.2, drag.offsetLat));
             } else if (mode === '2d') {
                 drag.panX += rubberDelta(drag.panX, dx, drag.boundX);
@@ -1623,20 +1836,35 @@ export function DotMatrixGlobe({
                             </>
                         )}
                     </div>
-                    {/* Says what you are looking at, and nothing more -- there is one
-                        projection now. Hidden over the globe, which is in no projection
-                        at all, so the label never names something the map is not.
-                        Fades over the 500ms the dots take to roll up into the sphere.
-                        Left out on a phone, where the map has no room to spare. */}
-                    <div
-                        className={`hidden sm:block px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap cursor-default transition-opacity duration-500 ${
-                            mode === '3d' ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
-                        }`}
-                        title={EQUAL_EARTH_NOTE}
-                        aria-hidden={mode === '3d'}
-                    >
-                        {EQUAL_EARTH_LABEL}
-                    </div>
+                    {/* Names the projection the flat map is in, and picks another.
+                        Hidden over the globe, which is in no projection at all, so
+                        the label never names something the map is not. Fades over
+                        the 500ms the dots take to roll up into the sphere. Left out
+                        on a phone, where the map has no room to spare. */}
+                    <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger
+                            className={`hidden sm:flex min-h-9 items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap transition-[opacity,background-color] duration-500 ${
+                                mode === '3d' ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
+                            }`}
+                            title={projection.note}
+                            aria-label={`Projection: ${projection.label}. Choose another`}
+                            aria-hidden={mode === '3d'}
+                            tabIndex={mode === '3d' ? -1 : undefined}
+                        >
+                            {projection.label}
+                            <ChevronDown aria-hidden="true" className="w-3.5 h-3.5" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" side="top" className="w-72">
+                            <DropdownMenuRadioGroup value={projectionId} onValueChange={chooseProjection}>
+                                {MAP_PROJECTIONS.map((option) => (
+                                    <DropdownMenuRadioItem key={option.id} value={option.id} className="flex-col items-start gap-0.5">
+                                        <span className="font-semibold">{option.label}</span>
+                                        <span className="text-xs text-muted-foreground">{option.note}</span>
+                                    </DropdownMenuRadioItem>
+                                ))}
+                            </DropdownMenuRadioGroup>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     <button
                         onClick={() => setMode(m => m === '2d' ? '3d' : '2d')}
                         className="ml-auto flex min-h-9 items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"

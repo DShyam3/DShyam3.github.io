@@ -160,6 +160,19 @@
         "--strictPort"
       ],
       "port": 8094
+    },
+    {
+      "name": "dev:8082",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "8082",
+        "--strictPort"
+      ],
+      "port": 8082
     }
   ]
 }

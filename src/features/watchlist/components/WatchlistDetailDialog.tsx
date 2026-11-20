@@ -115,7 +115,9 @@ export function WatchlistDetailDialog({
 
   const isTVShow = item.category === 'TV Shows';
   const { data: tmdbDetail } = useQuery({
-    queryKey: ['watchlist', 'tmdb-details', isTVShow ? 'tv' : 'movie', item.tmdb_id],
+    // Not getMovieDetails' own key, which it fetches inside: same-key
+    // fetchQuery joins this query's in-flight promise and never settles.
+    queryKey: ['watchlist', 'detail-dialog-tmdb', isTVShow ? 'tv' : 'movie', item.tmdb_id],
     enabled: open && !!item.tmdb_id,
     staleTime: 30 * 60 * 1000,
     queryFn: async () => {

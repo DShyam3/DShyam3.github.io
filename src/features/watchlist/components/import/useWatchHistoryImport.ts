@@ -216,12 +216,13 @@ export function useWatchHistoryImport() {
         setProgress({ label: `Adding ${entry.title}`, done: i, total: adds.length });
         const type = entry.category === 'Movies' ? 'movie' : 'tv';
         await pace(myRun);
-        let details = await getMovieDetails(entry.tmdbId, type);
+        // This loop waits out the proxy limit itself, cancellably.
+        let details = await getMovieDetails(entry.tmdbId, type, { retryRateLimit: false });
         assertLive(myRun);
         if (!details) {
           await wait(RETRY_WAIT_MS, myRun);
           await pace(myRun);
-          details = await getMovieDetails(entry.tmdbId, type);
+          details = await getMovieDetails(entry.tmdbId, type, { retryRateLimit: false });
           assertLive(myRun);
         }
         if (!details) { failedAdds.push(entry.title); continue; }

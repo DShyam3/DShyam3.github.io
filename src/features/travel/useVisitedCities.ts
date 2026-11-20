@@ -50,15 +50,6 @@ export function useVisitedCities() {
         return groups;
     }, [visitedCities]);
 
-    /** Set of "col,row" keys for visited city dots — O(1) globe lookup */
-    const visitedDotKeys = useMemo(() => {
-        const s = new Set<string>();
-        for (const city of visitedCities) {
-            s.add(`${city.dot_col},${city.dot_row}`);
-        }
-        return s;
-    }, [visitedCities]);
-
     const addCity = async (
         countryCode: string,
         cityName: string,
@@ -103,7 +94,6 @@ export function useVisitedCities() {
     return {
         visitedCities,
         citiesByCountry,
-        visitedDotKeys,
         loading,
         addCity,
         removeCity,

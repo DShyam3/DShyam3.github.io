@@ -2,7 +2,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { buildMemberships, countMembers, assertTotals, countPlaces } from '@/features/travel/memberships';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixGlobe } from '@/components/dot-matrix/DotMatrixGlobe';
-import { latLngToCell } from 'h3-js';
+import { getResolution, isValidCell, latLngToCell } from 'h3-js';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVisitedCountries } from '@/features/travel/useVisitedCountries';
 import { useVisitedCities } from '@/features/travel/useVisitedCities';
@@ -90,7 +90,7 @@ const TravelContent = () => {
     const { byCode: continentByCode, totals: continentTotals, sovereignCodes, loading: continentLoading } = useContinentMap();
 
     // City tracking
-    const { visitedCities, citiesByCountry, visitedDotKeys, addCity, removeCity } = useVisitedCities();
+    const { visitedCities, citiesByCountry, addCity, removeCity } = useVisitedCities();
     const { loaded: cityMapLoaded, loading: cityMapLoading, loadCityMap, getCitiesForCountry } = useCityMap();
     // The globe turns to the city whose journal is open and marks its dot. A
     // journal-only city has no stored dot, so its key's coordinates stand in.
@@ -299,7 +299,8 @@ const TravelContent = () => {
         const key = hovered.dotKey;
         return visitedCities.filter(c =>
             `${c.dot_col},${c.dot_row}` === key ||
-            latLngToCell(c.lat, c.lon, 3) === key
+            // The map hovers at whichever hex level it is showing.
+            (isValidCell(key) && latLngToCell(c.lat, c.lon, getResolution(key)) === key)
         );
     }, [hovered?.dotKey, visitedCities, viewMode]);
 
@@ -777,7 +778,6 @@ const TravelContent = () => {
                                 {/* Map */}
                                 <DotMatrixGlobe
                                     visitedCountryCodes={visitedCodes}
-                                    visitedCityDots={viewMode === 'cities' ? visitedDotKeys : undefined}
                                     visitedCities={viewMode === 'cities' ? visitedCitiesForMap : undefined}
                                     viewMode={viewMode}
                                     focusedCountryCode={selectedCountry?.code}

@@ -17,7 +17,10 @@ vi.mock('@/integrations/supabase/client', () => ({
     from: (table: string) => {
       const data = () => tables.rows[table] ?? [];
       const builder: Record<string, unknown> = {
-        range: async () => ({ data: data(), error: null, count: data().length }),
+        range: async (from: number, to: number) => {
+          const all = data();
+          return { data: all.slice(from, to + 1), error: null, count: all.length };
+        },
         then: (resolve: (value: unknown) => unknown) => resolve({ data: data(), error: null }),
       };
       for (const method of ['select', 'gte', 'lte', 'gt', 'order', 'limit', 'in']) builder[method] = () => builder;
@@ -78,5 +81,18 @@ describe('News queries drop dropped shows and watched films', () => {
     tables.rows.tv_show_episodes = [episode(2, 'stopped')];
     const result = await run<{ announcements: { tv_show_id: number }[] }>(recentAnnouncementsQuery(7));
     expect(result.announcements.map((row) => row.tv_show_id)).toEqual([1]);
+  });
+
+  it('announcements paginate past PostgREST 1,000-row pages without truncating', async () => {
+    const created_at = '2026-11-17T00:00:00Z';
+    tables.rows.tv_show_seasons = [
+      { id: 1, tv_show_id: 1, season_number: 1, created_at, tv_shows: { title: 'Big Show', poster: null, platform: null, library_state: 'active' } },
+    ];
+    tables.rows.tv_show_episodes = Array.from({ length: 1205 }, (_, index) => ({
+      ...episode(index + 1, 'active'),
+      created_at,
+    }));
+    const result = await run<{ announcements: { kind: string }[] }>(recentAnnouncementsQuery(30));
+    expect(result.announcements.filter((row) => row.kind === 'episode')).toHaveLength(1205);
   });
 });

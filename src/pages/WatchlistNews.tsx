@@ -139,12 +139,9 @@ function CountdownPill({ days }: { days: number }) {
   );
 }
 
-/** One row of the merged Updates list, laid out on fixed grid tracks --
- *  poster | title (with the line stacked beneath) | platform | date -- so
- *  every column lines up down the list. The line sits under the title rather
- *  than in a column of its own, which on a wide screen left a gap across the
- *  middle of every row. Below `sm` the platform column is hidden
- *  (REHAUL_PLAN.md 8.C-bis). */
+/** One row of the merged Updates list: poster on the left, title, sentence
+ *  and relative date stacked in a single flex column on the right so wrapped
+ *  lines never collide with each other or adjacent rows. */
 function UpdateRow({
   row,
   today,
@@ -162,9 +159,9 @@ function UpdateRow({
       type="button"
       onClick={onClick}
       aria-label={`${row.title} — open details`}
-      className="news-update-row grid w-full grid-cols-[44px_minmax(0,1fr)_64px] items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:grid-cols-[56px_minmax(0,1fr)_104px_72px] sm:gap-x-4"
+      className="news-update-row flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:gap-3.5"
     >
-      <div className="col-start-1 row-span-2 row-start-1 aspect-[2/3] w-11 shrink-0 self-center overflow-hidden rounded bg-muted sm:w-14">
+      <div className="aspect-[2/3] w-11 shrink-0 overflow-hidden rounded bg-muted">
         {showFallback ? (
           <div className="missing-art flex h-full w-full items-center justify-center">
             <Tv className="h-3.5 w-3.5" />
@@ -180,21 +177,17 @@ function UpdateRow({
         )}
       </div>
 
-      <span className="col-start-2 row-start-1 min-w-0 self-end truncate font-serif text-sm font-medium sm:text-base">
-        {row.title}
-      </span>
-
-      <span className="col-start-2 row-start-2 min-w-0 self-start truncate text-xs text-muted-foreground sm:text-sm">
-        {row.sentence}
-      </span>
-
-      <span className="hidden min-w-0 items-center sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:flex">
-        <PlatformBadge platform={row.platform ?? undefined} size={16} />
-      </span>
-
-      <span className="col-start-3 row-span-2 row-start-1 shrink-0 justify-self-end text-right text-xs text-muted-foreground sm:col-start-4 sm:text-sm">
-        {relativeDay(row.occurredAt, today)}
-      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="min-w-0 break-words font-serif text-sm font-medium leading-snug sm:text-base">
+          {row.title}
+        </span>
+        <span className="min-w-0 break-words text-xs leading-snug text-muted-foreground sm:text-sm">
+          {row.sentence}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {relativeDay(row.occurredAt, today)}
+        </span>
+      </div>
     </button>
   );
 }
@@ -767,7 +760,7 @@ const WatchlistNews = () => {
               {upcomingLoading ? <p role="status" className="text-sm text-muted-foreground">Loading upcoming releases…</p> : <UpcomingGrid items={visibleUpcoming} activeWindow={newsWindow} onSelect={openDetail} scheduleFor={(item) => scheduleFor(item.entityType, item.entityId, item.title, item.date)} failed={upcomingFailed} />}
             </div>
             <div className="flex min-h-0 flex-col gap-4 min-w-0">
-              <section aria-label="Your week" className="shrink-0 rounded-2xl border border-border/60 bg-card p-4">
+              <section aria-label="Your week" className="news-calendar-pane shrink-0 rounded-2xl border border-border/60 bg-card p-4">
                 <YourWeek
                   schedule={schedule}
                   loading={scheduleLoading || watchlistLoading}

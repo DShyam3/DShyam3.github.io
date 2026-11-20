@@ -2,11 +2,18 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { withRestTimeout } from './rest-timeout-fetch';
+import { withApiUsageTelemetry } from './api-usage-fetch';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // Consumers import the `supabase` export below via the `@/` alias.
+
+const instrumentedFetch = withApiUsageTelemetry(
+  withRestTimeout((input, init) => fetch(input, init), SUPABASE_URL),
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY,
+);
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -15,6 +22,6 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
   },
   // Database API requests fail after a hard limit instead of hanging on a
-  // dead connection (rest-timeout-fetch.ts).
-  global: { fetch: withRestTimeout((input, init) => fetch(input, init), SUPABASE_URL) },
+  // dead connection (rest-timeout-fetch.ts) and record usage telemetry for /dev.
+  global: { fetch: instrumentedFetch },
 });

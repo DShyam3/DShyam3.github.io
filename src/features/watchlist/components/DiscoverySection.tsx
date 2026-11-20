@@ -408,8 +408,13 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           <h2 id="discover-coming-soon"><DotMatrixText text="COMING SOON" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">Outside your library, over the next six months. Dates can change, and a cinema release is not streaming.</p>
         </div>
-        {discovery.upcomingLoading && <p role="status" className="text-sm text-muted-foreground">Finding new releases…</p>}
+        {(discovery.upcomingLoading || (comingSoon.length === 0 && discovery.upcomingLoadingMore)) && (
+          <p role="status" className="text-sm text-muted-foreground">Finding new releases…</p>
+        )}
         {discovery.upcomingFailed && <p role="status" className="text-sm text-muted-foreground">Some new releases couldn’t load.</p>}
+        {!discovery.upcomingLoading && !discovery.upcomingLoadingMore && !discovery.upcomingFailed && comingSoon.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nothing new among the most popular releases of the next six months.</p>
+        )}
         {comingSoon.length > 0 && <TileGrid items={comingSoon} onDismiss={discovery.dismiss} />}
       </section>
 
@@ -417,7 +422,10 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         <div className="space-y-1">
           <h2 id="discover-already-watched"><DotMatrixText text="HAVE YOU ALREADY WATCHED?" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">
-            Film trilogies, collections and connected TV spin-offs from what is already in your library, grouped in release order so you can log what you’ve seen or add the rest.
+            Film collections and connected TV spin-offs you have started, each in release order, so you can log what you’ve seen or add the rest.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Newest first: films and series take turns, each led by the one you added to most recently. Release and watch dates don’t count.
           </p>
         </div>
         {discovery.franchisesLoading && discovery.franchises.length === 0 && (
@@ -452,7 +460,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           <div className="space-y-3 pt-2">
             <div className="space-y-0.5">
               <h3 className="text-sm font-medium">Likely seen</h3>
-              <p className="text-xs text-muted-foreground">Recommended across multiple titles you have already watched or rated highly.</p>
+              <p className="text-xs text-muted-foreground">Recommended across titles you have watched, or widely watched on TMDB.</p>
             </div>
             <TileGrid items={discovery.likelySeen} onDismiss={discovery.dismiss} />
           </div>
@@ -465,6 +473,9 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           <p className="text-sm text-muted-foreground">Discover new films and series outside the collections above, based on what you rate highly, favourite and watch.</p>
         </div>
         {discovery.loading && <p role="status" className="text-sm text-muted-foreground">Finding films and shows for you…</p>}
+        {!discovery.loading && discovery.loadingMore && discovery.recommendations.length === 0 && (
+          <p role="status" className="text-sm text-muted-foreground">Finding more suggestions…</p>
+        )}
         {discovery.failed && (
           <div role="status" className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             <p>Suggestions couldn’t load.</p>
@@ -473,8 +484,12 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         )}
         {discovery.partlyFailed && <p role="status" className="text-sm text-muted-foreground">A few suggestions couldn’t load; Show more keeps looking.</p>}
         {discovery.recommendations.length > 0 && <TileGrid items={discovery.recommendations} onDismiss={discovery.dismiss} />}
-        {!discovery.loading && discovery.recommendations.length === 0 && !discovery.failed && (
-          <p className="text-sm text-muted-foreground">Nothing new on this page. Show more to keep looking.</p>
+        {!discovery.loading && !discovery.loadingMore && discovery.recommendations.length === 0 && !discovery.failed && (
+          <p className="text-sm text-muted-foreground">
+            {discovery.hasMore
+              ? 'Nothing new on this page — automatic loading paused to stay within API rate limits. Click Show more to keep looking.'
+              : 'No more suggestions to show.'}
+          </p>
         )}
         {!discovery.loading && (discovery.recommendations.length > 0 || discovery.hasMore) && (
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">

@@ -180,6 +180,14 @@ const EDGES: [number, number][] = [
   [0, 5],
 ];
 
+/** A 60 Hz frame, the rate the orbit speed was first tuned at. */
+const FRAME_MS = 1000 / 60;
+/**
+ * Orbit speed in radians per millisecond. It was 0.0032 per frame, which on a
+ * 120 Hz or 240 Hz screen turned two or four times as fast.
+ */
+const ORBIT_PER_MS = 0.0032 / FRAME_MS;
+
 interface ProjectedCluster {
   cluster: SemanticClusterNode;
   x: number;
@@ -431,22 +439,32 @@ export function SemanticConstellation({
 
   useEffect(() => {
     let rafId = 0;
+    let lastTime = -1;
+    // Scrolled out of view, the orbit stops: nobody can see it turn.
+    let onScreen = true;
     const shouldAnimate = !reducedMotion && !isPaused;
 
-    const tick = () => {
-      if (!dragRef.current.active && shouldAnimate) {
-        rotationRef.current.yaw += 0.0032;
+    const tick = (time: number) => {
+      rafId = 0;
+      // Starting or resuming, the gap is not a step; a stall is capped so the
+      // orbit cannot lurch.
+      const dt = lastTime < 0 ? FRAME_MS : Math.min(Math.max(0, time - lastTime), 100);
+      lastTime = time;
+      if (!dragRef.current.active) {
+        rotationRef.current.yaw += ORBIT_PER_MS * dt;
       }
       renderFrame();
-      if (shouldAnimate) {
-        rafId = window.requestAnimationFrame(tick);
-      }
+      if (shouldAnimate && onScreen) rafId = window.requestAnimationFrame(tick);
+    };
+
+    const start = () => {
+      if (!shouldAnimate || !onScreen || rafId) return;
+      lastTime = -1;
+      rafId = window.requestAnimationFrame(tick);
     };
 
     renderFrame();
-    if (shouldAnimate) {
-      rafId = window.requestAnimationFrame(tick);
-    }
+    start();
 
     const handleResize = () => renderFrame();
     window.addEventListener('resize', handleResize);
@@ -456,10 +474,25 @@ export function SemanticConstellation({
         ? new ResizeObserver(handleResize)
         : null;
     if (observer && canvas) observer.observe(canvas);
+    const visibility =
+      typeof IntersectionObserver !== 'undefined' && canvas
+        ? new IntersectionObserver((entries) => {
+            // Several crossings can queue up before this runs; the last is now.
+            onScreen = entries[entries.length - 1].isIntersecting;
+            if (onScreen) {
+              start();
+            } else if (rafId) {
+              window.cancelAnimationFrame(rafId);
+              rafId = 0;
+            }
+          })
+        : null;
+    if (visibility && canvas) visibility.observe(canvas);
     return () => {
-      window.cancelAnimationFrame(rafId);
+      if (rafId) window.cancelAnimationFrame(rafId);
       window.removeEventListener('resize', handleResize);
       observer?.disconnect();
+      visibility?.disconnect();
     };
   }, [isPaused, reducedMotion, renderFrame]);
 

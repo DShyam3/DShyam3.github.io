@@ -53,9 +53,11 @@ export function discoverySeeds(
   );
   const seed = (item: WatchlistItem, reason: string): DiscoverySeed => ({ id: item.tmdb_id!, media: mediaOf(item), title: item.title, reason });
 
+  const hasFranchise = (item: WatchlistItem) => item.collection_id != null || Boolean(item.franchise);
+
   const rated = usable
     .filter((item) => (item.personal_rating ?? 0) >= 8)
-    .sort((a, b) => (b.personal_rating ?? 0) - (a.personal_rating ?? 0) || a.title.localeCompare(b.title))
+    .sort((a, b) => Number(hasFranchise(b)) - Number(hasFranchise(a)) || (b.personal_rating ?? 0) - (a.personal_rating ?? 0) || a.title.localeCompare(b.title))
     .map((item) => seed(item, `Because you rated ${item.title} ${item.personal_rating}/10`));
   const favoured = favourites
     .filter((item) => item.tmdb_id && !blocked.has(discoveryKey(item.media_type, item.tmdb_id)))
@@ -63,13 +65,13 @@ export function discoverySeeds(
     .map((item): DiscoverySeed => ({ id: item.tmdb_id!, media: item.media_type, title: item.title, reason: `Because you favourited ${item.title}` }));
   const recent = usable
     .filter((item) => item.watched_at)
-    .sort((a, b) => (b.watched_at ?? '').localeCompare(a.watched_at ?? ''))
+    .sort((a, b) => Number(hasFranchise(b)) - Number(hasFranchise(a)) || (b.watched_at ?? '').localeCompare(a.watched_at ?? ''))
     .map((item) => seed(item, `Because you watched ${item.title}`));
   const watching = usable
     // Any started show with episodes in play: mid-season, kept up with, or
     // between seasons on To watch.
     .filter((item) => ['Watching', 'Between seasons'].includes(libraryStatus(item, today)))
-    .sort((a, b) => a.title.localeCompare(b.title))
+    .sort((a, b) => Number(hasFranchise(b)) - Number(hasFranchise(a)) || a.title.localeCompare(b.title))
     .map((item) => seed(item, `Because you’re watching ${item.title}`));
   const awaited = usable
     // New titles only: a caught-up series' dated return also sits on
@@ -79,7 +81,7 @@ export function discoverySeeds(
     .sort((a, b) => a.date.localeCompare(b.date) || a.item.title.localeCompare(b.item.title))
     .map(({ item }) => seed(item, `Because you’re waiting for ${item.title}`));
   const saved = [...usable]
-    .sort((a, b) => a.title.localeCompare(b.title))
+    .sort((a, b) => Number(hasFranchise(b)) - Number(hasFranchise(a)) || a.title.localeCompare(b.title))
     .map((item) => seed(item, `Based on ${item.title} in your library`));
 
   const seen = new Set<string>();
@@ -136,6 +138,33 @@ export function interleaveBySeed(
     for (const queue of queues) if (queue[index]) result.push(queue[index]);
   }
   return result;
+}
+
+/**
+ * What to do with this browser's dismissals once the owner's table is
+ * reachable. A key leaves the browser copy only when a read of the table
+ * has it (`confirmed`), never on a successful write alone: a read already in
+ * flight when the write lands finishes after it without the new row, and a
+ * key released on the write would then vanish from both copies and the title
+ * would come back. Keys already being written are not sent twice; keys that
+ * could never be written (malformed) are released.
+ */
+export function dismissalHandover(
+  local: ReadonlySet<string>,
+  confirmed: readonly string[] | undefined,
+  sending: ReadonlySet<string>,
+): { release: Set<string>; send: { media: DiscoveryMedia; tmdb_id: number }[] } {
+  const inTable = new Set(confirmed ?? []);
+  const release = new Set<string>();
+  const send: { media: DiscoveryMedia; tmdb_id: number }[] = [];
+  for (const key of local) {
+    if (inTable.has(key)) { release.add(key); continue; }
+    const [media, id] = key.split(':');
+    const tmdbId = Number(id);
+    if ((media !== 'movie' && media !== 'tv') || !Number.isInteger(tmdbId) || tmdbId <= 0) { release.add(key); continue; }
+    if (!sending.has(key)) send.push({ media, tmdb_id: tmdbId });
+  }
+  return { release, send };
 }
 
 /** Identity always includes media type: TMDB film/show IDs can collide. */

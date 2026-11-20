@@ -1,5 +1,5 @@
 import type { GlobeView } from './globeProjection';
-import type { HexTierData } from './hexMapData';
+import type { HexPatchData } from './hexMapData';
 
 /**
  * Draws the hex map's cells and borders with WebGL2.
@@ -15,6 +15,11 @@ import type { HexTierData } from './hexMapData';
  * What a cell looks like (its colour and how far it is inset) is one byte
  * per cell in a small texture, rewritten when the visited set, the hover or
  * the selection changes, rather than per frame.
+ *
+ * Cells come in patches: the base level is one, and the finer levels are
+ * cut into many, each uploaded once when it first comes on screen and kept.
+ * A frame draws whichever patches it is given, each at its own opacity, so
+ * one level can fade into the next.
  */
 
 export interface HexGlPalette {
@@ -32,9 +37,20 @@ export interface HexGlBorders {
     halfWidth: number;
 }
 
+/** One patch to draw this frame, and how opaque. */
+export interface HexGlDraw {
+    key: string;
+    alpha: number;
+}
+
 export interface HexGlRenderer {
-    setCellStyles(styles: Uint8Array): void;
-    render(view: GlobeView, palette: HexGlPalette, borders: HexGlBorders): void;
+    /** Uploads a patch's cells and borders. A key already held is replaced. */
+    addPatch(key: string, data: HexPatchData): void;
+    hasPatch(key: string): boolean;
+    removePatch(key: string): void;
+    /** One style byte per cell of the patch, in its cell order. */
+    setPatchStyles(key: string, styles: Uint8Array): void;
+    render(view: GlobeView, palette: HexGlPalette, borders: HexGlBorders, draws: readonly HexGlDraw[]): void;
     dispose(): void;
 }
 
@@ -48,6 +64,7 @@ uniform float u_radius;
 uniform vec4 u_turn;
 uniform vec4 u_flat;
 uniform float u_progress;
+uniform float u_alpha;
 
 vec3 globe(vec3 p) {
     vec3 s = p * u_radius;
@@ -83,7 +100,7 @@ out vec4 v_color;
 
 void main() {
     vec3 centre = globe(a_c3);
-    if ((centre.z < 0.0 && u_progress > 0.85) || (a_meta.z > 0.5 && u_progress < 0.5)) {
+    if ((centre.z < 0.0 && u_progress > 0.85) || u_progress < a_meta.z) {
         gl_Position = CULLED;
         v_color = vec4(0.0);
         return;
@@ -93,10 +110,9 @@ void main() {
     vec2 c = mix(flatMap(a_c2), centre.xy, u_progress);
     vec2 v = mix(flatMap(a_v2), globe(a_v3).xy, u_progress);
     vec2 p = c + (v - c) * (u_scales[style] * a_meta.y);
-    // In sevenths, as the canvas 2D path batches it, so the two shade alike.
-    float opacity = round(((1.0 - u_progress) + max(0.1, 0.45 + 0.55 * centre.z) * u_progress) * 6.0) / 6.0;
+    float opacity = (1.0 - u_progress) + max(0.1, 0.45 + 0.55 * centre.z) * u_progress;
     vec4 color = u_colors[style];
-    float alpha = color.a * opacity;
+    float alpha = color.a * opacity * u_alpha;
     v_color = vec4(color.rgb * alpha, alpha);
     gl_Position = toClip(p);
 }
@@ -122,7 +138,7 @@ uniform float u_halfWidth;
 void main() {
     vec3 g1 = globe(a_p1);
     vec3 g2 = globe(a_p2);
-    if ((a_meta.z > 0.5 && u_progress < 0.5) || (u_progress > 0.5 && g1.z < 0.0 && g2.z < 0.0)) {
+    if (u_progress < a_meta.z || (u_progress > 0.5 && g1.z < 0.0 && g2.z < 0.0)) {
         gl_Position = CULLED;
         return;
     }
@@ -151,7 +167,7 @@ const HEX_LAYOUT: Layout = [['a_c3', 3], ['a_c2', 2], ['a_v3', 3], ['a_v2', 2], 
 const BORDER_LAYOUT: Layout = [['a_p1', 3], ['a_p2', 3], ['a_f1', 2], ['a_f2', 2], ['a_meta', 3]];
 const STRIDE = 13;
 
-const SHARED_UNIFORMS = ['u_view', 'u_radius', 'u_turn', 'u_flat', 'u_progress'] as const;
+const SHARED_UNIFORMS = ['u_view', 'u_radius', 'u_turn', 'u_flat', 'u_progress', 'u_alpha'] as const;
 
 interface Program {
     program: WebGLProgram;
@@ -219,38 +235,28 @@ function mesh(gl: WebGL2RenderingContext, data: Float32Array, indices: Uint32Arr
 }
 
 /** Each cell as a fan: its centre, then its corners, both projections per vertex. */
-function hexGeometry(tier: HexTierData): { data: Float32Array; indices: Uint32Array } {
-    let vertices = 0;
-    let triangles = 0;
-    for (const cell of tier.cells) {
-        vertices += 1 + cell.verts3d.length;
-        triangles += cell.verts3d.length;
-    }
-    const data = new Float32Array(vertices * STRIDE);
-    const indices = new Uint32Array(triangles * 3);
+function hexGeometry(patch: HexPatchData): { data: Float32Array; indices: Uint32Array } {
+    const corners = patch.cornerStart[patch.count];
+    const data = new Float32Array((patch.count + corners) * STRIDE);
+    const indices = new Uint32Array(corners * 3);
+    const { centre3, centre2, corner3, corner2, cornerStart, hide } = patch;
     let v = 0;
     let i = 0;
-    for (const cell of tier.cells) {
+    for (let cell = 0; cell < patch.count; cell++) {
         const base = v;
-        const c3 = cell.center3d;
-        const c2 = cell.center2d;
-        const anti = cell.crossesAntimeridian ? 1 : 0;
-        const put = (ux: number, uy: number, uz: number, nx: number, ny: number, rim: number) => {
+        const put = (k3: Float32Array, o3: number, k2: Float32Array, o2: number, rim: number) => {
             const o = v * STRIDE;
-            data[o] = c3.ux; data[o + 1] = c3.uy; data[o + 2] = c3.uz;
-            data[o + 3] = c2.nx; data[o + 4] = c2.ny;
-            data[o + 5] = ux; data[o + 6] = uy; data[o + 7] = uz;
-            data[o + 8] = nx; data[o + 9] = ny;
-            data[o + 10] = cell.index; data[o + 11] = rim; data[o + 12] = anti;
+            data[o] = centre3[cell * 3]; data[o + 1] = centre3[cell * 3 + 1]; data[o + 2] = centre3[cell * 3 + 2];
+            data[o + 3] = centre2[cell * 2]; data[o + 4] = centre2[cell * 2 + 1];
+            data[o + 5] = k3[o3]; data[o + 6] = k3[o3 + 1]; data[o + 7] = k3[o3 + 2];
+            data[o + 8] = k2[o2]; data[o + 9] = k2[o2 + 1];
+            data[o + 10] = cell; data[o + 11] = rim; data[o + 12] = hide[cell];
             v++;
         };
-        put(c3.ux, c3.uy, c3.uz, c2.nx, c2.ny, 0);
-        const n = cell.verts3d.length;
-        for (let k = 0; k < n; k++) {
-            const p = cell.verts3d[k];
-            const f = cell.verts2d[k];
-            put(p.ux, p.uy, p.uz, f.nx, f.ny, 1);
-        }
+        put(centre3, cell * 3, centre2, cell * 2, 0);
+        const first = cornerStart[cell];
+        const n = cornerStart[cell + 1] - first;
+        for (let k = 0; k < n; k++) put(corner3, (first + k) * 3, corner2, (first + k) * 2, 1);
         for (let k = 0; k < n; k++) {
             indices[i++] = base;
             indices[i++] = base + 1 + k;
@@ -264,23 +270,21 @@ function hexGeometry(tier: HexTierData): { data: Float32Array; indices: Uint32Ar
  * Each border segment as a quad, widened in screen space by the shader so the
  * stroke keeps its pixel width at any zoom (WebGL's own lines are 1px).
  */
-function borderGeometry(tier: HexTierData): { data: Float32Array; indices: Uint32Array } {
-    const segments = tier.borderSegments;
-    const data = new Float32Array(segments.length * 4 * STRIDE);
-    const indices = new Uint32Array(segments.length * 6);
+function borderGeometry(patch: HexPatchData): { data: Float32Array; indices: Uint32Array } {
+    const n = patch.borderCount;
+    const data = new Float32Array(n * 4 * STRIDE);
+    const indices = new Uint32Array(n * 6);
+    const { border3, border2, borderHide } = patch;
     let v = 0;
     let i = 0;
-    for (const seg of segments) {
+    for (let seg = 0; seg < n; seg++) {
         const base = v;
-        const anti = seg.crossesAntimeridian ? 1 : 0;
         for (const end of [0, 1]) {
             for (const side of [-1, 1]) {
                 const o = v * STRIDE;
-                data[o] = seg.p1.ux; data[o + 1] = seg.p1.uy; data[o + 2] = seg.p1.uz;
-                data[o + 3] = seg.p2.ux; data[o + 4] = seg.p2.uy; data[o + 5] = seg.p2.uz;
-                data[o + 6] = seg.fx1; data[o + 7] = seg.fy1;
-                data[o + 8] = seg.fx2; data[o + 9] = seg.fy2;
-                data[o + 10] = end; data[o + 11] = side; data[o + 12] = anti;
+                for (let j = 0; j < 6; j++) data[o + j] = border3[seg * 6 + j];
+                for (let j = 0; j < 4; j++) data[o + 6 + j] = border2[seg * 4 + j];
+                data[o + 10] = end; data[o + 11] = side; data[o + 12] = borderHide[seg];
                 v++;
             }
         }
@@ -290,14 +294,22 @@ function borderGeometry(tier: HexTierData): { data: Float32Array; indices: Uint3
     return { data, indices };
 }
 
+/** A patch as the GPU holds it. */
+interface GpuPatch {
+    hex: Mesh;
+    border: Mesh;
+    texture: WebGLTexture;
+    rows: number;
+    pixels: Uint8Array;
+}
+
 /**
- * A renderer for `tier` on `canvas`, or null where WebGL2 is not available;
- * the globe then draws with canvas 2D. `onLost` fires if the GPU takes the
- * context away mid-session, which is the globe's cue to fall back the same way.
+ * A renderer on `canvas`, or null where WebGL2 is not available; the globe
+ * then draws with canvas 2D. `onLost` fires if the GPU takes the context away
+ * mid-session, which is the globe's cue to fall back the same way.
  */
 export function createHexGlRenderer(
     canvas: HTMLCanvasElement,
-    tier: HexTierData,
     styleCount: number,
     onLost: () => void,
 ): HexGlRenderer | null {
@@ -313,22 +325,7 @@ export function createHexGlRenderer(
 
     const hexProgram = link(gl, hexVertex(styleCount), HEX_FRAGMENT, HEX_LAYOUT, ['u_style', 'u_colors', 'u_scales']);
     const borderProgram = link(gl, BORDER_VERTEX, BORDER_FRAGMENT, BORDER_LAYOUT, ['u_halfWidth', 'u_color']);
-    const hexGeo = hexGeometry(tier);
-    const hexMesh = mesh(gl, hexGeo.data, hexGeo.indices, HEX_LAYOUT);
-    const borderGeo = borderGeometry(tier);
-    const borderMesh = mesh(gl, borderGeo.data, borderGeo.indices, BORDER_LAYOUT);
-
-    const rows = Math.max(1, Math.ceil(tier.cells.length / STYLE_TEX_WIDTH));
-    const stylePixels = new Uint8Array(STYLE_TEX_WIDTH * rows);
-    const styleTexture = gl.createTexture();
-    if (!styleTexture) throw new Error('createTexture failed');
-    gl.bindTexture(gl.TEXTURE_2D, styleTexture);
-    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, STYLE_TEX_WIDTH, rows, 0, gl.RED, gl.UNSIGNED_BYTE, stylePixels);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const patches = new Map<string, GpuPatch>();
 
     let lost = false;
     const handleLost = () => {
@@ -346,16 +343,66 @@ export function createHexGlRenderer(
         gl.uniform1f(u.get('u_progress') ?? null, view.progress);
     };
 
+    const release = (patch: GpuPatch) => {
+        for (const m of [patch.hex, patch.border]) {
+            gl.deleteVertexArray(m.vao);
+            for (const b of m.buffers) gl.deleteBuffer(b);
+        }
+        gl.deleteTexture(patch.texture);
+    };
+
+    const uploadStyles = (patch: GpuPatch) => {
+        gl.bindTexture(gl.TEXTURE_2D, patch.texture);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, STYLE_TEX_WIDTH, patch.rows, gl.RED, gl.UNSIGNED_BYTE, patch.pixels);
+    };
+
     return {
-        setCellStyles(styles) {
+        addPatch(key, data) {
             if (lost) return;
-            stylePixels.set(styles.subarray(0, Math.min(styles.length, stylePixels.length)));
-            gl.bindTexture(gl.TEXTURE_2D, styleTexture);
+            const old = patches.get(key);
+            if (old) release(old);
+            const hexGeo = hexGeometry(data);
+            const borderGeo = borderGeometry(data);
+            const rows = Math.max(1, Math.ceil(data.count / STYLE_TEX_WIDTH));
+            const pixels = new Uint8Array(STYLE_TEX_WIDTH * rows);
+            const texture = gl.createTexture();
+            if (!texture) throw new Error('createTexture failed');
+            gl.bindTexture(gl.TEXTURE_2D, texture);
             gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, STYLE_TEX_WIDTH, rows, gl.RED, gl.UNSIGNED_BYTE, stylePixels);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, STYLE_TEX_WIDTH, rows, 0, gl.RED, gl.UNSIGNED_BYTE, pixels);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            patches.set(key, {
+                hex: mesh(gl, hexGeo.data, hexGeo.indices, HEX_LAYOUT),
+                border: mesh(gl, borderGeo.data, borderGeo.indices, BORDER_LAYOUT),
+                texture,
+                rows,
+                pixels,
+            });
         },
 
-        render(view, palette, borders) {
+        hasPatch(key) {
+            return patches.has(key);
+        },
+
+        removePatch(key) {
+            const patch = patches.get(key);
+            if (!patch) return;
+            if (!lost) release(patch);
+            patches.delete(key);
+        },
+
+        setPatchStyles(key, styles) {
+            const patch = patches.get(key);
+            if (lost || !patch) return;
+            patch.pixels.set(styles.subarray(0, Math.min(styles.length, patch.pixels.length)));
+            uploadStyles(patch);
+        },
+
+        render(view, palette, borders, draws) {
             if (lost) return;
             // Resizing reallocates the drawing buffer, so only on a change.
             const width = Math.max(1, Math.round(view.width * view.dpr));
@@ -367,6 +414,7 @@ export function createHexGlRenderer(
             gl.clear(gl.COLOR_BUFFER_BIT);
             if (view.width <= 0 || view.height <= 0) return;
             gl.enable(gl.BLEND);
+            const visible = draws.filter((d) => d.alpha > 0.004 && patches.has(d.key));
 
             if (borders.alpha > 0.015) {
                 gl.useProgram(borderProgram.program);
@@ -377,15 +425,19 @@ export function createHexGlRenderer(
                 const minHalf = 0.5 / view.dpr;
                 const halfWidth = Math.max(borders.halfWidth, minHalf);
                 gl.uniform1f(borderProgram.uniforms.get('u_halfWidth') ?? null, halfWidth);
-                const a = borders.alpha * (borders.halfWidth / halfWidth);
-                const shade = borders.shade * a;
-                gl.uniform4f(borderProgram.uniforms.get('u_color') ?? null, shade, shade, shade, a);
                 // Segments meet at every hex corner, and their quads overlap
-                // there. MAX rather than blending keeps those joints the same
+                // there; so do the two halves of a border between patches.
+                // MAX rather than blending keeps those joints the same
                 // strength as the line, as one canvas stroke would be.
                 gl.blendEquation(gl.MAX);
-                gl.bindVertexArray(borderMesh.vao);
-                gl.drawElements(gl.TRIANGLES, borderMesh.count, gl.UNSIGNED_INT, 0);
+                for (const draw of visible) {
+                    const a = borders.alpha * (borders.halfWidth / halfWidth) * draw.alpha;
+                    const shade = borders.shade * a;
+                    gl.uniform4f(borderProgram.uniforms.get('u_color') ?? null, shade, shade, shade, a);
+                    const patch = patches.get(draw.key)!;
+                    gl.bindVertexArray(patch.border.vao);
+                    gl.drawElements(gl.TRIANGLES, patch.border.count, gl.UNSIGNED_INT, 0);
+                }
             }
 
             gl.useProgram(hexProgram.program);
@@ -393,26 +445,27 @@ export function createHexGlRenderer(
             gl.uniform4fv(hexProgram.uniforms.get('u_colors') ?? null, palette.colors);
             gl.uniform1fv(hexProgram.uniforms.get('u_scales') ?? null, palette.scales);
             gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, styleTexture);
             gl.uniform1i(hexProgram.uniforms.get('u_style') ?? null, 0);
             gl.blendEquation(gl.FUNC_ADD);
             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-            gl.bindVertexArray(hexMesh.vao);
-            gl.drawElements(gl.TRIANGLES, hexMesh.count, gl.UNSIGNED_INT, 0);
+            for (const draw of visible) {
+                const patch = patches.get(draw.key)!;
+                gl.uniform1f(hexProgram.uniforms.get('u_alpha') ?? null, draw.alpha);
+                gl.bindTexture(gl.TEXTURE_2D, patch.texture);
+                gl.bindVertexArray(patch.hex.vao);
+                gl.drawElements(gl.TRIANGLES, patch.hex.count, gl.UNSIGNED_INT, 0);
+            }
             gl.bindVertexArray(null);
         },
 
         dispose() {
             canvas.removeEventListener('webglcontextlost', handleLost);
             if (!lost) {
-                for (const m of [hexMesh, borderMesh]) {
-                    gl.deleteVertexArray(m.vao);
-                    for (const b of m.buffers) gl.deleteBuffer(b);
-                }
-                gl.deleteTexture(styleTexture);
+                for (const patch of patches.values()) release(patch);
                 gl.deleteProgram(hexProgram.program);
                 gl.deleteProgram(borderProgram.program);
             }
+            patches.clear();
             // Give the context back once the canvas has left the page, rather
             // than waiting on garbage collection: browsers cap live contexts.
             // A canvas still attached is being re-mounted (Fast Refresh, or a

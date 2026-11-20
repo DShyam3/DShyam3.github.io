@@ -3139,3 +3139,11 @@ The globe now uploads its geometry once and the shader does the rotation and the
 Not measured: the lag entering and leaving Travel, before or after the change, and frame rate on a real phone.
 
 Closure: `src/components/dot-matrix/hexGlRenderer.ts`, `src/components/dot-matrix/DotMatrixGlobe.tsx`.
+
+### Discover ranks collections by add order, and its request budget is fixed — 2026-11-20
+
+`HAVE YOU ALREADY WATCHED?` ranked franchise cards by latest activity, which meant `created_at` on the library rows. The library fills `created_at` from the release date (`library-query.ts`), and `movies` and `tv_shows` have no add-time column, so that sort was in effect ordering by release year. A live SQL check put Hangover 4th and Harry Potter 16th of 201 collections by add order. The order now uses the newest library row id in each franchise, which is the add order. Film and series ids come from separate tables and are not comparable, so films and series take turns, film first, and each media type is sorted on its own. Release and watch dates do not count. The known limit: marking an existing to-watch film watched does not move its franchise up. Fixing that needs a last-touched column and a migration, which is not done.
+
+The request budget is also a decision. `tmdb-proxy` allows 60 calls a minute per IP. Discover spends a fixed amount per visit: opening costs 25 calls, and automatic top-ups add at most 26, once per visit. The counters do not re-arm, so a visit cannot keep fetching. Only a 429 from `getMovieDetails` is retried (at 5s, 20s and 40s). The watch-history import opts out, because it waits on its own. A rate-limited collection or spin-off lookup now throws rather than caching an empty result, so the limit is never stored as an answer.
+
+Closure: `src/features/watchlist/franchise.ts` (`orderByNewestAdded`), `src/features/watchlist/useDiscovery.ts`, `src/features/watchlist/tmdb-retry.test.ts`. Not browser-verified; not deployed.

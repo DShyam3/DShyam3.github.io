@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { curateDiscovery, discoverySeeds, interleaveBySeed, interleaveUpcoming, likelySeenConsensus, type DiscoveryItem } from './discovery';
+import { curateDiscovery, discoverySeeds, dismissalHandover, interleaveBySeed, interleaveUpcoming, likelySeenConsensus, type DiscoveryItem } from './discovery';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -140,6 +140,16 @@ describe('discoverySeeds', () => {
     expect(seeds).toHaveLength(2);
     expect(seeds.map((seed) => `${seed.media}:${seed.id}`)).toEqual(['movie:42', 'tv:42']);
   });
+
+  it('prioritises franchise titles within seed signals regardless of release or watch date', () => {
+    const watchlist: WatchlistItem[] = [
+      makeWatchlistItem({ id: '1', title: 'Recent Solo', category: 'Movies', tmdb_id: 1, watched: true, watched_at: '2026-11-20T00:00:00Z', release_date: '2026-01-01' }),
+      makeWatchlistItem({ id: '2', title: 'Older Franchise', category: 'Movies', tmdb_id: 2, watched: true, watched_at: '2020-01-01T00:00:00Z', release_date: '2009-05-01', collection_id: 86119 }),
+    ];
+
+    const seeds = discoverySeeds(watchlist, [], weekZero);
+    expect(seeds.map((seed) => seed.title)).toEqual(['Older Franchise', 'Recent Solo']);
+  });
 });
 
 describe('interleaveBySeed', () => {
@@ -245,5 +255,28 @@ describe('likelySeenConsensus', () => {
       shortReason: 'In 2 of your lists',
       reason: 'Recommended across 2 titles in your library',
     });
+  });
+});
+
+describe('dismissalHandover', () => {
+  it('keeps a written key in the browser until a read of the table has it', () => {
+    // The race this guards: a read that began before the write finishes after
+    // it, without the new row. The key must stay local, so the title stays hidden.
+    const local = new Set(['movie:331']);
+    expect(dismissalHandover(local, ['movie:1'], new Set(['movie:331']))).toEqual({ release: new Set(), send: [] });
+    expect(dismissalHandover(local, ['movie:1', 'movie:331'], new Set())).toEqual({ release: new Set(['movie:331']), send: [] });
+  });
+
+  it('sends what the table lacks, once', () => {
+    const local = new Set(['movie:331', 'movie:330', 'tv:44217']);
+    const { release, send } = dismissalHandover(local, [], new Set(['movie:330']));
+    expect(release.size).toBe(0);
+    expect(send).toEqual([{ media: 'movie', tmdb_id: 331 }, { media: 'tv', tmdb_id: 44217 }]);
+  });
+
+  it('releases keys that could never be written', () => {
+    const { release, send } = dismissalHandover(new Set(['book:1', 'movie:abc', 'movie:0']), undefined, new Set());
+    expect([...release].sort()).toEqual(['book:1', 'movie:0', 'movie:abc']);
+    expect(send).toEqual([]);
   });
 });

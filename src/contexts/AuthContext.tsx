@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { setClientTelemetryAuth } from '@/integrations/supabase/api-usage-fetch';
 import { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { mfaStepRequired } from '@/lib/auth-aal';
@@ -178,6 +179,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setMfaRequired(false);
         return true;
     }, []);
+
+    useEffect(() => {
+        setClientTelemetryAuth(isAdmin, session?.access_token ?? null);
+    }, [isAdmin, session?.access_token]);
 
     const value = useMemo(
         () => ({ isAdmin, isAuthLoading, mfaRequired, login, verifyCode, logout, session }),
