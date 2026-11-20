@@ -23,6 +23,7 @@ describe('isPersistablePublicQueryKey', () => {
     expect(isPersistablePublicQueryKey(['watchlist', 'viewing-orders'])).toBe(true);
     expect(isPersistablePublicQueryKey(['watchlist', 'news', 'recent-episodes', 30])).toBe(true);
     expect(isPersistablePublicQueryKey(['watchlist', 'tmdb-details', 'movie', 123])).toBe(true);
+    expect(isPersistablePublicQueryKey(['watchlist', 'film-universes'])).toBe(true);
   });
 
   it('rejects private, admin-only, signed-URL, and finance query keys', () => {

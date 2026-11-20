@@ -164,6 +164,21 @@ export interface WikidataTvSpinoffLink {
   posterPath?: string | null;
 }
 
+/**
+ * One film of a shared universe (`wikidata/film-universes`): a Wikidata
+ * series spanning several TMDB collections, such as the Marvel Cinematic
+ * Universe. Title, date and poster are TMDB's where it answered.
+ */
+export interface FilmUniverseMember {
+  /** Wikidata id of the universe, e.g. `Q642878`. */
+  universeId: string;
+  universeName: string;
+  tmdbId: number;
+  title: string | null;
+  releaseDate: string | null;
+  posterPath: string | null;
+}
+
 /** One row of `search/movie` or `search/tv`. */
 export interface TMDBSearchItem {
   id: number;

@@ -96,9 +96,9 @@ const SERVICES: ServiceDefinition[] = [
   {
     id: 'wikidata',
     name: 'Wikidata',
-    description: 'Public SPARQL knowledge graph linking TV series to their spin-offs and shared universes.',
-    howUsed: 'Queried by tmdb-proxy (wikidata/tv-spinoffs) using your library’s TV TMDB IDs, cached for 24 hours.',
-    whyUsed: 'TMDB has film collections but no TV franchise grouping; Wikidata links connected TV universes.',
+    description: 'Public SPARQL knowledge graph linking TV series to their spin-offs, and films to shared universes.',
+    howUsed: 'Queried by tmdb-proxy: wikidata/tv-spinoffs with your library’s TV TMDB IDs, and wikidata/film-universes for the Marvel Cinematic Universe’s films. Both cached for 24 hours.',
+    whyUsed: 'TMDB has film collections but no TV franchise grouping, and splits a shared universe like the MCU into small collections; Wikidata links both.',
     providers: ['wikidata'],
     limitLabel: 'Shared with tmdb-proxy (60 / min)',
   },

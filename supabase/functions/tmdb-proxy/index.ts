@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
 import { addressBlock, clientAddress } from '../_shared/client-address.ts'
-import { recordApiUsage } from '../_shared/api-usage.ts'
+import { createUsageBatcher, recordApiUsage } from '../_shared/api-usage.ts'
 
 const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY')
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
@@ -71,7 +71,11 @@ function callerKey(req: Request): string {
  * the abuse it prevents, and what is being protected here is a free API
  * quota rather than data.
  */
-async function isRateLimited(key: string): Promise<boolean> {
+async function isRateLimited(
+    key: string,
+    limit = MAX_REQUESTS_PER_WINDOW,
+    windowSeconds = WINDOW_SECONDS,
+): Promise<boolean> {
     try {
         const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/check_rate_limit`, {
             method: 'POST',
@@ -82,8 +86,8 @@ async function isRateLimited(key: string): Promise<boolean> {
             },
             body: JSON.stringify({
                 p_key: key,
-                p_limit: MAX_REQUESTS_PER_WINDOW,
-                p_window_seconds: WINDOW_SECONDS,
+                p_limit: limit,
+                p_window_seconds: windowSeconds,
             }),
         })
         if (!response.ok) return false
@@ -233,9 +237,181 @@ async function fetchTvSpinoffs(seedIds: number[]): Promise<TvSpinoffLink[]> {
     return links
 }
 
+// --- Shared film universes ------------------------------------------------
+//
+// TMDB groups films by collection only, which splits a shared universe into
+// small ones ("The Avengers Collection", "Iron Man Collection"). Wikidata has
+// the universe as a series: each film carries "part of the series" (P179)
+// pointing at it, and its TMDB id as P4947. P179 is read across every rank but
+// deprecated, since a film's universe statement is not always its preferred
+// one. Media franchise (P8345) is not used: for the MCU it holds only shorts
+// and TV specials.
+//
+// A fixed registry rather than an id the caller names, so the endpoint stays
+// a known shape like the rest of the allowlist. Adding a universe is a row.
+const FILM_UNIVERSES: { id: string; name: string }[] = [
+    { id: 'Q642878', name: 'Marvel Cinematic Universe' },
+]
+
+/** Film and film project: no shorts or TV specials. An extended cut shares its film's TMDB id. */
+const FILM_TYPES = ['Q11424', 'Q18011172']
+
+/**
+ * Per universe, earliest first. A universe film needs one TMDB details call
+ * for its title and poster, and the MCU has about 45.
+ */
+const MAX_UNIVERSE_FILMS = 80
+/** Details calls in flight at once, so the lookup does not 429 itself. */
+const UNIVERSE_DETAIL_CONCURRENCY = 10
+
+// One call here costs one SPARQL query and a details call per film, and
+// every caller rebuilds the same answer. The client asks once a day per
+// browser, so a second, tighter limit bounds what a loop can spend.
+const UNIVERSE_LIMIT = 6
+const UNIVERSE_WINDOW_SECONDS = 600
+
+interface FilmUniverseBinding {
+    universe?: { value?: string }
+    tmdb?: { value?: string }
+    label?: { value?: string }
+    date?: { value?: string }
+}
+
+interface FilmUniverseMember {
+    universeId: string
+    universeName: string
+    tmdbId: number
+    title: string | null
+    releaseDate: string | null
+    posterPath: string | null
+}
+
+const isoDay = (raw: string | null | undefined): string | null => {
+    const day = raw?.slice(0, 10) ?? ''
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null
+}
+
+async function fetchFilmUniverses(usage: ReturnType<typeof createUsageBatcher>): Promise<FilmUniverseMember[]> {
+    const names = new Map(FILM_UNIVERSES.map((u) => [u.id, u.name]))
+    const sparql = `SELECT ?universe ?tmdb ?label ?date WHERE {
+  VALUES ?universe { ${FILM_UNIVERSES.map((u) => `wd:${u.id}`).join(' ')} }
+  ?film p:P179 ?statement .
+  ?statement ps:P179 ?universe .
+  FILTER NOT EXISTS { ?statement wikibase:rank wikibase:DeprecatedRank }
+  ?film wdt:P31 ?type .
+  VALUES ?type { ${FILM_TYPES.map((id) => `wd:${id}`).join(' ')} }
+  ?film wdt:P4947 ?tmdb .
+  OPTIONAL { ?film wdt:P577 ?date . }
+  OPTIONAL { ?film rdfs:label ?label . FILTER(LANG(?label) = "en") }
+}`
+    const url = new URL('https://query.wikidata.org/sparql')
+    url.searchParams.set('query', sparql)
+    const response = await fetch(url.toString(), {
+        headers: {
+            'Accept': 'application/sparql-results+json',
+            'User-Agent': 'DShyamWatchlist/1.0 (https://dshyam3.github.io)',
+        },
+    })
+    if (!response.ok) throw new Error(`Wikidata returned ${response.status}`)
+    const payload = (await response.json()) as { results?: { bindings?: FilmUniverseBinding[] } }
+
+    // One row per date and type, so a film arrives several times: keep its
+    // earliest date, and its English label as a fallback title.
+    const members = new Map<string, FilmUniverseMember>()
+    for (const row of payload.results?.bindings ?? []) {
+        const universeId = row.universe?.value?.split('/').pop() ?? ''
+        const universeName = names.get(universeId)
+        const tmdbId = Number(row.tmdb?.value)
+        if (!universeName || !Number.isInteger(tmdbId) || tmdbId <= 0) continue
+        const key = `${universeId}:${tmdbId}`
+        const member = members.get(key) ?? {
+            universeId,
+            universeName,
+            tmdbId,
+            title: null,
+            releaseDate: null,
+            posterPath: null,
+        }
+        const date = isoDay(row.date?.value)
+        if (date && (!member.releaseDate || date < member.releaseDate)) member.releaseDate = date
+        const label = row.label?.value?.trim()
+        if (label && !member.title) member.title = label
+        members.set(key, member)
+    }
+    // The registry is never empty, so no rows is a failed query rather than
+    // an answer, and must not be cached as one.
+    if (members.size === 0) throw new Error('Wikidata returned no universe films')
+
+    const byUniverse = new Map<string, FilmUniverseMember[]>()
+    for (const member of members.values()) {
+        const films = byUniverse.get(member.universeId) ?? []
+        films.push(member)
+        byUniverse.set(member.universeId, films)
+    }
+    const list: FilmUniverseMember[] = []
+    for (const [universeId, films] of byUniverse) {
+        films.sort((a, b) => (a.releaseDate ?? '9999').localeCompare(b.releaseDate ?? '9999'))
+        if (films.length > MAX_UNIVERSE_FILMS) {
+            console.warn(`film universe ${universeId}: ${films.length} films, keeping the earliest ${MAX_UNIVERSE_FILMS}`)
+        }
+        list.push(...films.slice(0, MAX_UNIVERSE_FILMS))
+    }
+
+    // TMDB's own title, poster and release date. Wikidata's English labels
+    // come back missing for some films, and its dates are world premieres
+    // where TMDB's are the primary release the library already uses.
+    if (TMDB_API_KEY) {
+        const ids = [...new Set(list.map((m) => m.tmdbId))]
+        const meta = new Map<number, { title: string | null; posterPath: string | null; releaseDate: string | null }>()
+        let failed = 0
+        for (let start = 0; start < ids.length; start += UNIVERSE_DETAIL_CONCURRENCY) {
+            await Promise.all(ids.slice(start, start + UNIVERSE_DETAIL_CONCURRENCY).map(async (id) => {
+                const startedAt = Date.now()
+                try {
+                    const res = await fetch(`${TMDB_BASE_URL}/movie/${id}?api_key=${TMDB_API_KEY}&language=en-GB`)
+                    usage.record({ provider: 'tmdb', endpoint: 'movie/:id', statusCode: res.status, durationMs: Date.now() - startedAt })
+                    // A 404 is TMDB not having the film: left to the Wikidata label.
+                    if (res.status === 404) return
+                    if (!res.ok) { failed++; return }
+                    const detail = (await res.json()) as {
+                        title?: string | null
+                        poster_path?: string | null
+                        release_date?: string | null
+                    }
+                    meta.set(id, {
+                        title: detail.title?.trim() || null,
+                        posterPath: detail.poster_path ?? null,
+                        releaseDate: isoDay(detail.release_date),
+                    })
+                } catch {
+                    usage.record({ provider: 'tmdb', endpoint: 'movie/:id', statusCode: null, outcome: 'error', durationMs: Date.now() - startedAt })
+                    failed++
+                }
+            }))
+        }
+        // Any other failure (a 429, an outage) would leave the card short of
+        // films, or untitled, for the day the client keeps it: fail instead.
+        if (failed > 0) throw new Error(`TMDB details failed for ${failed} universe films`)
+        for (const m of list) {
+            const hit = meta.get(m.tmdbId)
+            if (!hit) continue
+            if (hit.title) m.title = hit.title
+            if (hit.posterPath) m.posterPath = hit.posterPath
+            if (hit.releaseDate) m.releaseDate = hit.releaseDate
+        }
+    }
+
+    return list
+}
+
+/** As /dev lists it: a Wikidata lookup under its own name, as on success. */
+const usageEndpoint = (endpoint: string) =>
+    endpoint.startsWith('wikidata/') ? endpoint.slice('wikidata/'.length) : endpoint
+
 function cacheControlFor(endpoint: string): string {
     if (
         endpoint === 'wikidata/tv-spinoffs' ||
+        endpoint === 'wikidata/film-universes' ||
         endpoint.startsWith('collection/') ||
         endpoint.startsWith('person/') ||
         endpoint.startsWith('movie/') ||
@@ -259,8 +435,8 @@ serve(async (req) => {
 
     if (await isRateLimited(callerKey(req))) {
         void recordApiUsage({
-            provider: reqEndpoint === 'wikidata/tv-spinoffs' ? 'wikidata' : 'tmdb',
-            endpoint: reqEndpoint,
+            provider: reqEndpoint.startsWith('wikidata/') ? 'wikidata' : 'tmdb',
+            endpoint: usageEndpoint(reqEndpoint),
             statusCode: 429,
             outcome: 'rate_limited',
             durationMs: Date.now() - startedAt,
@@ -306,6 +482,47 @@ serve(async (req) => {
             })
         }
 
+        if (endpoint === 'wikidata/film-universes') {
+            if (await isRateLimited(`${callerKey(req)}:film-universes`, UNIVERSE_LIMIT, UNIVERSE_WINDOW_SECONDS)) {
+                void recordApiUsage({
+                    provider: 'wikidata',
+                    endpoint: 'film-universes',
+                    statusCode: 429,
+                    outcome: 'rate_limited',
+                    durationMs: Date.now() - startedAt,
+                })
+                return new Response(JSON.stringify({ error: 'Too many requests' }), {
+                    status: 429,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(UNIVERSE_WINDOW_SECONDS),
+                    },
+                })
+            }
+            const usage = createUsageBatcher()
+            try {
+                const results = await fetchFilmUniverses(usage)
+                void recordApiUsage({
+                    provider: 'wikidata',
+                    endpoint: 'film-universes',
+                    statusCode: 200,
+                    outcome: 'ok',
+                    durationMs: Date.now() - startedAt,
+                })
+                return new Response(JSON.stringify({ results }), {
+                    status: 200,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Cache-Control': cacheControlFor(endpoint),
+                    },
+                })
+            } finally {
+                void usage.flush()
+            }
+        }
+
         if (!ALLOWED_ENDPOINT_PATTERNS.some((pattern) => pattern.test(endpoint))) {
             return new Response(JSON.stringify({ error: 'Endpoint not allowed' }), {
                 status: 403,
@@ -344,8 +561,8 @@ serve(async (req) => {
         })
     } catch (error) {
         void recordApiUsage({
-            provider: reqEndpoint === 'wikidata/tv-spinoffs' ? 'wikidata' : 'tmdb',
-            endpoint: reqEndpoint,
+            provider: reqEndpoint.startsWith('wikidata/') ? 'wikidata' : 'tmdb',
+            endpoint: usageEndpoint(reqEndpoint),
             statusCode: 502,
             outcome: 'error',
             durationMs: Date.now() - startedAt,

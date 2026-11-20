@@ -22,6 +22,8 @@ import {
   buildOrderView,
   collectionPartsToEntries,
   collectionsFromLibrary,
+  collectionsInsideUniverses,
+  filmUniversesFromMembers,
   hasWatchGap,
   libraryLookup,
   newestAdded,
@@ -29,6 +31,7 @@ import {
   tvFranchisesFromLinks,
   type OrderEntryInput,
   type OrderView,
+  type UniverseLibraryFilm,
 } from './franchise';
 import { POSTER_BASE } from './components/franchise/EntryList';
 import { useTMDB } from './useTMDB';
@@ -119,7 +122,7 @@ function sourcesForMediaPage(seeds: DiscoverySeed[], page: number, media: Discov
 export interface DiscoveryFranchiseGroup {
   key: string;
   name: string;
-  kind: 'collection' | 'tv-spinoff';
+  kind: 'collection' | 'tv-spinoff' | 'universe';
   media: DiscoveryMedia;
   view: OrderView;
   missingCount: number;
@@ -128,11 +131,11 @@ export interface DiscoveryFranchiseGroup {
   added: number;
 }
 
-// tmdb-proxy allows 60 calls a minute per visitor. Opening Discover costs 25
+// tmdb-proxy allows 60 calls a minute per visitor. Opening Discover costs 26
 // (8 suggestion seeds, 2 coming soon, 2 likely seen, 12 collections, 1
-// spin-off lookup); the automatic top-ups below add at most 26 more (12
-// collections, 8 suggestions, 4 coming soon, 2 likely seen), once per visit
-// to Discover. That leaves 9 for the owner's clicks: an add or "Seen it" on a
+// spin-off lookup, 1 film-universe lookup); the automatic top-ups below add
+// at most 26 more (12 collections, 8 suggestions, 4 coming soon, 2 likely
+// seen), once per visit to Discover. That leaves 8 for the owner's clicks: an add or "Seen it" on a
 // film is one call, on a series one plus one per season, which a long series
 // can outrun; the details call waits out the limit (useTMDB `detailRetry`),
 // the season calls do not. Franchises lead the page, so they get the largest
@@ -150,7 +153,7 @@ const AUTO_LIKELY_SEEN_PAGES = 1;
 
 export function useDiscovery(type: LibraryType) {
   const { watchlist, favourites, loading, ratingsStatus } = useWatchlist();
-  const { getCollection, getTvSpinoffs } = useTMDB();
+  const { getCollection, getTvSpinoffs, getFilmUniverses } = useTMDB();
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [localDismissed, setLocalDismissed] = useState(readDismissed);
@@ -346,18 +349,23 @@ export function useDiscovery(type: LibraryType) {
   }, [likelySeenPool.data?.pages, type]);
 
   // --- "Have you already watched?" grouped franchises & spin-offs ----------
+  // A visitor's cards read only what a visitor's seeds do: a hidden or
+  // stopped title is neither a seed nor shown as in the library, so a card
+  // never reveals it (its tick, its count, its details).
+  const visibleLibrary = useMemo(
+    () => (isAdmin ? watchlist : watchlist.filter((item) => item.library_state !== 'hidden' && item.library_state !== 'stopped')),
+    [watchlist, isAdmin],
+  );
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
-  const lookup = useMemo(() => libraryLookup(watchlist, today), [watchlist, week]);
+  const lookup = useMemo(() => libraryLookup(visibleLibrary, today), [visibleLibrary, week]);
 
   // Fetched in this order, a batch at a time, so the collection added to most
   // recently is looked up first. Never by release date: `created_at` on a
   // library item is its release date.
   const libraryCollections = useMemo(() => {
     return collectionsFromLibrary(
-      watchlist.flatMap((item) =>
-        item.category === 'Movies' &&
-        item.collection_id != null &&
-        (isAdmin || (item.library_state !== 'hidden' && item.library_state !== 'stopped'))
+      visibleLibrary.flatMap((item) =>
+        item.category === 'Movies' && item.collection_id != null
           ? [{
               id: item.id,
               tmdbId: item.tmdb_id ?? null,
@@ -373,7 +381,7 @@ export function useDiscovery(type: LibraryType) {
     )
       .map((collection) => ({ ...collection, added: newestAdded(collection.films) }))
       .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name));
-  }, [watchlist, isAdmin]);
+  }, [visibleLibrary]);
 
   const activeCollectionIds = useMemo(
     () => libraryCollections.slice(0, collectionLimit).map((c) => c.collectionId),
@@ -408,13 +416,44 @@ export function useDiscovery(type: LibraryType) {
   );
   const collectionsPending = activeCollectionIds.length > 0 && collectionQueries.some((q) => q.isPending);
 
+  // Shared universes (the MCU) span several collections, so the collection
+  // lookups above cannot see them. One call, whatever the library holds: the
+  // proxy names the universes, and the library decides which are started.
+  const universeLibrary = useMemo(() => {
+    const films = new Map<number, UniverseLibraryFilm>();
+    for (const item of visibleLibrary) {
+      if (item.category !== 'Movies' || item.tmdb_id == null) continue;
+      films.set(item.tmdb_id, {
+        id: item.id,
+        title: item.title,
+        releaseDate: item.release_date ?? null,
+        poster: item.image_url ?? null,
+      });
+    }
+    return films;
+  }, [visibleLibrary]);
+  const filmUniverses = useQuery({
+    queryKey: ['watchlist', 'film-universes'],
+    enabled: !loading && type !== 'tv' && universeLibrary.size > 0,
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: false,
+    // Thrown on failure, as for spin-offs: persisted, and a failed lookup
+    // must not be kept for a day as "no universes".
+    queryFn: () => getFilmUniverses({ throwOnError: true }),
+  });
+  const filmUniverseSummaries = useMemo(
+    () => filmUniversesFromMembers(filmUniverses.data ?? [], universeLibrary, POSTER_BASE),
+    [filmUniverses.data, universeLibrary],
+  );
+  const universesPending = type !== 'tv' && universeLibrary.size > 0 && filmUniverses.isPending;
+
   const tvSeedIds = useMemo(
     () =>
-      watchlist
-        .filter((item) => item.category === 'TV Shows' && item.tmdb_id && (isAdmin || (item.library_state !== 'hidden' && item.library_state !== 'stopped')))
+      visibleLibrary
+        .filter((item) => item.category === 'TV Shows' && item.tmdb_id)
         .map((item) => item.tmdb_id!)
         .sort((a, b) => a - b),
-    [watchlist, isAdmin],
+    [visibleLibrary],
   );
   const tvSpinoffs = useQuery({
     queryKey: ['watchlist', 'tv-spinoffs', tvSeedIds],
@@ -426,8 +465,8 @@ export function useDiscovery(type: LibraryType) {
     queryFn: () => getTvSpinoffs(tvSeedIds, { throwOnError: true }),
   });
   const tvFranchiseSummaries = useMemo(
-    () => tvFranchisesFromLinks(tvSpinoffs.data ?? [], watchlist, POSTER_BASE),
-    [tvSpinoffs.data, watchlist],
+    () => tvFranchisesFromLinks(tvSpinoffs.data ?? [], visibleLibrary, POSTER_BASE),
+    [tvSpinoffs.data, visibleLibrary],
   );
 
   const filterDismissedEntries = (entries: OrderEntryInput[]) =>
@@ -442,7 +481,26 @@ export function useDiscovery(type: LibraryType) {
     const groups: DiscoveryFranchiseGroup[] = [];
     if (type !== 'tv') {
       const byId = new Map(libraryCollections.map((c) => [c.collectionId, c]));
+      // A collection wholly inside a universe is shown as part of it.
+      const insideUniverse = collectionsInsideUniverses(expandedCollectionsData, filmUniverseSummaries);
+      for (const universe of filmUniverseSummaries) {
+        const view = buildOrderView(filterDismissedEntries(universe.entries), lookup);
+        const missingCount = view.total - view.inLibrary;
+        if (view.total >= 2 && missingCount > 0) {
+          groups.push({
+            key: `universe:${universe.id}`,
+            name: universe.name,
+            kind: 'universe',
+            media: 'movie',
+            view,
+            missingCount,
+            hasGap: hasWatchGap(view),
+            added: universe.added,
+          });
+        }
+      }
       for (const item of expandedCollectionsData) {
+        if (insideUniverse.has(item.collectionId)) continue;
         const filtered = filterDismissedEntries(item.entries);
         const view = buildOrderView(filtered, lookup);
         const missingCount = view.total - view.inLibrary;
@@ -481,7 +539,7 @@ export function useDiscovery(type: LibraryType) {
     }
     return orderByNewestAdded(groups);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `dismissed` is read through filterDismissedEntries.
-  }, [type, libraryCollections, expandedCollectionsData, tvFranchiseSummaries, lookup, dismissed]);
+  }, [type, libraryCollections, expandedCollectionsData, filmUniverseSummaries, tvFranchiseSummaries, lookup, dismissed]);
 
   const franchiseEntryKeys = useMemo(
     () => new Set(franchiseGroups.flatMap((g) => g.view.entries.map((e) => e.key))),
@@ -607,15 +665,16 @@ export function useDiscovery(type: LibraryType) {
   // Collections are fetched newest-added first, and most turn out to be
   // complete already; scan ahead until a healthy set of incomplete ones turns
   // up. Franchises lead this section, so "Likely seen" filling up never stops
-  // the scan. Waits for the spin-off lookup, whose groups count too.
+  // the scan. Waits for the spin-off and universe lookups, whose groups count
+  // too.
   const spinoffsPending = type !== 'movie' && tvSeedIds.length > 0 && tvSpinoffs.isPending;
   useEffect(() => {
     if (franchiseGroups.length >= TARGET_FRANCHISES) return;
-    if (loading || collectionsPending || spinoffsPending || collectionsAllFailed || !hasMoreFranchises) return;
+    if (loading || collectionsPending || spinoffsPending || universesPending || collectionsAllFailed || !hasMoreFranchises) return;
     if (autoFranchiseBatchesRef.current >= AUTO_COLLECTION_BATCH_CAP) return;
     autoFranchiseBatchesRef.current += 1;
     setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH);
-  }, [franchiseGroups.length, loading, collectionsPending, spinoffsPending, collectionsAllFailed, hasMoreFranchises]);
+  }, [franchiseGroups.length, loading, collectionsPending, spinoffsPending, universesPending, collectionsAllFailed, hasMoreFranchises]);
 
   // With a large library, a whole page of seed recommendations can curate down
   // to only a couple of titles; keep paging until a full grid is ready.
@@ -633,9 +692,13 @@ export function useDiscovery(type: LibraryType) {
   const franchisesLoading =
     loading ||
     (type !== 'tv' && collectionsPending) ||
-    spinoffsPending;
+    spinoffsPending ||
+    universesPending;
   const franchisesFailed =
-    type !== 'tv' && !collectionsPending && collectionQueries.some((q) => q.isError);
+    type !== 'tv' && (
+      (!collectionsPending && collectionQueries.some((q) => q.isError)) ||
+      filmUniverses.isError
+    );
 
   return {
     recommendations,
@@ -651,6 +714,7 @@ export function useDiscovery(type: LibraryType) {
         if (q.isError && !q.isFetching) void q.refetch();
       }
       if (tvSpinoffs.isError && !tvSpinoffs.isFetching) void tvSpinoffs.refetch();
+      if (filmUniverses.isError && !filmUniverses.isFetching) void filmUniverses.refetch();
     },
     loading: loading || ratingsStatus === 'loading' || isPending,
     upcomingLoading: loading || upcoming.isPending,

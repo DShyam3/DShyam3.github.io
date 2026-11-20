@@ -4,7 +4,7 @@
  */
 
 import type { WatchlistItem } from './WatchlistContext';
-import type { WikidataTvSpinoffLink } from './tmdb-types';
+import type { FilmUniverseMember, WikidataTvSpinoffLink } from './tmdb-types';
 import { daysUntil, isSpecialsSeason } from './watchlist-utils';
 
 export interface OrderEntryInput {
@@ -313,6 +313,98 @@ export function tvFranchisesFromLinks(
   }
 
   return groups.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export interface FilmUniverseSummary {
+  /** Wikidata id of the universe, e.g. `Q642878`. */
+  id: string;
+  name: string;
+  entries: OrderEntryInput[];
+  /**
+   * Every film the lookup named, `movie:<id>`, including those `entries`
+   * leaves out, so a collection holding one still folds into the universe.
+   */
+  memberKeys: string[];
+  /** Newest library row id among its films; see `newestAdded`. */
+  added: number;
+}
+
+/** A library film, by TMDB id, as `filmUniversesFromMembers` reads it. */
+export interface UniverseLibraryFilm {
+  id: string;
+  title: string;
+  releaseDate: string | null;
+  poster: string | null;
+}
+
+/**
+ * Shared film universes the library has started, each as one list of its
+ * films in release order: one Marvel Cinematic Universe rather than an
+ * Avengers and an Iron Man collection. A universe counts as started once one
+ * of its films is in `library`. The lookup's title, date and poster lead, as
+ * a collection's TMDB parts do; the library's fill what it lacks. A film with
+ * no title is left out, and so is one with no release date that is not in
+ * the library: an unannounced project. Sorted by name.
+ */
+export function filmUniversesFromMembers(
+  members: FilmUniverseMember[],
+  library: Map<number, UniverseLibraryFilm>,
+  posterBase = '',
+): FilmUniverseSummary[] {
+  const universes = new Map<string, { name: string; entries: Map<number, OrderEntryInput>; memberKeys: Set<string>; owned: UniverseLibraryFilm[] }>();
+  for (const member of members) {
+    if (!member.universeId || !Number.isInteger(member.tmdbId) || member.tmdbId <= 0) continue;
+    const universe = universes.get(member.universeId) ?? {
+      name: member.universeName?.trim() || member.universeId,
+      entries: new Map<number, OrderEntryInput>(),
+      memberKeys: new Set<string>(),
+      owned: [],
+    };
+    universes.set(member.universeId, universe);
+    universe.memberKeys.add(`movie:${member.tmdbId}`);
+    if (universe.entries.has(member.tmdbId)) continue;
+    const owned = library.get(member.tmdbId);
+    const title = member.title?.trim() || (owned ? stripTrailingYear(owned.title) : '');
+    const releaseDate = member.releaseDate || owned?.releaseDate?.slice(0, 10) || null;
+    if (!title || (!owned && !releaseDate)) continue;
+    if (owned) universe.owned.push(owned);
+    universe.entries.set(member.tmdbId, {
+      key: `movie:${member.tmdbId}`,
+      mediaType: 'movie',
+      tmdbId: member.tmdbId,
+      title,
+      releaseDate,
+      poster: member.posterPath ? posterBase + member.posterPath : owned?.poster ?? null,
+    });
+  }
+  return [...universes.entries()]
+    .filter(([, u]) => u.owned.length > 0 && u.entries.size >= 2)
+    .map(([id, u]) => ({
+      id,
+      name: u.name,
+      entries: sortByRelease([...u.entries.values()]),
+      memberKeys: [...u.memberKeys],
+      added: newestAdded(u.owned),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Collections a started universe already lists in full, such as Iron Man
+ * inside the MCU, so the same films are not offered on two cards. A
+ * collection with a film the universe lacks keeps its own card: Deadpool's
+ * first two films are not MCU, so the Deadpool collection stays.
+ */
+export function collectionsInsideUniverses(
+  collections: { collectionId: number; entries: Pick<OrderEntryInput, 'key'>[] }[],
+  universes: Pick<FilmUniverseSummary, 'memberKeys'>[],
+): Set<number> {
+  const covered = new Set(universes.flatMap((u) => u.memberKeys));
+  return new Set(
+    collections
+      .filter((c) => c.entries.length > 0 && c.entries.every((e) => covered.has(e.key)))
+      .map((c) => c.collectionId),
+  );
 }
 
 export interface CustomFranchiseGroup {

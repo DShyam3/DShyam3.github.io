@@ -422,7 +422,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         <div className="space-y-1">
           <h2 id="discover-already-watched"><DotMatrixText text="HAVE YOU ALREADY WATCHED?" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">
-            Film collections and connected TV spin-offs you have started, each in release order, so you can log what you’ve seen or add the rest.
+            Film collections, shared universes such as the Marvel Cinematic Universe, and connected TV spin-offs you have started, each in release order, so you can log what you’ve seen or add the rest.
           </p>
           <p className="text-xs text-muted-foreground">
             Newest first: films and series take turns, each led by the one you added to most recently. Release and watch dates don’t count.

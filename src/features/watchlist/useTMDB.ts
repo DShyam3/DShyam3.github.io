@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type {
+    FilmUniverseMember,
     TMDBCollection,
     TMDBDetails,
     TMDBSearchItem,
@@ -193,6 +194,30 @@ export function useTMDB() {
         }
     }, [fetchTMDB, queryClient]);
 
+    /**
+     * Films of the shared universes tmdb-proxy knows (the Marvel Cinematic
+     * Universe), from Wikidata; [] on failure unless `throwOnError`, as for
+     * `getTvSpinoffs`. Takes no ids: the proxy's registry decides which
+     * universes, and the caller which of them the library has started.
+     */
+    const getFilmUniverses = useCallback(async (options?: { throwOnError?: boolean }): Promise<FilmUniverseMember[]> => {
+        try {
+            return await queryClient.fetchQuery({
+                queryKey: ['watchlist', 'tmdb-film-universes'],
+                staleTime: 24 * 60 * 60 * 1000,
+                retry: false,
+                queryFn: async () => {
+                    const data = await fetchTMDB<{ results?: FilmUniverseMember[] }>('wikidata/film-universes', {});
+                    return data.results ?? [];
+                },
+            });
+        } catch (error) {
+            console.error('Wikidata Film Universes Error:', error);
+            if (options?.throwOnError) throw error;
+            return [];
+        }
+    }, [fetchTMDB, queryClient]);
+
     const searchMulti = useCallback(async (query: string) => {
         const trimmedQuery = query.trim();
         if (!trimmedQuery) {
@@ -283,5 +308,6 @@ export function useTMDB() {
         getMovieDetails,
         getCollection,
         getTvSpinoffs,
+        getFilmUniverses,
     };
 }

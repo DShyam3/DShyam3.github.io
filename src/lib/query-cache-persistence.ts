@@ -35,6 +35,8 @@ const PUBLIC_WATCHLIST_KEYS = new Set([
   'tmdb-collection',
   'tmdb-spinoffs',
   'tv-spinoffs',
+  'tmdb-film-universes',
+  'film-universes',
 ]);
 
 /**

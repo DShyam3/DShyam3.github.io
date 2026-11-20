@@ -4,8 +4,10 @@ import {
   buildOrderView,
   collectionPartsToEntries,
   collectionsFromLibrary,
+  collectionsInsideUniverses,
   customFranchisesFromLibrary,
   entryState,
+  filmUniversesFromMembers,
   hasWatchGap,
   libraryLookup,
   newestAdded,
@@ -14,7 +16,9 @@ import {
   tvFranchisesFromLinks,
   type LibraryLookup,
   type OrderEntryInput,
+  type UniverseLibraryFilm,
 } from './franchise';
+import type { FilmUniverseMember } from './tmdb-types';
 
 const entry = (over: Partial<OrderEntryInput>): OrderEntryInput => ({
   key: 'k', mediaType: 'movie', tmdbId: 1, title: 'T', releaseDate: null, poster: null, ...over,
@@ -341,5 +345,118 @@ describe('franchise ordering by newest add', () => {
 
   it('breaks a tie by name', () => {
     expect(orderByNewestAdded([group('B', 'movie', ['5']), group('A', 'movie', ['5'])]).map((g) => g.name)).toEqual(['A', 'B']);
+  });
+});
+
+describe('filmUniversesFromMembers', () => {
+  const mcu = (tmdbId: number, title: string | null, releaseDate: string | null, posterPath: string | null = null): FilmUniverseMember => ({
+    universeId: 'Q642878', universeName: 'Marvel Cinematic Universe', tmdbId, title, releaseDate, posterPath,
+  });
+  const owned = (films: [number, UniverseLibraryFilm][]) => new Map(films);
+  // Out of order on purpose: the lookup's rows carry no order.
+  const members = [
+    mcu(299534, 'Avengers: Endgame', '2019-04-24', '/endgame.jpg'),
+    mcu(1726, 'Iron Man', '2008-04-30', '/ironman.jpg'),
+    mcu(1003596, 'Avengers: Doomsday', '2026-12-16'),
+    mcu(24428, 'The Avengers', '2012-04-25', '/avengers.jpg'),
+    mcu(10138, 'Iron Man 2', '2010-04-28'),
+  ];
+
+  it('makes one universe of every film, in release order, once a film is in the library', () => {
+    const library = owned([
+      [1726, { id: '2380', title: 'Iron Man (2008)', releaseDate: '2008-04-30', poster: '/lib-ironman.jpg' }],
+      [24428, { id: '2514', title: 'The Avengers', releaseDate: '2012-04-25', poster: null }],
+    ]);
+    const [universe, ...rest] = filmUniversesFromMembers(members, library, 'https://img');
+    expect(rest).toEqual([]);
+    expect(universe).toMatchObject({ id: 'Q642878', name: 'Marvel Cinematic Universe', added: 2514 });
+    expect(universe.entries.map((e) => e.title)).toEqual([
+      'Iron Man', 'Iron Man 2', 'The Avengers', 'Avengers: Endgame', 'Avengers: Doomsday',
+    ]);
+    expect(universe.entries[0]).toEqual({
+      key: 'movie:1726', mediaType: 'movie', tmdbId: 1726, title: 'Iron Man', releaseDate: '2008-04-30', poster: 'https://img/ironman.jpg',
+    });
+  });
+
+  it('shows nothing for a universe the library has not started', () => {
+    expect(filmUniversesFromMembers(members, owned([]))).toEqual([]);
+    expect(filmUniversesFromMembers(members, owned([[550, { id: '9', title: 'Fight Club', releaseDate: null, poster: null }]]))).toEqual([]);
+  });
+
+  it('fills a gap in the lookup from the library, and drops untitled films and unannounced projects', () => {
+    const library = owned([[1726, { id: '1', title: 'Iron Man (2008)', releaseDate: '2008-05-02', poster: '/lib.jpg' }]]);
+    const [universe] = filmUniversesFromMembers(
+      [
+        mcu(1726, null, null),
+        mcu(10138, 'Iron Man 2', '2010-04-28'),
+        mcu(1715017, 'Blade', null),
+        mcu(5, null, '2030-01-01'),
+        mcu(10138, 'Iron Man 2 again', '2010-04-28'),
+      ],
+      library,
+    );
+    expect(universe.entries).toEqual([
+      { key: 'movie:1726', mediaType: 'movie', tmdbId: 1726, title: 'Iron Man', releaseDate: '2008-05-02', poster: '/lib.jpg' },
+      { key: 'movie:10138', mediaType: 'movie', tmdbId: 10138, title: 'Iron Man 2', releaseDate: '2010-04-28', poster: null },
+    ]);
+  });
+
+  it('keeps an owned film with no date, last', () => {
+    const library = owned([[1715017, { id: '7', title: 'Blade', releaseDate: null, poster: null }]]);
+    const [universe] = filmUniversesFromMembers([mcu(1715017, 'Blade', null), mcu(1726, 'Iron Man', '2008-04-30')], library);
+    expect(universe.entries.map((e) => e.key)).toEqual(['movie:1726', 'movie:1715017']);
+  });
+
+  it('needs two films, and keeps universes apart, sorted by name', () => {
+    const other = (tmdbId: number, title: string, releaseDate: string): FilmUniverseMember => ({
+      universeId: 'Q1', universeName: 'A Universe', tmdbId, title, releaseDate, posterPath: null,
+    });
+    const library = owned([
+      [1726, { id: '1', title: 'Iron Man', releaseDate: '2008-04-30', poster: null }],
+      [100, { id: '2', title: 'One', releaseDate: '2000-01-01', poster: null }],
+      [300, { id: '3', title: 'Lonely', releaseDate: '2001-01-01', poster: null }],
+    ]);
+    const universes = filmUniversesFromMembers(
+      [...members, other(100, 'One', '2000-01-01'), other(200, 'Two', '2002-01-01'),
+        { universeId: 'Q2', universeName: 'Solo', tmdbId: 300, title: 'Lonely', releaseDate: '2001-01-01', posterPath: null }],
+      library,
+    );
+    expect(universes.map((u) => [u.name, u.entries.length])).toEqual([['A Universe', 2], ['Marvel Cinematic Universe', 5]]);
+  });
+});
+
+describe('collectionsInsideUniverses', () => {
+  const keys = (...ids: number[]) => ids.map((id) => ({ key: `movie:${id}` }));
+  const universe = { memberKeys: keys(1726, 10138, 68721, 24428, 533535).map((k) => k.key) };
+
+  it('folds a collection the universe lists in full, and keeps one with a film it lacks', () => {
+    const inside = collectionsInsideUniverses(
+      [
+        { collectionId: 131292, entries: keys(1726, 10138, 68721) }, // Iron Man
+        { collectionId: 448150, entries: keys(293660, 383498, 533535) }, // Deadpool: only the third is MCU
+        { collectionId: 1, entries: [] },
+      ],
+      [universe],
+    );
+    expect([...inside]).toEqual([131292]);
+  });
+
+  it('folds by every film the lookup named, not only those the card lists', () => {
+    // An undated, unowned sequel is left off the card but is still the universe's.
+    const library = new Map([[1726, { id: '1', title: 'Iron Man', releaseDate: '2008-04-30', poster: null }]]);
+    const universes = filmUniversesFromMembers(
+      [
+        { universeId: 'Q642878', universeName: 'Marvel Cinematic Universe', tmdbId: 1726, title: 'Iron Man', releaseDate: '2008-04-30', posterPath: null },
+        { universeId: 'Q642878', universeName: 'Marvel Cinematic Universe', tmdbId: 10138, title: 'Iron Man 2', releaseDate: '2010-04-28', posterPath: null },
+        { universeId: 'Q642878', universeName: 'Marvel Cinematic Universe', tmdbId: 9999, title: 'Iron Man 4', releaseDate: null, posterPath: null },
+      ],
+      library,
+    );
+    expect(universes[0].entries.map((e) => e.tmdbId)).toEqual([1726, 10138]);
+    expect([...collectionsInsideUniverses([{ collectionId: 131292, entries: keys(1726, 10138, 9999) }], universes)]).toEqual([131292]);
+  });
+
+  it('folds nothing without a universe', () => {
+    expect(collectionsInsideUniverses([{ collectionId: 131292, entries: keys(1726) }], []).size).toBe(0);
   });
 });
