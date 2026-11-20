@@ -23,7 +23,7 @@ import {
  * The finer hex levels, 4 (~45 km apart) and 5 (~17 km), shown as the map
  * zooms in. Level 5 has over half a million land cells, far too many to
  * build or hold at once, so both are cut into patches -- every cell under
- * one resolution-1 cell, ~600 km across -- and only the patches on screen are
+ * one resolution-1 cell, ~700 km across -- and only the patches on screen are
  * built. The files hold each country's cells compacted, so a country's
  * interior is a handful of coarse cells and the lookup below never needs the
  * whole level expanded.
@@ -32,7 +32,7 @@ import {
 export type DetailRes = 4 | 5;
 
 /** Patches are the cells under one cell of this resolution. */
-const PATCH_RES = 1;
+export const PATCH_RES = 1;
 
 /** What the page needs of a level: which country any cell belongs to. */
 export interface HexDetailLookup {
@@ -62,7 +62,6 @@ export interface HexPatch {
     projection: string;
     h3: string[];
     codes: string[];
-    indexByH3: Map<string, number>;
     data: HexPatchData;
 }
 
@@ -136,11 +135,6 @@ export function codeOf(level: HexDetailLookup, cell: string): string | undefined
         if (code !== undefined) return code;
     }
     return undefined;
-}
-
-/** The patch a cell sits in. */
-export function patchOf(cell: string): string {
-    return cellToParent(cell, PATCH_RES);
 }
 
 /** How far a cell must wait into the morph, as `hideBelow`, from its corners in degrees. */
@@ -259,7 +253,6 @@ export function buildPatch(level: HexDetailLevel, key: string, projection: MapPr
         projection: projection.id,
         h3,
         codes,
-        indexByH3,
         data: {
             count,
             centre3,
@@ -335,21 +328,6 @@ export function detailHexAtPoint(
         }
     }
     return best;
-}
-
-/**
- * The patches with land that a set of places on screen fall in, with the ring
- * around each so a patch whose corner alone shows is not missed.
- */
-export function patchesAround(level: HexDetailLevel, places: { lat: number; lon: number }[]): string[] {
-    const keys = new Set<string>();
-    for (const { lat, lon } of places) {
-        const home = latLngToCell((lat * 180) / Math.PI, (lon * 180) / Math.PI, PATCH_RES);
-        for (const key of gridDisk(home, 1)) {
-            if (level.patches.has(key)) keys.add(key);
-        }
-    }
-    return [...keys];
 }
 
 /** One cell of any level in the shape the base level's cells have, for the selection outline. */

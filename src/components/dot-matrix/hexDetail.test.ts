@@ -1,15 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { latLngToCell } from 'h3-js';
+import { cellToParent, latLngToCell, uncompactCells } from 'h3-js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { getMapProjection } from '@/lib/mapProjections';
 import {
+    PATCH_RES,
     buildDetailLevel,
     buildPatch,
     codeOf,
     detailHexAtPoint,
-    patchOf,
-    patchesAround,
     resolveDetailCityHex,
     type HexDetailLevel,
 } from './hexDetail';
@@ -42,7 +41,7 @@ describe('codeOf', () => {
 
 describe('buildPatch', () => {
     it('builds every land cell under a patch, with borders', () => {
-        const key = patchOf(latLngToCell(51.5, -0.12, 5));
+        const key = cellToParent(latLngToCell(51.5, -0.12, 5), PATCH_RES);
         const patch = buildPatch(level5, key, equalEarth);
         expect(patch.h3.length).toBeGreaterThan(100);
         expect(patch.codes).toContain('GB');
@@ -76,10 +75,27 @@ describe('cities and picking', () => {
         const hit = detailHexAtPoint(51.0, 1.4, level5, 3, () => true);
         expect(hit).not.toBeNull();
     });
+});
 
-    it('names the patches around places on screen', () => {
-        const keys = patchesAround(level5, [{ lat: (51.5 * Math.PI) / 180, lon: (-0.12 * Math.PI) / 180 }]);
-        expect(keys).toContain(patchOf(latLngToCell(51.5, -0.12, 5)));
-        expect(keys.length).toBeGreaterThan(1);
+describe('level files', () => {
+    const known = new Set(
+        (JSON.parse(readFileSync(resolve(__dirname, '../../../public/countries.json'), 'utf8')) as { cca2: string }[]).map((c) => c.cca2),
+    );
+
+    it.each([3, 4, 5])('names only real countries at level %i', (res) => {
+        const unknown = Object.keys(read(res).countries).filter((code) => !known.has(code));
+        expect(unknown).toEqual([]);
+    });
+
+    it('keeps Antarctica, which h3 cannot sample in one piece', () => {
+        const antarctica = uncompactCells(read(3).countries.AQ ?? [], 3);
+        expect(antarctica.length).toBeGreaterThan(900);
+    });
+
+    it('cuts every level-5 cell into exactly one patch', () => {
+        let total = 0;
+        for (const entries of level5.patches.values()) total += entries.length;
+        const compacted = Object.values(read(5).countries).reduce((n, cells) => n + cells.length, 0);
+        expect(total).toBeGreaterThanOrEqual(compacted);
     });
 });

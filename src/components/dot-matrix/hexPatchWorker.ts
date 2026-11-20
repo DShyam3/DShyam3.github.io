@@ -39,6 +39,14 @@ export interface LevelPrepare {
     res: DetailRes;
 }
 
+/** Patches the page has dropped, which may be asked for again; or, with no keys, all of them. */
+export interface PatchForget {
+    type: 'forget';
+    res?: DetailRes;
+    projection?: MapProjectionId;
+    keys?: string[];
+}
+
 /** The patches a level has land in, so the page knows what to ask for. */
 export interface LevelReady {
     type: 'level';
@@ -49,6 +57,13 @@ export interface LevelReady {
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 let wanted: PatchWant | null = null;
 let running = false;
+/**
+ * Patches already sent. The page asks again for everything it has not had
+ * back, which includes the one being built as the list arrives; without this
+ * that one would be built twice.
+ */
+const built = new Set<string>();
+const idOf = (res: DetailRes, projection: string, key: string) => `${res}|${projection}|${key}`;
 
 async function run() {
     if (running) return;
@@ -57,6 +72,7 @@ async function run() {
         while (wanted && wanted.keys.length > 0) {
             const { res, projection } = wanted;
             const key = wanted.keys.shift()!;
+            if (built.has(idOf(res, projection, key))) continue;
             let level;
             try {
                 level = await loadDetailLevel(res);
@@ -67,6 +83,7 @@ async function run() {
             }
             const patch = buildPatch(level, key, getMapProjection(projection));
             const { data } = patch;
+            built.add(idOf(res, projection, key));
             const message: PatchBuilt = { type: 'built', res, projection, key, h3: patch.h3, codes: patch.codes, data };
             scope.postMessage(message, [
                 data.centre3.buffer,
@@ -87,8 +104,13 @@ async function run() {
     }
 }
 
-scope.onmessage = (event: MessageEvent<PatchWant | LevelPrepare>) => {
+scope.onmessage = (event: MessageEvent<PatchWant | LevelPrepare | PatchForget>) => {
     const message = event.data;
+    if (message?.type === 'forget') {
+        if (!message.keys) built.clear();
+        else for (const key of message.keys) built.delete(idOf(message.res!, message.projection!, key));
+        return;
+    }
     if (message?.type === 'prepare') {
         loadDetailLevel(message.res)
             .then((level) => scope.postMessage({ type: 'level', res: message.res, keys: [...level.patches.keys()] } satisfies LevelReady))
@@ -96,6 +118,6 @@ scope.onmessage = (event: MessageEvent<PatchWant | LevelPrepare>) => {
         return;
     }
     if (message?.type !== 'want') return;
-    wanted = { ...message, keys: [...message.keys] };
+    wanted = { ...message, keys: message.keys.filter((key) => !built.has(idOf(message.res, message.projection, key))) };
     void run();
 };

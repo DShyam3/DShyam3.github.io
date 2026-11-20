@@ -3147,3 +3147,11 @@ Closure: `src/components/dot-matrix/hexGlRenderer.ts`, `src/components/dot-matri
 The request budget is also a decision. `tmdb-proxy` allows 60 calls a minute per IP. Discover spends a fixed amount per visit: opening costs 25 calls, and automatic top-ups add at most 26, once per visit. The counters do not re-arm, so a visit cannot keep fetching. Only a 429 from `getMovieDetails` is retried (at 5s, 20s and 40s). The watch-history import opts out, because it waits on its own. A rate-limited collection or spin-off lookup now throws rather than caching an empty result, so the limit is never stored as an answer.
 
 Closure: `src/features/watchlist/franchise.ts` (`orderByNewestAdded`), `src/features/watchlist/useDiscovery.ts`, `src/features/watchlist/tmdb-retry.test.ts`. Not browser-verified; not deployed.
+
+### Hex levels are cut into patches built in a worker; the finest built level per patch cross-fades — 2026-11-20
+
+The zoomed-in Travel map shows finer hexes (about 45 km, then about 17 km) in place of the 120 km ones. The level is picked by how large a cell is on screen, not by the zoom number. Each level is cut into patches of one resolution-1 cell. A patch on screen shows the finest level it has built, and a finer patch is built in a Web Worker and cross-fades in when it lands.
+
+The reason is size. The whole world at level 5 is about 570,000 cells: roughly 220 MB of GPU buffers, and over 1 GB as JavaScript objects, which a phone cannot hold. So only patches on screen are built, off the main thread, and built geometry is kept on the GPU only, capped at 200 patches for level 4 and 60 for level 5. The caps and the patch size are first-pass numbers. They have not been measured on a phone, and GPU memory there is unverified.
+
+Closure: `src/components/dot-matrix/hexLevels.ts`, `src/components/dot-matrix/hexPatchWorker.ts`, `src/components/dot-matrix/hexDetail.ts`, `scripts/generate-hex-map.mjs`. Uncommitted at the time of writing.

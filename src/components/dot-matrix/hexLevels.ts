@@ -1,16 +1,16 @@
 import { cellToParent, gridDisk, latLngToCell } from 'h3-js';
 import type { MapProjection } from '@/lib/mapProjections';
 import { mapPointAt, type GlobeView } from './globeProjection';
-import { loadDetailLookup, type DetailRes, type HexDetailLookup } from './hexDetail';
+import { PATCH_RES, loadDetailLookup, type DetailRes, type HexDetailLookup } from './hexDetail';
 import type { HexGlDraw, HexGlRenderer } from './hexGlRenderer';
-import { hexSpacingRad, tierPatchData, type HexPatchData, type HexTierData } from './hexMapData';
-import type { LevelPrepare, LevelReady, PatchBuilt, PatchFailed, PatchWant } from './hexPatchWorker';
+import { hexSpacingRad, tierPatchData, type HexTierData } from './hexMapData';
+import type { LevelPrepare, LevelReady, PatchBuilt, PatchFailed, PatchForget, PatchWant } from './hexPatchWorker';
 
 /**
  * Which hex level each part of the map shows as it zooms, and the patches
  * behind it.
  *
- * The map is cut into patches, one per resolution-1 cell (~600 km). A finer
+ * The map is cut into patches, one per resolution-1 cell (~700 km). A finer
  * level comes in when its cells would be at least `SHOW_PX` across, and goes
  * when they shrink under `HIDE_PX`, so a zoom that stops on the line does not
  * flicker between the two. Each patch on screen shows the finest level it has
@@ -33,11 +33,10 @@ const PREFETCH_PX = 4;
 /** The share of a fade done per 60 Hz frame. */
 const FADE_PER_FRAME = 0.16;
 /** At most this many built patches of a level are kept, GPU and all; the longest off screen go first. */
-const CAP: Record<DetailRes, number> = { 4: 320, 5: 72 };
+const CAP: Record<DetailRes, number> = { 4: 200, 5: 60 };
 /** How often the set of patches on screen is worked out again while the view moves. */
 const VISIBLE_EVERY_MS = 120;
 
-const PATCH_RES = 1;
 const PATCH_SPACING = hexSpacingRad(PATCH_RES);
 
 export interface LevelStyles {
@@ -49,11 +48,11 @@ export interface LevelStyles {
     detail(res: DetailRes, h3: string, code: string): number;
 }
 
+/** A built patch. Its geometry lives on the GPU only; this keeps what restyling needs. */
 interface StoredPatch {
     res: DetailRes;
     h3: string[];
     codes: string[];
-    data: HexPatchData;
     lastSeen: number;
 }
 
@@ -80,6 +79,8 @@ export class HexLevels {
     /** The patches each level has land in, from the worker. */
     private patchKeys: Partial<Record<DetailRes, Set<string>>> = {};
     private loading = new Set<DetailRes>();
+    /** Levels the current worker has been asked to prepare. */
+    private prepared = new Set<DetailRes>();
     private failed = new Set<DetailRes>();
     private worker: Worker | null | undefined;
     private store = new Map<string, StoredPatch>();
@@ -100,10 +101,10 @@ export class HexLevels {
      * patches built in another projection are thrown away.
      */
     reset(gl: HexGlRenderer | null, tier: HexTierData, projection: MapProjection) {
-        if (this.projection?.id !== projection.id) {
-            this.store.clear();
-            this.wantSent = '';
-        }
+        // The GPU is new, so every built patch has to be built again.
+        this.store.clear();
+        this.wantSent = '';
+        this.worker?.postMessage({ type: 'forget' } satisfies PatchForget);
         this.gl = gl;
         this.tier = tier;
         this.projection = projection;
@@ -113,10 +114,7 @@ export class HexLevels {
         const grouped = groupBase(tier);
         this.baseCells = grouped.cells;
         this.baseBorders = grouped.borders;
-        if (gl) {
-            gl.addPatch('base', tierPatchData(tier));
-            // A patch built before the renderer was replaced goes up again on its next showing.
-        }
+        if (gl) gl.addPatch('base', tierPatchData(tier));
     }
 
     /** Stops the worker. A later frame that needs one starts it again (a remount, or StrictMode's double mount). */
@@ -125,8 +123,8 @@ export class HexLevels {
         this.worker = undefined;
         this.wantSent = '';
         // A new worker has to be asked to prepare its levels again.
+        this.prepared.clear();
         this.patchKeys = {};
-        this.detail = {};
     }
 
     level(res: DetailRes): HexDetailLookup | undefined {
@@ -143,15 +141,21 @@ export class HexLevels {
     }
 
     private ensureLevel(res: DetailRes) {
-        if (this.detail[res] || this.loading.has(res) || this.failed.has(res)) return;
+        if (this.failed.has(res)) return;
         const worker = this.ensureWorker();
         if (!worker) return;
-        this.loading.add(res);
         // The worker cuts the level into patches; the page keeps only the lookup.
-        worker.postMessage({ type: 'prepare', res } satisfies LevelPrepare);
+        if (!this.prepared.has(res)) {
+            this.prepared.add(res);
+            worker.postMessage({ type: 'prepare', res } satisfies LevelPrepare);
+        }
+        if (this.detail[res] || this.loading.has(res)) return;
+        this.loading.add(res);
         loadDetailLookup(res)
             .then((level) => {
                 this.detail[res] = level;
+                // A patch styled before the lookup came had no cities or selection to light.
+                this.styled.clear();
                 this.onChange();
             })
             .catch(() => this.failed.add(res))
@@ -175,15 +179,15 @@ export class HexLevels {
                 }
                 if (message.projection !== this.projection?.id) return;
                 const key = `${message.res}:${message.key}`;
+                if (!this.gl) return;
+                this.gl.addPatch(key, message.data);
                 this.store.set(key, {
                     res: message.res,
                     h3: message.h3,
                     codes: message.codes,
-                    data: message.data,
                     lastSeen: performance.now(),
                 });
                 this.styled.delete(key);
-                this.gl?.addPatch(key, message.data);
                 this.evict(performance.now());
                 this.onChange();
             };
@@ -249,15 +253,36 @@ export class HexLevels {
             let excess = mine.length - CAP[res];
             if (excess <= 0) continue;
             mine.sort((a, b) => a[1].lastSeen - b[1].lastSeen);
+            const dropped: string[] = [];
             for (const [key, patch] of mine) {
                 // Never one on screen in the last second.
                 if (excess <= 0 || now - patch.lastSeen < 1000) break;
-                this.store.delete(key);
-                this.styled.delete(key);
-                this.gl?.removePatch(key);
+                this.drop(key);
+                dropped.push(key.slice(key.indexOf(':') + 1));
                 excess--;
             }
+            this.forget(res, dropped);
         }
+    }
+
+    private drop(key: string) {
+        this.store.delete(key);
+        this.styled.delete(key);
+        this.gl?.removePatch(key);
+    }
+
+    /** Tells the worker these may be asked for again. */
+    private forget(res: DetailRes, keys: string[]) {
+        if (keys.length === 0 || !this.worker || !this.projection) return;
+        this.worker.postMessage({ type: 'forget', res, projection: this.projection.id, keys } satisfies PatchForget);
+        this.wantSent = '';
+    }
+
+    /** Clears the worker's queue once no finer level is wanted, so it stops building for nothing. */
+    private stopWanting() {
+        if (!this.wantSent || !this.worker || !this.projection) return;
+        this.worker.postMessage({ type: 'want', res: 4, projection: this.projection.id, keys: [] } satisfies PatchWant);
+        this.wantSent = '';
     }
 
     /**
@@ -269,11 +294,13 @@ export class HexLevels {
         dt: number,
         pxPerRad: number,
         styles: LevelStyles,
+        reducedMotion = false,
     ): { draws: HexGlDraw[]; fading: boolean } {
         const gl = this.gl;
         if (!gl || !this.tier) return { draws: [], fading: false };
         const want = this.chooseRes(pxPerRad);
         const now = performance.now();
+        if (want === 3) this.stopWanting();
 
         // Mid-morph no point on screen stands for a place, so the patches on
         // screen cannot be worked out: the base in one piece until it lands.
@@ -297,7 +324,8 @@ export class HexLevels {
 
         const draws: HexGlDraw[] = [];
         const missing: string[] = [];
-        const fade = easeOver(FADE_PER_FRAME, dt);
+        // With reduced motion a level lands in one step, as every other ease does.
+        const fade = reducedMotion ? 1 : easeOver(FADE_PER_FRAME, dt);
         // A view the patch list has not caught up with keeps the loop running until it does.
         let fading = viewKey !== this.visibleView;
         const onScreen = new Set(this.visible);
@@ -309,18 +337,16 @@ export class HexLevels {
             let avail: ShownRes = 3;
             for (let res = want; res > 3; res--) {
                 const stored = this.store.get(`${res}:${key}`);
-                if (stored && gl.hasPatch(`${res}:${key}`)) {
-                    stored.lastSeen = now;
-                    avail = res as ShownRes;
-                    break;
+                if (!stored) continue;
+                if (!gl.hasPatch(`${res}:${key}`)) {
+                    // Gone from the GPU: built again when next wanted.
+                    this.drop(`${res}:${key}`);
+                    this.forget(res as DetailRes, [key]);
+                    continue;
                 }
-                if (stored) {
-                    // Built before the renderer was replaced: up again it goes.
-                    gl.addPatch(`${res}:${key}`, stored.data);
-                    stored.lastSeen = now;
-                    avail = res as ShownRes;
-                    break;
-                }
+                stored.lastSeen = now;
+                avail = res as ShownRes;
+                break;
             }
             if (want > 3 && avail < want && this.patchKeys[want as DetailRes]?.has(key)) missing.push(key);
 
@@ -328,6 +354,10 @@ export class HexLevels {
             if (!state) {
                 state = { shown: avail, alpha: 1, prev: null, prevAlpha: 0 };
                 this.states.set(key, state);
+            } else if (state.shown !== avail && state.prev === avail) {
+                // Back to the level that was fading out: it fades back in from where it was.
+                [state.shown, state.prev] = [avail, state.shown];
+                [state.alpha, state.prevAlpha] = [state.prevAlpha, state.alpha];
             } else if (state.shown !== avail) {
                 // The level that was most visible fades out; the new one fades in.
                 if (state.alpha >= state.prevAlpha || state.prev === null) {

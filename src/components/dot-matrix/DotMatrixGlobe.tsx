@@ -20,6 +20,7 @@ import {
     BUCKET_COLS,
     BUCKET_ROWS,
     buildCityHexSet,
+    degToUnit,
     getRegionHoverLabel,
     hexAtPoint,
     hexSpacingRad,
@@ -1235,7 +1236,7 @@ export function DotMatrixGlobe({
                     }
                     return cellStyle(key, code, inputs);
                 },
-            });
+            }, reduced);
             levelsFading = frame.fading;
             gl.render(view, isDark ? STYLE_GL.dark : STYLE_GL.light, {
                 shade: isDark ? 1 : 0,
@@ -1274,21 +1275,24 @@ export function DotMatrixGlobe({
 
         const selectedIndex = selectedKey ? baseTier.cellIndexByH3.get(selectedKey) : undefined;
         if (selectedIndex !== undefined) {
-            // Outlined at whichever level its part of the map is showing.
-            const baseCell = baseTier.cells[selectedIndex];
-            const res = gl ? levels.shownAt(baseCell.lat, baseCell.lon) : 3;
-            const detailKey = res > 3 ? detailInfo(res as DetailRes)?.selected ?? null : null;
-            let cell = baseCell;
-            if (detailKey) {
+            // Outlined at whichever level its part of the map is showing --
+            // judged where the finer cell sits, which can be a ring or two
+            // from the base cell, over the next patch.
+            let cell = baseTier.cells[selectedIndex];
+            let res = 3;
+            for (const r of gl ? ([5, 4] as DetailRes[]) : []) {
+                const key = detailInfo(r)?.selected;
+                if (!key) continue;
                 const kept = selectedCellRef.current;
-                if (kept && kept.key === detailKey && kept.projection === projection.id) {
-                    cell = kept.cell;
-                } else {
-                    cell = hexCellOf(detailKey, projection);
-                    selectedCellRef.current = { key: detailKey, projection: projection.id, cell };
+                const detailCell = kept && kept.key === key && kept.projection === projection.id ? kept.cell : hexCellOf(key, projection);
+                selectedCellRef.current = { key, projection: projection.id, cell: detailCell };
+                if (levels.shownAt(detailCell.lat, detailCell.lon) === r) {
+                    cell = detailCell;
+                    res = r;
+                    break;
                 }
             }
-            const scale = detailKey ? hexSpacingRad(res) / hexSpacingRad(3) : 1;
+            const scale = hexSpacingRad(res) / hexSpacingRad(3);
             const hex = placeSelectedHex(cell, view, (mapW / 135) * curZoom * scale);
             if (hex) drawSelectedHex(hex);
         } else if (markerCell && !markerCell.hasDot) {
@@ -1488,9 +1492,7 @@ export function DotMatrixGlobe({
             const shown = view.progress === 1
                 ? (cell: string) => {
                     const [lat, lon] = cellToLatLng(cell);
-                    const la = (lat * Math.PI) / 180;
-                    const lo = (lon * Math.PI) / 180;
-                    return projectToGlobe(view, { ux: Math.cos(la) * Math.sin(lo), uy: -Math.sin(la), uz: Math.cos(la) * Math.cos(lo) }).z >= 0;
+                    return projectToGlobe(view, degToUnit(lat, lon).unit).z >= 0;
                 }
                 : (cell: string) => cellHideBelow(projection, cell) === 0;
             const key = detailHexAtPoint(latDeg, lonDeg, level, reach, shown);
