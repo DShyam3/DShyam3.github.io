@@ -50,6 +50,7 @@ import Photos from './pages/Photos';
 import Articles from './pages/Articles';
 import Recipes from './pages/Recipes';
 import WatchlistNews from './pages/WatchlistNews';
+import WatchlistFacts from './pages/WatchlistFacts';
 import Auth from './pages/Auth';
 import NotFound from './pages/NotFound';
 
@@ -172,6 +173,7 @@ const App = () => {
                     <Route path="/watchlist/library" element={<Watchlist />} />
                     <Route path="/watchlist/diary" element={<WatchlistDiary />} />
                     <Route path="/watchlist/franchises" element={<WatchlistFranchises />} />
+                    <Route path="/watchlist/facts" element={<WatchlistFacts />} />
                   </Route>
                   {/* Kept so a saved or shared link to the old address still lands somewhere. */}
                   <Route path="/watchlist/news" element={<Navigate to="/watchlist" replace />} />

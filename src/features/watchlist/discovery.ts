@@ -107,18 +107,32 @@ function takeTurns<T>(lists: T[][]): T[] {
   return result;
 }
 
-/** Round-robin across seeds, keeping each seed's own order. */
-export function interleaveBySeed(items: DiscoveryItem[]): DiscoveryItem[] {
+export const MAX_SUGGESTIONS_PER_SEED = 4;
+
+/**
+ * Round-robin across seeds, keeping each seed's own order, and capping each
+ * non-filler seed so one prolific show cannot dominate the grid.
+ */
+export function interleaveBySeed(
+  items: DiscoveryItem[],
+  maxPerSeed = MAX_SUGGESTIONS_PER_SEED,
+): DiscoveryItem[] {
   const groups = new Map<string, DiscoveryItem[]>();
   for (const item of items) {
     const key = item.seedKey ?? '';
     const existing = groups.get(key);
-    if (existing) existing.push(item);
-    else groups.set(key, [item]);
+    if (existing) {
+      if (key.startsWith('filler:') || maxPerSeed <= 0 || existing.length < maxPerSeed) {
+        existing.push(item);
+      }
+    } else {
+      groups.set(key, [item]);
+    }
   }
   const queues = [...groups.values()];
+  const total = queues.reduce((sum, q) => sum + q.length, 0);
   const result: DiscoveryItem[] = [];
-  for (let index = 0; result.length < items.length; index++) {
+  for (let index = 0; result.length < total; index++) {
     for (const queue of queues) if (queue[index]) result.push(queue[index]);
   }
   return result;

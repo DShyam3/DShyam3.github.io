@@ -19,7 +19,7 @@ export function AddEntryDialog({
   const [query, setQuery] = useState('');
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [failures, setFailures] = useState<Record<string, string>>({});
-  const { results, loading, searchMulti, getPosterUrl } = useTMDB();
+  const { results, loading, searchMulti, clearSearch, getPosterUrl } = useTMDB();
 
   useEffect(() => {
     if (query.length < 2) return;
@@ -39,7 +39,7 @@ export function AddEntryDialog({
       searchLabel="Film or series"
       placeholder="Search films and series"
       query={query}
-      onQueryChange={setQuery}
+      onQueryChange={(value) => { clearSearch(); setQuery(value); }}
       results={results}
       loading={loading}
       resultKey={keyOf}

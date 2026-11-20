@@ -163,11 +163,59 @@ export function YourWeek({ schedule, watchlist, loading, declined: controlledDec
     ? new Date(current.getFullYear(), current.getMonth() + direction, 1)
     : new Date(current.getFullYear(), current.getMonth(), current.getDate() + direction * 7));
 
+  const calendarToolbar = (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex gap-1" role="group" aria-label="Calendar view">
+        <Button variant={view === 'week' ? 'default' : 'outline'} size="sm" aria-pressed={view === 'week'} onClick={() => setView('week')}>Week</Button>
+        <Button variant={view === 'month' ? 'default' : 'outline'} size="sm" aria-pressed={view === 'month'} onClick={() => setView('month')}>Month</Button>
+      </div>
+      <p className="text-sm font-medium" aria-live="polite">{view === 'week' ? `Week of ${weekDates[0].toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}` : anchor.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</p>
+      <div className="flex gap-1">
+        <Button variant="outline" size="icon" aria-label={`Previous ${view}`} onClick={() => navigate(-1)}><ChevronLeft /></Button>
+        <Button variant="outline" size="sm" onClick={() => setAnchor(new Date())}>{view === 'week' ? 'This week' : 'This month'}</Button>
+        <Button variant="outline" size="icon" aria-label={`Next ${view}`} onClick={() => navigate(1)}><ChevronRight /></Button>
+      </div>
+    </div>
+  );
+
+  const calendarBody = loading ? (
+    <p role="status" className="text-sm text-muted-foreground">Loading your schedule…</p>
+  ) : view === 'week' ? (
+    renderAgenda(weekDates)
+  ) : (
+    <>
+      <div className="md:hidden">{renderAgenda(monthDates.filter(inMonth), false, true)}</div>
+      <div className="hidden space-y-3 md:block">
+        <div className="grid grid-cols-7 gap-2">
+          {DAYS.map((day) => <p key={day} className="px-2 text-xs font-medium text-muted-foreground">{day.slice(0, 3)}</p>)}
+          {monthDates.map((date) => {
+            const key = calendarDateKey(date);
+            return (
+              <div key={key} className={cn('min-h-24 min-w-0 space-y-1 rounded-lg border p-2', key === todayKey ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card/40', !inMonth(date) && 'bg-muted/30')}>
+                <p className={cn('text-xs', !inMonth(date) && 'text-muted-foreground')}><time dateTime={key}>{date.getDate()}</time>{key === todayKey && <span className="ml-1 text-primary">Today</span>}</p>
+                {events.filter((event) => event.date === key).map((event) => (
+                  <div key={event.id}>
+                    <Button variant="ghost" className={cn('h-auto w-full flex-col items-start gap-1 rounded-md px-1 py-2 text-left whitespace-normal', event.kind === 'suggestion' && 'border border-dashed border-border', event.unreleased && 'opacity-60')} aria-label={`${event.item.title}, ${event.kind === 'plan' ? 'planned' : 'suggested release'}, ${event.label}, ${key}`} onClick={() => setSelectedEvent(event)}>
+                      <span className="line-clamp-2 w-full break-words text-xs font-medium" title={event.item.title}>{event.item.title}</span>
+                      <span className="line-clamp-2 text-xs text-muted-foreground" title={event.label}>{event.kind === 'plan' ? 'Planned' : 'Suggested'} · {event.label}</span>
+                    </Button>
+                    {event.kind === 'suggestion' && <Button variant="ghost" size="sm" className="text-xs" aria-label={`Decline suggested release: ${event.item.title}, ${event.label}`} onClick={() => declineRelease(event)}>Decline</Button>}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+        {!monthHasEvents && emptyMessage('this month')}
+      </div>
+    </>
+  );
+
   return (
     <section id="your-week" className="news-pane news-pane-your-week col-span-full min-w-0 scroll-mt-4 space-y-3" tabIndex={0} role="region" aria-label="Your week calendar">
       <div className="news-pane-heading flex flex-wrap items-center justify-between gap-2">
-        <DotMatrixText text="YOUR WEEK" size="xs" />
-        <Button variant="outline" size="sm" onClick={() => { setAnchor(new Date()); setView('week'); setExpanded(true); }}><CalendarDays className="h-4 w-4" />Expand calendar</Button>
+        <DotMatrixText text="YOUR CALENDAR" size="xs" />
+        <Button variant="outline" size="sm" onClick={() => setExpanded(true)}><CalendarDays className="h-4 w-4" />Full screen</Button>
       </div>
       <details className="text-xs text-muted-foreground">
         <summary className="cursor-pointer">Plans and suggested releases</summary>
@@ -176,54 +224,23 @@ export function YourWeek({ schedule, watchlist, loading, declined: controlledDec
       </details>
       {declined.length > 0 && <Button variant="link" size="sm" className="h-auto whitespace-normal px-0 text-xs" onClick={() => saveDeclined([])}>Restore declined suggestions ({declined.length})</Button>}
       {declineError && <p role="alert" className="text-xs text-destructive">{declineError}</p>}
-      {loading ? <p role="status" className="text-sm text-muted-foreground">Loading your schedule…</p> : renderAgenda(datesFrom(calendarWeekStart(today), 7), true)}
+      {calendarToolbar}
+      <div
+        role="region"
+        aria-label={`${view === 'week' ? 'Week' : 'Month'} calendar`}
+        className={view === 'month' ? 'max-h-[45dvh] overflow-y-auto app-scroll pr-1' : undefined}
+      >
+        {calendarBody}
+      </div>
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-[min(96vw,100rem)]">
           <DialogHeader className="shrink-0">
             <DialogTitle>Your calendar</DialogTitle>
             <DialogDescription>Future weekly entries plan one episode per week and adjust with watched progress. Suggestions are not scheduled until you add them. Unknown release dates are not guessed.</DialogDescription>
           </DialogHeader>
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-            <div className="flex gap-1" role="group" aria-label="Calendar view">
-              <Button variant={view === 'week' ? 'default' : 'outline'} size="sm" aria-pressed={view === 'week'} onClick={() => setView('week')}>Week</Button>
-              <Button variant={view === 'month' ? 'default' : 'outline'} size="sm" aria-pressed={view === 'month'} onClick={() => setView('month')}>Month</Button>
-            </div>
-            <p className="text-sm font-medium" aria-live="polite">{view === 'week' ? `Week of ${weekDates[0].toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}` : anchor.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</p>
-            <div className="flex gap-1">
-              <Button variant="outline" size="icon" aria-label={`Previous ${view}`} onClick={() => navigate(-1)}><ChevronLeft /></Button>
-              <Button variant="outline" onClick={() => setAnchor(new Date())}>{view === 'week' ? 'This week' : 'This month'}</Button>
-              <Button variant="outline" size="icon" aria-label={`Next ${view}`} onClick={() => navigate(1)}><ChevronRight /></Button>
-            </div>
-          </div>
+          <div className="shrink-0">{calendarToolbar}</div>
           <div className="min-h-0 overflow-y-auto" role="region" aria-label={`${view === 'week' ? 'Week' : 'Month'} calendar`} tabIndex={0}>
-            {loading ? <p role="status" className="text-sm text-muted-foreground">Loading your schedule…</p> : view === 'week' ? renderAgenda(weekDates) : (
-              <>
-                <div className="md:hidden">{renderAgenda(monthDates.filter(inMonth), false, true)}</div>
-                <div className="hidden space-y-3 md:block">
-                  <div className="grid grid-cols-7 gap-2">
-                    {DAYS.map((day) => <p key={day} className="px-2 text-xs font-medium text-muted-foreground">{day.slice(0, 3)}</p>)}
-                    {monthDates.map((date) => {
-                      const key = calendarDateKey(date);
-                      return (
-                        <div key={key} className={cn('min-h-24 min-w-0 space-y-1 rounded-lg border p-2', key === todayKey ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card/40', !inMonth(date) && 'bg-muted/30')}>
-                          <p className={cn('text-xs', !inMonth(date) && 'text-muted-foreground')}><time dateTime={key}>{date.getDate()}</time>{key === todayKey && <span className="ml-1 text-primary">Today</span>}</p>
-                          {events.filter((event) => event.date === key).map((event) => (
-                            <div key={event.id}>
-                            <Button variant="ghost" className={cn('h-auto w-full flex-col items-start gap-1 rounded-md px-1 py-2 text-left whitespace-normal', event.kind === 'suggestion' && 'border border-dashed border-border', event.unreleased && 'opacity-60')} aria-label={`${event.item.title}, ${event.kind === 'plan' ? 'planned' : 'suggested release'}, ${event.label}, ${key}`} onClick={() => setSelectedEvent(event)}>
-                              <span className="line-clamp-2 w-full break-words text-xs font-medium" title={event.item.title}>{event.item.title}</span>
-                              <span className="line-clamp-2 text-xs text-muted-foreground" title={event.label}>{event.kind === 'plan' ? 'Planned' : 'Suggested'} · {event.label}</span>
-                            </Button>
-                            {event.kind === 'suggestion' && <Button variant="ghost" size="sm" className="text-xs" aria-label={`Decline suggested release: ${event.item.title}, ${event.label}`} onClick={() => declineRelease(event)}>Decline</Button>}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {!monthHasEvents && emptyMessage('this month')}
-                </div>
-              </>
-            )}
+            {calendarBody}
           </div>
         </DialogContent>
       </Dialog>

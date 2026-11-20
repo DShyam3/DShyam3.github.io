@@ -284,7 +284,7 @@ export function SeasonEpisodeList({
                   });
                 }}
                 className={cn(
-                  'px-3 py-2 rounded-lg transition-[background-color,opacity,border-color] duration-200 border-l-4',
+                  'space-y-1.5 px-3 py-2 rounded-lg transition-[background-color,opacity,border-color] duration-200 border-l-4',
                   toggleEpisodeWatched
                     ? 'cursor-pointer'
                     : 'cursor-default',

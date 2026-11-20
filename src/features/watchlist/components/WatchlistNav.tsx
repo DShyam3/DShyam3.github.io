@@ -1,16 +1,17 @@
 import { Link } from 'react-router-dom';
-import { Library, ListOrdered, Newspaper, NotebookPen } from 'lucide-react';
+import { Library, ListOrdered, Newspaper, NotebookPen, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { cn } from '@/lib/utils';
 
-export type WatchlistView = 'news' | 'library' | 'diary' | 'franchises';
+export type WatchlistView = 'news' | 'library' | 'diary' | 'franchises' | 'facts';
 
 const VIEWS: { view: WatchlistView; to: string; label: string; Icon: typeof Library }[] = [
   { view: 'news', to: '/watchlist', label: 'News', Icon: Newspaper },
   { view: 'library', to: '/watchlist/library', label: 'Library', Icon: Library },
   { view: 'diary', to: '/watchlist/diary', label: 'Diary', Icon: NotebookPen },
   { view: 'franchises', to: '/watchlist/franchises', label: 'Franchises', Icon: ListOrdered },
+  { view: 'facts', to: '/watchlist/facts', label: 'Cool facts', Icon: Sparkles },
 ];
 
 /** The Watchlist's views, one row of pills. The current one is filled. */

@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { Check, Plus, X } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Check, Loader2, Plus, Search, X } from 'lucide-react';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { CardGrid } from '@/components/shared/CardGrid';
 import {
@@ -13,12 +13,16 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWatchlist } from '../useWatchlist';
 import { useTMDB } from '../useTMDB';
+import type { TMDBResult } from '../useTMDB';
+import { newItemFromDetails } from '../new-item';
+import { findExistingTitle } from '../existing-title';
 import { discoveryDate, discoveryKey, interleaveUpcoming, type DiscoveryItem, type DiscoveryMedia } from '../discovery';
 import { useDiscovery, type DiscoveryFranchiseGroup } from '../useDiscovery';
 import { discoveryAddPayload } from '../discovery-add';
 import type { OrderEntryView } from '../franchise';
 import type { LibraryType } from '../library-state';
 import type { WatchedWhen } from '../watched-when';
+import { todayLocal } from '../watched-when';
 import { EntryList } from './franchise/EntryList';
 import { EntryPreviewDialog } from './franchise/EntryPreviewDialog';
 import { FranchiseCard } from './franchise/FranchiseCard';
@@ -26,6 +30,7 @@ import { useAddToLibrary } from './franchise/useAddToLibrary';
 import { PlatformBadge } from './PlatformLogo';
 import { PosterCard } from './PosterCard';
 import { TrailerButton } from './TrailerButton';
+import { TmdbSearchDialog } from './TmdbSearchDialog';
 import { WatchedWhenMenu } from './WatchedWhenMenu';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
 import { CreditsList, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
@@ -259,6 +264,123 @@ function DiscoveryFranchiseCard({
   );
 }
 
+/** A direct lookup for titles that did not surface among Discover's suggestions. */
+function DiscoverAddSearch({ type }: { type: LibraryType }) {
+  const { watchlist, loading: libraryLoading, addWatchlistItem } = useWatchlist();
+  const { results, search, searchMulti, clearSearch, getPosterUrl, getMovieDetails, loading } = useTMDB();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [pending, setPending] = useState<Set<string>>(new Set());
+
+  const existingFor = (result: TMDBResult) => findExistingTitle(watchlist, result);
+
+  const alreadyWatched = (result: TMDBResult) => {
+    const existing = existingFor(result);
+    if (!existing) return false;
+    if (existing.category === 'Movies') return existing.watched === true;
+    const aired = (existing.seasons ?? []).filter((season) => season.season_number > 0)
+      .flatMap((season) => season.episodes)
+      .filter((episode) => !!episode.release_date && episode.release_date.slice(0, 10) <= todayLocal());
+    return aired.length > 0 && aired.every((episode) => episode.watched);
+  };
+
+  useEffect(() => {
+    if (!open) {
+      setQuery('');
+      clearSearch();
+      return;
+    }
+    if (query.trim().length < 2) return;
+    const timer = setTimeout(() => {
+      const yearMatch = query.match(/\((\d{4})\)\s*$/);
+      const year = yearMatch ? Number(yearMatch[1]) : undefined;
+      const title = query.replace(/\s*\(\d{4}\)\s*$/, '').trim();
+      if (type === 'all') void searchMulti(title);
+      else void search(title, type === 'tv' ? 'TV Shows' : 'Movies', year);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [open, query, type, search, searchMulti, clearSearch]);
+
+  const add = async (result: TMDBResult, watchedWhen: WatchedWhen) => {
+    const key = `${result.media_type}-${result.id}`;
+    if (libraryLoading || pending.has(key) || existingFor(result)) return;
+    setPending((current) => new Set(current).add(key));
+    try {
+      const details = await getMovieDetails(result.id, result.media_type);
+      if (!details) return;
+      await addWatchlistItem(
+        { ...newItemFromDetails(details, result.media_type === 'tv' ? 'TV Shows' : 'Movies'), watched: true },
+        { seasons: details.seasons, watchedWhen },
+      );
+    } catch {
+      // The watchlist mutation shows its own failure toast.
+    } finally {
+      setPending((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
+  return (
+    <TmdbSearchDialog
+      open={open}
+      onOpenChange={setOpen}
+      triggerLabel="Search watched titles"
+      trigger={
+        <Button variant="outline" className="h-auto min-h-14 w-full justify-start gap-3 rounded-xl border-border/60 bg-card px-4 py-3 text-left text-muted-foreground hover:text-foreground">
+          <Search className="h-5 w-5 shrink-0" />
+          <span className="min-w-0 flex-1">Search for a film or series you watched…</span>
+          <Plus className="h-4 w-4 shrink-0" />
+        </Button>
+      }
+      title="Log a watched title"
+      description="Search for a film or TV series and choose when you watched it."
+      searchLabel={type === 'movie' ? 'Search films' : type === 'tv' ? 'Search series' : 'Search films and series'}
+      placeholder={type === 'movie' ? 'Type a film name…' : type === 'tv' ? 'Type a series name…' : 'Type a film or series name…'}
+      query={query}
+      onQueryChange={(value) => { clearSearch(); setQuery(value); }}
+      results={results}
+      loading={loading}
+      getPosterUrl={getPosterUrl}
+      resultKey={(result) => `${result.media_type}-${result.id}`}
+      isDisabled={(result) => pending.has(`${result.media_type}-${result.id}`) || !!existingFor(result)}
+      renderActions={(result) => {
+        if (existingFor(result)) return null;
+        const key = `${result.media_type}-${result.id}`;
+        const releaseDate = result.release_date || result.first_air_date;
+        const notOutYet = !!releaseDate && releaseDate.slice(0, 10) > todayLocal();
+        return (
+          <div className="mt-3">
+            <WatchedWhenMenu
+              releaseDate={releaseDate || undefined}
+              releaseText={result.media_type === 'tv' ? "On each episode's air date" : undefined}
+              disabled={libraryLoading || notOutYet || pending.has(key)}
+              onPick={(when) => { void add(result, when); }}
+              size="default"
+              className="min-h-11"
+            >
+              {libraryLoading ? 'Checking library…' : notOutYet ? 'Not out yet' : 'Seen it · choose when'}
+            </WatchedWhenMenu>
+          </div>
+        );
+      }}
+      renderStatus={(result) => {
+        const key = `${result.media_type}-${result.id}`;
+        const existing = existingFor(result);
+        return pending.has(key) ? (
+          <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />Adding…
+          </span>
+        ) : existing ? (
+          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{alreadyWatched(result) ? 'Already watched' : 'Already in library'}</span>
+        ) : null;
+      }}
+    />
+  );
+}
+
 /** Discover: what is coming that you do not follow, grouped franchises/spin-offs you have started, then "more like this". */
 export function DiscoverySection({ type }: { type: LibraryType }) {
   const discovery = useDiscovery(type);
@@ -280,6 +402,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
 
   return (
     <div className="ultrawide-discover-grid">
+      {isAdmin && <div style={{ gridColumn: '1 / -1' }}><DiscoverAddSearch type={type} /></div>}
       <section className="space-y-4 min-w-0" aria-labelledby="discover-coming-soon">
         <div className="space-y-1">
           <h2 id="discover-coming-soon"><DotMatrixText text="COMING SOON" size="sm" /></h2>

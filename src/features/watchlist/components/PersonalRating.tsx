@@ -57,7 +57,7 @@ export function PersonalRating({ label, value, onChange, prompt, onSkip }: Perso
                 type="button"
                 disabled={saving}
                 aria-label={value == null ? `${label}: Rate` : `${label}: ${value}/10`}
-                className="inline-flex h-11 min-h-11 min-w-11 items-center justify-center rounded-full border border-border bg-background px-3 text-sm text-foreground disabled:opacity-50"
+                className="inline-flex h-9 min-h-9 min-w-9 items-center justify-center rounded-full border border-border bg-background px-2.5 text-xs text-foreground disabled:opacity-50"
               >
                 {value == null ? 'Rate' : (
                   <span className="tabular-nums">

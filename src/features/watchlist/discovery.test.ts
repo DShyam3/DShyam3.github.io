@@ -153,6 +153,18 @@ describe('interleaveBySeed', () => {
     ];
     expect(interleaveBySeed(items).map((item) => item.id)).toEqual([1, 4, 5, 2, 3]);
   });
+
+  it('caps each non-filler seed at MAX_SUGGESTIONS_PER_SEED while keeping filler uncapped', () => {
+    const prolific = Array.from({ length: 6 }, (_, i) => makeDiscoveryItem({ id: i + 1, seedKey: 'tv:beef' }));
+    const other = [makeDiscoveryItem({ id: 99, seedKey: 'tv:bb' })];
+    const filler = Array.from({ length: 6 }, (_, i) => makeDiscoveryItem({ id: 200 + i, seedKey: 'filler:tv' }));
+
+    const result = interleaveBySeed([...prolific, ...other]);
+    expect(result.filter((i) => i.seedKey === 'tv:beef').map((i) => i.id)).toEqual([1, 2, 3, 4]);
+    expect(result.filter((i) => i.seedKey === 'tv:bb')).toHaveLength(1);
+
+    expect(interleaveBySeed(filler)).toHaveLength(6);
+  });
 });
 
 describe('curateDiscovery', () => {

@@ -1,7 +1,8 @@
+import { Fragment, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
-import { joinNames } from '@/features/watchlist/credits';
+import { PersonFilmographyDialog } from '@/features/watchlist/components/PersonFilmographyDialog';
 import type { WatchlistItem } from '@/features/watchlist/useWatchlist';
 
 /**
@@ -78,6 +79,46 @@ export function DetailDescription({
   );
 }
 
+function ClickableNameList({
+  names,
+  onSelect,
+  max = 3,
+}: {
+  names: string[];
+  onSelect: (name: string) => void;
+  max?: number;
+}) {
+  const shown = names.slice(0, max);
+  const remaining = names.length - shown.length;
+
+  return (
+    <>
+      {shown.map((name, index) => {
+        const isLastShown = index === shown.length - 1;
+        const separator =
+          index === 0
+            ? ''
+            : isLastShown && remaining === 0
+              ? ' and '
+              : ', ';
+        return (
+          <Fragment key={name}>
+            {separator}
+            <button
+              type="button"
+              onClick={() => onSelect(name)}
+              className="underline decoration-border underline-offset-4 hover:decoration-foreground transition-colors text-left"
+            >
+              {name}
+            </button>
+          </Fragment>
+        );
+      })}
+      {remaining > 0 ? ` and ${remaining} more` : null}
+    </>
+  );
+}
+
 /** "Directed by" / "Created by" and "Starring" rows. Renders nothing when both lists are empty. */
 export function CreditsList({
   kind,
@@ -90,23 +131,37 @@ export function CreditsList({
   cast?: string[];
   className?: string;
 }) {
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const hasLeads = !!leads?.length;
   const hasCast = !!cast?.length;
   if (!hasLeads && !hasCast) return null;
   return (
-    <dl className={cn('grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm', className)}>
-      {hasLeads ? (
-        <>
-          <dt className="text-muted-foreground">{kind === 'tv' ? 'Created by' : 'Directed by'}</dt>
-          <dd className="text-foreground">{joinNames(leads)}</dd>
-        </>
-      ) : null}
-      {hasCast ? (
-        <>
-          <dt className="text-muted-foreground">Starring</dt>
-          <dd className="text-foreground">{joinNames(cast)}</dd>
-        </>
-      ) : null}
-    </dl>
+    <>
+      <dl className={cn('grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm', className)}>
+        {hasLeads && leads ? (
+          <>
+            <dt className="text-muted-foreground">{kind === 'tv' ? 'Created by' : 'Directed by'}</dt>
+            <dd className="text-foreground">
+              <ClickableNameList names={leads} onSelect={setSelectedPerson} />
+            </dd>
+          </>
+        ) : null}
+        {hasCast && cast ? (
+          <>
+            <dt className="text-muted-foreground">Starring</dt>
+            <dd className="text-foreground">
+              <ClickableNameList names={cast} onSelect={setSelectedPerson} />
+            </dd>
+          </>
+        ) : null}
+      </dl>
+      <PersonFilmographyDialog
+        name={selectedPerson}
+        open={selectedPerson !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedPerson(null);
+        }}
+      />
+    </>
   );
 }

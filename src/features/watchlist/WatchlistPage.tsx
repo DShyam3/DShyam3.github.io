@@ -326,6 +326,7 @@ const Watchlist = () => {
     results: searchResults,
     search: tmdbSearch,
     searchMulti: tmdbSearchMulti,
+    clearSearch: clearTmdbSearch,
     getPosterUrl,
     getMovieDetails,
     loading: searchLoading,
@@ -875,7 +876,7 @@ const Watchlist = () => {
               searchLabel="Search Movies & TV Shows"
               placeholder="Type a movie or TV show name..."
               query={favSearchQuery}
-              onQueryChange={setFavSearchQuery}
+              onQueryChange={(value) => { clearTmdbSearch(); setFavSearchQuery(value); }}
               results={searchResults}
               loading={searchLoading}
               getPosterUrl={getPosterUrl}
@@ -914,7 +915,7 @@ const Watchlist = () => {
             searchLabel={libraryType === 'movie' ? 'Search films' : libraryType === 'tv' ? 'Search series' : 'Search films and series'}
             placeholder={libraryType === 'movie' ? 'Type a film name…' : libraryType === 'tv' ? 'Type a series name…' : 'Type a film or series name…'}
             query={title}
-            onQueryChange={setTitle}
+            onQueryChange={(value) => { clearTmdbSearch(); setTitle(value); }}
             results={searchResults}
             loading={searchLoading}
             getPosterUrl={getPosterUrl}

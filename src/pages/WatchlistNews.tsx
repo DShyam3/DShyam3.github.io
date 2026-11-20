@@ -5,6 +5,7 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
+import { PosterCard } from '@/features/watchlist/components/PosterCard';
 import { PlatformBadge } from '@/features/watchlist/components/PlatformLogo';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
 import { useWatchlist } from '@/features/watchlist/useWatchlist';
@@ -48,7 +49,7 @@ import './WatchlistNews.css';
 import { DiscoverySection } from '@/features/watchlist/components/DiscoverySection';
 import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
 import { LIBRARY_TYPE_OPTIONS, type LibraryType, isFollowedState } from '@/features/watchlist/library-state';
-import { readDeclinedReleases, WeekStrip, YourWeek } from '@/features/watchlist/components/YourWeek';
+import { readDeclinedReleases, YourWeek } from '@/features/watchlist/components/YourWeek';
 
 /** Which entity a click on a card or row resolves to -- looked up in
  *  `useWatchlist()`'s list by both fields, since a TV show and a movie id
@@ -62,7 +63,6 @@ function NewsPosterCard({
   sub,
   platform,
   pill,
-  srLabel,
   onClick,
   schedule,
 }: {
@@ -82,64 +82,29 @@ function NewsPosterCard({
   };
 }) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [failedPoster, setFailedPoster] = useState<string | null>(null);
   return (
     <>
-      <article className="item-card flex h-full min-w-0 flex-col">
-        <button
-          type="button"
-          onClick={onClick}
-          aria-label={srLabel || `${title} — open details`}
-          className="flex flex-1 w-full items-start gap-3 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-        >
-          <span className="aspect-[2/3] w-14 shrink-0 overflow-hidden rounded bg-muted self-start">
-            {poster && poster !== failedPoster ? (
-              <img
-                src={poster}
-                alt=""
-                loading="lazy"
-                onError={() => setFailedPoster(poster)}
-                className="h-full w-full object-contain"
-              />
-            ) : (
-              <span className="flex h-full items-center justify-center">
-                <Tv className="h-5 w-5" />
-              </span>
-            )}
-          </span>
-          <span className="flex flex-1 flex-col min-w-0 self-stretch justify-between">
-            <span className="min-w-0">
-              <span
-                className="line-clamp-2 min-h-[2.5rem] block break-words text-sm font-medium leading-snug"
-                title={title}
-              >
-                {title}
-              </span>
-              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                {sub}
-              </span>
-            </span>
-            <span className="mt-2 flex flex-wrap items-center gap-1.5">
-              <PlatformBadge platform={platform ?? undefined} size={18} />
-              {pill}
-            </span>
-          </span>
-        </button>
-        {schedule && (
-          <Button
-            variant="ghost"
-            aria-label={schedule.scheduled ? `Remove ${title} from schedule` : `Add ${title} to schedule`}
-            className="mt-auto h-auto min-h-11 w-full justify-start whitespace-normal rounded-t-none rounded-b-[inherit] border-t px-3 py-2 text-left text-xs text-primary shrink-0"
-            onClick={() => {
-              if (schedule.scheduled) schedule.onRemove();
-              else setScheduleOpen(true);
-            }}
-          >
-            <Calendar className="h-4 w-4 shrink-0" />
-            <span>{schedule.scheduled ? 'Scheduled · remove' : 'Add to schedule'}</span>
-          </Button>
-        )}
-      </article>
+      <PosterCard
+        title={title}
+        poster={poster}
+        subtitle={sub}
+        meta={
+          <div className="flex flex-wrap items-center gap-1.5">
+            <PlatformBadge platform={platform ?? undefined} size={18} />
+            {pill}
+          </div>
+        }
+        scheduled={schedule?.scheduled}
+        onSchedule={
+          schedule
+            ? () => {
+                if (schedule.scheduled) schedule.onRemove();
+                else setScheduleOpen(true);
+              }
+            : undefined
+        }
+        onOpen={onClick}
+      />
       {schedule && (
         <SmartScheduleDialog
           open={scheduleOpen}
@@ -361,8 +326,8 @@ function UpdatesList({
   failed: boolean;
 }) {
   return (
-    <section className="news-pane news-pane-updates min-w-0 space-y-1" aria-label="Updates">
-      <h2 className="news-pane-heading"><DotMatrixText text="UPDATES" size="sm" /></h2>
+    <section className="news-pane news-pane-updates flex min-h-0 flex-1 flex-col min-w-0 rounded-2xl border border-border/60 bg-card p-4 space-y-3" aria-label="Updates">
+      <h2 className="news-pane-heading shrink-0"><DotMatrixText text="UPDATES" size="sm" /></h2>
       {failed && (
         <SectionFailure>
           {rows.length === 0 ? 'Could not load updates' : 'Some updates could not load'}
@@ -499,7 +464,6 @@ const WatchlistNews = () => {
   const { schedule, loading: scheduleLoading, addToSchedule, removeFromSchedule, updateScheduleDay, removeFromScheduleByWatchlistId, isInSchedule } = useSchedule();
   const [detailScheduleOpen, setDetailScheduleOpen] = useState(false);
   const [selectedRef, setSelectedRef] = useState<EntityRef | null>(null);
-  const [weekOpen, setWeekOpen] = useState(false);
   const [declinedReleases, setDeclinedReleases] = useState<string[]>(readDeclinedReleases);
   // Page level (REHAUL_PLAN.md 8.C-bis): drives both Upcoming (forward) and
   // Updates (backward), and Out Now (backward) too.
@@ -762,18 +726,22 @@ const WatchlistNews = () => {
   );
 
   return (
-    <AppShell title="Watchlist" subtitle="A little inspiration for your next watch" toolbar={toolbar}>
-      <div className="curated-news space-y-8 py-4">
-        <div className="ultrawide-toolbar flex flex-wrap items-center justify-between gap-3">
+    <AppShell
+      title="Watchlist"
+      subtitle="A little inspiration for your next watch"
+      toolbar={toolbar}
+    >
+      <div className={cn('curated-news py-2', newsPanel === 'following' ? 'curated-news-following flex flex-col gap-4' : 'space-y-8 py-4')}>
+        <div className="ultrawide-toolbar flex shrink-0 flex-wrap items-center justify-between gap-3">
           <SegmentedControl label="Show films, series or both" options={LIBRARY_TYPE_OPTIONS} value={newsType} onChange={setNewsType} />
           {newsPanel === 'following' && <SegmentedControl label="News time range" options={NEWS_WINDOW_OPTIONS} value={newsWindow} onChange={setNewsWindow} />}
         </div>
         {newsPanel === 'following' ? (
           <div className="ultrawide-news-grid">
-            <div className="space-y-8 min-w-0">
-              {featured && <FeaturedCard key={`${featured.entityType}:${featured.entityId}`} featured={featured} run={featuredRun} onOpen={() => openDetail(featured)} />}
+            <div className="news-left-col flex flex-col gap-5 min-w-0">
+              {featured && <div className="shrink-0"><FeaturedCard key={`${featured.entityType}:${featured.entityId}`} featured={featured} run={featuredRun} onOpen={() => openDetail(featured)} /></div>}
               {!pinnedLoading && pinnedFailed && <SectionFailure>Could not load the countdown.</SectionFailure>}
-              <section className="space-y-3" aria-labelledby="news-out-now">
+              <section className="shrink-0 space-y-3" aria-labelledby="news-out-now">
                 <h2 id="news-out-now" className="news-pane-heading"><DotMatrixText text="OUT NOW" size="sm" /></h2>
                 {outNowLoading && <p role="status" className="text-sm text-muted-foreground">Loading new releases…</p>}
                 {outNowFailed && <SectionFailure>Some new releases could not load.</SectionFailure>}
@@ -798,42 +766,23 @@ const WatchlistNews = () => {
               </section>
               {upcomingLoading ? <p role="status" className="text-sm text-muted-foreground">Loading upcoming releases…</p> : <UpcomingGrid items={visibleUpcoming} activeWindow={newsWindow} onSelect={openDetail} scheduleFor={(item) => scheduleFor(item.entityType, item.entityId, item.title, item.date)} failed={upcomingFailed} />}
             </div>
-            <div className="space-y-8 min-w-0">
-              <section aria-label="Your week" className="rounded-2xl border border-border/60 bg-card p-4">
-                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-                  <button
-                    type="button"
-                    aria-expanded={weekOpen}
-                    onClick={() => setWeekOpen((open) => !open)}
-                    className="flex min-h-11 shrink-0 cursor-pointer items-center text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
-                  >
-                    Your week · {weekOpen ? 'hide schedule' : 'view your schedule'}
-                  </button>
-                  {!scheduleLoading && !watchlistLoading && (
-                    <div className="hidden min-w-[18rem] flex-1 sm:flex">
-                      <WeekStrip schedule={schedule} watchlist={watchlist} isEpisodeWatched={isEpisodeWatched} declined={declinedReleases} />
-                    </div>
-                  )}
-                </div>
-                {weekOpen && (
-                  <div className="pt-4">
-                    <YourWeek
-                      schedule={schedule}
-                      loading={scheduleLoading || watchlistLoading}
-                      watchlist={watchlist}
-                      declined={declinedReleases}
-                      onDeclineChange={setDeclinedReleases}
-                      removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
-                      updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
-                      addToSchedule={isAdmin ? addToSchedule : undefined}
-                      toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
-                      isEpisodeWatched={isEpisodeWatched}
-                      isSeasonWatched={isSeasonWatched}
-                      getAutoStatus={getAutoStatus}
-                      isInSchedule={isInSchedule}
-                    />
-                  </div>
-                )}
+            <div className="flex min-h-0 flex-col gap-4 min-w-0">
+              <section aria-label="Your week" className="shrink-0 rounded-2xl border border-border/60 bg-card p-4">
+                <YourWeek
+                  schedule={schedule}
+                  loading={scheduleLoading || watchlistLoading}
+                  watchlist={watchlist}
+                  declined={declinedReleases}
+                  onDeclineChange={setDeclinedReleases}
+                  removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
+                  updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
+                  addToSchedule={isAdmin ? addToSchedule : undefined}
+                  toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
+                  isEpisodeWatched={isEpisodeWatched}
+                  isSeasonWatched={isSeasonWatched}
+                  getAutoStatus={getAutoStatus}
+                  isInSchedule={isInSchedule}
+                />
               </section>
               {updatesLoading ? <p role="status" className="text-sm text-muted-foreground">Loading updates…</p> : <UpdatesList rows={visibleUpdates} activeWindow={newsWindow} today={today} onSelect={openDetail} failed={updatesFailed} />}
             </div>

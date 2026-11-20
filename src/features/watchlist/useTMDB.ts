@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type {
@@ -28,6 +28,14 @@ export function useTMDB() {
     const queryClient = useQueryClient();
     const [results, setResults] = useState<TMDBResult[]>([]);
     const [loading, setLoading] = useState(false);
+    // A response for an earlier query must not replace results for what is
+    // currently in the search field (or for another dialog using this hook).
+    const searchRequest = useRef(0);
+    const clearSearch = useCallback(() => {
+        searchRequest.current += 1;
+        setResults([]);
+        setLoading(false);
+    }, []);
 
     const fetchTMDB = useCallback(async <T,>(endpoint: string, params: Record<string, string>): Promise<T> => {
         // Always route through the tmdb-proxy edge function so the TMDB API
@@ -161,10 +169,12 @@ export function useTMDB() {
     const searchMulti = useCallback(async (query: string) => {
         const trimmedQuery = query.trim();
         if (!trimmedQuery) {
-            setResults([]);
+            clearSearch();
             return;
         }
 
+        const request = ++searchRequest.current;
+        setResults([]);
         setLoading(true);
         try {
             const [movieData, tvData] = await Promise.all([
@@ -189,14 +199,14 @@ export function useTMDB() {
                 if (i < tvShows.length) combined.push(tvShows[i]);
             }
 
-            setResults(combined);
+            if (request === searchRequest.current) setResults(combined);
         } catch (error) {
             console.error('TMDB Multi-Search Error:', error);
-            setResults([]);
+            if (request === searchRequest.current) setResults([]);
         } finally {
-            setLoading(false);
+            if (request === searchRequest.current) setLoading(false);
         }
-    }, [fetchTMDB]);
+    }, [clearSearch, fetchTMDB]);
 
     /**
      * A title search returned rather than put in state, and throwing when the
@@ -217,24 +227,28 @@ export function useTMDB() {
 
     const search = useCallback(async (query: string, type: 'TV Shows' | 'Movies', year?: number) => {
         if (!query.trim()) {
-            setResults([]);
+            clearSearch();
             return;
         }
 
+        const request = ++searchRequest.current;
+        setResults([]);
         setLoading(true);
         try {
-            setResults(await searchTitles(query, type, year));
+            const found = await searchTitles(query, type, year);
+            if (request === searchRequest.current) setResults(found);
         } catch (error) {
             console.error('TMDB Search Error:', error);
-            setResults([]);
+            if (request === searchRequest.current) setResults([]);
         } finally {
-            setLoading(false);
+            if (request === searchRequest.current) setLoading(false);
         }
-    }, [searchTitles]);
+    }, [clearSearch, searchTitles]);
 
     return {
         results,
         loading,
+        clearSearch,
         search,
         searchTitles,
         searchMulti,

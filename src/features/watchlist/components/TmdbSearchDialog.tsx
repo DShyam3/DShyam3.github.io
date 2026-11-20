@@ -20,6 +20,8 @@ import { releaseYear } from '@/features/watchlist/watchlist-utils';
 interface TmdbSearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Optional custom trigger, such as Discover's full-width search bar. */
+  trigger?: ReactNode;
   /** Label on the button that opens the dialog. */
   triggerLabel: string;
   title: string;
@@ -33,7 +35,9 @@ interface TmdbSearchDialogProps {
   loading: boolean;
   /** Stable key per result -- favourites key on media type too. */
   resultKey: (result: TMDBResult) => string;
-  onSelect: (result: TMDBResult) => void;
+  onSelect?: (result: TMDBResult) => void;
+  /** Per-result buttons when selection needs another step, such as a watch date. */
+  renderActions?: (result: TMDBResult) => ReactNode;
   /** Greys the row out and blocks clicks, e.g. while adding or once added. */
   isDisabled?: (result: TMDBResult) => boolean;
   /** Right-hand status area: media-type tags, "Adding...", "Added". */
@@ -58,6 +62,7 @@ const yearOf = (result: TMDBResult) => {
 export function TmdbSearchDialog({
   open,
   onOpenChange,
+  trigger,
   triggerLabel,
   title,
   description,
@@ -69,6 +74,7 @@ export function TmdbSearchDialog({
   loading,
   resultKey,
   onSelect,
+  renderActions,
   isDisabled,
   renderStatus,
   searchDisabled,
@@ -80,10 +86,11 @@ export function TmdbSearchDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        {/* Icon-only below sm: on a phone the Library toolbar holds News, Library,
-            Add and Sync on one row, and four labels do not fit. The label stays
-            in the accessibility tree, so the button keeps its name. */}
-        <ActionButton icon={Plus} label={triggerLabel} labelClassName="sr-only sm:not-sr-only" />
+        {trigger ?? (
+          // Icon-only below sm: on a phone the Library toolbar holds News,
+          // Library, Add and Sync on one row. The label stays accessible.
+          <ActionButton icon={Plus} label={triggerLabel} labelClassName="sr-only sm:not-sr-only" />
+        )}
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-3xl h-[600px] max-h-[90dvh] flex flex-col p-0">
@@ -134,14 +141,15 @@ export function TmdbSearchDialog({
                     <div
                       key={resultKey(result)}
                       className={cn(
-                        'flex items-start gap-5 py-6 hover:bg-secondary/40 cursor-pointer transition-[background-color] duration-200 -mx-6 px-6',
+                        'flex items-start gap-5 py-6 transition-[background-color] duration-200 -mx-6 px-6',
+                        onSelect && 'cursor-pointer hover:bg-secondary/40',
                         isDisabled?.(result) && 'pointer-events-none opacity-60',
                       )}
-                      onClick={(e) => {
+                      onClick={onSelect ? (e) => {
                         e.preventDefault();
                         if (isDisabled?.(result)) return;
                         onSelect(result);
-                      }}
+                      } : undefined}
                     >
                       <div className="h-32 w-20 flex-shrink-0 bg-secondary rounded-md overflow-hidden shadow-md">
                         {result.poster_path ? (
@@ -174,6 +182,7 @@ export function TmdbSearchDialog({
                             {result.overview}
                           </p>
                         )}
+                        {renderActions?.(result)}
                       </div>
                     </div>
                   ))

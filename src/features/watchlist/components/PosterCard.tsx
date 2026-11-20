@@ -28,10 +28,10 @@ export function PosterCard({ title, poster, subtitle, meta, actions, footer, sch
       <div className="card-body flex flex-1 flex-col gap-1.5">
         <button type="button" onClick={onOpen} className="card-title flex items-start text-left font-medium leading-snug" title={title} aria-label={`${title} — open details`}><span className="line-clamp-2">{title}</span></button>
         <div className="card-sub text-xs text-muted-foreground">{subtitle}</div>
-        <div className="card-meta mt-auto grid gap-1">{meta}</div>
+        <div className="card-meta mt-auto grid gap-1 pt-1">{meta}</div>
       </div>
       {footer}
-      {onSchedule && <button type="button" onClick={onSchedule} className="schedule-action flex min-h-11 w-full shrink-0 items-center justify-center gap-2 border-t px-2 py-2 text-xs font-medium text-primary hover:bg-primary/10" aria-label={`${scheduled ? 'Remove' : 'Add'} ${title} ${scheduled ? 'from' : 'to'} schedule`}><Calendar className="h-4 w-4 shrink-0" /><span>{scheduled ? 'Scheduled · remove' : 'Add to schedule'}</span></button>}
+      {onSchedule && <button type="button" onClick={onSchedule} className="schedule-action flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap border-t px-2 py-2 text-xs font-medium text-primary hover:bg-primary/10" aria-label={`${scheduled ? 'Remove' : 'Add'} ${title} ${scheduled ? 'from' : 'to'} schedule`}><Calendar className="h-3.5 w-3.5 shrink-0" /><span>{scheduled ? 'Scheduled · remove' : 'Add to schedule'}</span></button>}
     </article>
   );
 }

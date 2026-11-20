@@ -354,8 +354,12 @@ html[data-wide-mode="centered"] {
   html:not([data-wide-mode="centered"]) .ultrawide-news-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-    gap: 2rem;
-    align-items: start;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: stretch;
+  }
+  html:not([data-wide-mode="centered"]) .workspace-shell-grid[data-inspector="open"] .ultrawide-news-grid {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.15fr);
   }
   html:not([data-wide-mode="centered"]) .ultrawide-discover-grid {
     display: grid;

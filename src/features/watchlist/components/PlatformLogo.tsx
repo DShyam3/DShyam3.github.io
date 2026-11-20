@@ -111,7 +111,7 @@ export function PlatformBadge({
       <span
         title={platform === 'Online' ? OTHER_SERVICES_HINT : undefined}
         className={cn(
-          'rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground whitespace-nowrap',
+          'inline-flex items-center rounded bg-muted px-2 py-0.5 text-xs font-medium leading-none text-muted-foreground whitespace-nowrap',
           className,
         )}
       >

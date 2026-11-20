@@ -173,7 +173,7 @@
 }
 
 .item-card:hover {
-  border-color: hsl(var(--brass) / 0.85);
+  border-color: hsl(var(--section-colour, var(--brass)) / 0.75);
   border-top-color: hsl(var(--section-colour, var(--sage)));
 }
 

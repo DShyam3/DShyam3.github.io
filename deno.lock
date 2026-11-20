@@ -65,6 +65,7 @@
         "npm:eslint@9.32.0",
         "npm:framer-motion@12.34.2",
         "npm:globals@15.15.0",
+        "npm:h3-js@4.5.0",
         "npm:input-otp@1.4.2",
         "npm:lucide-react@0.462.0",
         "npm:next-themes@0.3.0",

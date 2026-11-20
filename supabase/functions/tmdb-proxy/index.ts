@@ -10,7 +10,7 @@ const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 // unlimited generic TMDB proxy (which would burn the shared API key's
 // quota), only known endpoint shapes actually used by the app are allowed.
 const ALLOWED_ENDPOINT_PATTERNS = [
-    /^search\/(movie|tv)$/,
+    /^search\/(movie|tv|person)$/,
     /^discover\/(movie|tv)$/,
     /^(movie|tv)\/\d+\/recommendations$/,
     /^movie\/\d+$/,
@@ -19,6 +19,7 @@ const ALLOWED_ENDPOINT_PATTERNS = [
     // A film collection's parts, for Franchises: which films a collection
     // holds is the one thing the library's own rows cannot answer.
     /^collection\/\d+$/,
+    /^person\/\d+\/combined_credits$/,
 ]
 
 function buildCorsHeaders(req: Request) {
@@ -235,6 +236,7 @@ function cacheControlFor(endpoint: string): string {
     if (
         endpoint === 'wikidata/tv-spinoffs' ||
         endpoint.startsWith('collection/') ||
+        endpoint.startsWith('person/') ||
         endpoint.startsWith('movie/') ||
         /^tv\/\d+\/season\/\d+$/.test(endpoint)
     ) {
