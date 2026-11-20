@@ -425,7 +425,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
             Film collections, shared universes such as the Marvel Cinematic Universe, and connected TV spin-offs you have started, each in release order, so you can log what you’ve seen or add the rest.
           </p>
           <p className="text-xs text-muted-foreground">
-            Newest first: films and series take turns, each led by the one you added to most recently. Release and watch dates don’t count.
+            Most recent first, by the last time you added, watched, unwatched or re-dated a title in it, or changed its Library visibility. Release dates don’t count.
           </p>
         </div>
         {discovery.franchisesLoading && discovery.franchises.length === 0 && (
@@ -440,7 +440,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {!discovery.franchisesLoading && !discovery.franchisesFailed && discovery.franchises.length === 0 && discovery.likelySeen.length === 0 && (
           <p className="text-sm text-muted-foreground">
             {discovery.hasMoreFranchises
-              ? 'No incomplete series in the newest collections checked so far. Click Show more to check older ones.'
+              ? 'No incomplete series in the most recent collections checked so far. Click Show more to check older ones.'
               : 'No incomplete series, spin-offs or likely seen titles found in this view.'}
           </p>
         )}

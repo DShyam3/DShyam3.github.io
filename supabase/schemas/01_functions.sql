@@ -264,6 +264,79 @@ $$;
 
 ALTER FUNCTION "public"."log_watchlist_event"() OWNER TO "postgres";
 
+-- Stamps last_activity_at on movies and tv_shows when the OWNER acts: adds a
+-- row, or changes watched / watched_at / library_state. It exists as a trigger
+-- rather than client code because watchlist-cron-sync writes the same rows
+-- through a second runtime and must never move the stamp: Discover ranks
+-- franchises by it, and a nightly metadata refresh would otherwise reorder
+-- every franchise nightly.
+--
+-- UPDATE bumps only on a real change, same reasoning as set_watched_at():
+-- the cron's same-value rewrites must stay no-ops, so NEW.last_activity_at is
+-- left exactly as it arrived. tv_shows has no watched / watched_at columns,
+-- so those are gated on TG_TABLE_NAME = 'movies' and nested (not one AND), the
+-- pattern log_watchlist_event() uses for NEW.status: the field is never
+-- resolved against a row type that lacks it.
+--
+-- SECURITY INVOKER: it only assigns to NEW and reads no table.
+CREATE OR REPLACE FUNCTION "public"."touch_last_activity_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY INVOKER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.last_activity_at := pg_catalog.now();
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF NEW.library_state IS DISTINCT FROM OLD.library_state THEN
+      NEW.last_activity_at := pg_catalog.now();
+    END IF;
+
+    IF TG_TABLE_NAME = 'movies' THEN
+      IF NEW.watched IS DISTINCT FROM OLD.watched
+         OR NEW.watched_at IS DISTINCT FROM OLD.watched_at THEN
+        NEW.last_activity_at := pg_catalog.now();
+      END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION "public"."touch_last_activity_at"() OWNER TO "postgres";
+
+-- Series watching happens on episodes, so a watched flip there bumps the
+-- parent show. UPDATE only: the cron INSERTs newly aired episodes, which is
+-- not owner activity, and its upsert rewrites `watched` with its existing
+-- value, which the IS DISTINCT check keeps a no-op.
+--
+-- The `last_activity_at IS DISTINCT FROM now()` guard matters for a season
+-- toggle: update_episodes_watched_status() cascades it to every episode at
+-- trigger depth 2, and now() is constant within a transaction, so the show
+-- row is written once rather than once per episode.
+--
+-- SECURITY INVOKER is enough: the owner's client passes the existing "Admin
+-- update" policy on tv_shows ((SELECT public.is_admin())), service_role
+-- bypasses RLS, and anon cannot update episodes in the first place.
+CREATE OR REPLACE FUNCTION "public"."touch_show_last_activity_from_episode"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY INVOKER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF OLD.watched IS DISTINCT FROM NEW.watched
+     OR OLD.watched_at IS DISTINCT FROM NEW.watched_at THEN
+    UPDATE public.tv_shows s
+       SET last_activity_at = pg_catalog.now()
+      FROM public.tv_show_seasons se
+     WHERE se.id = NEW.season_id
+       AND s.id = se.tv_show_id
+       AND s.last_activity_at IS DISTINCT FROM pg_catalog.now();
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+ALTER FUNCTION "public"."touch_show_last_activity_from_episode"() OWNER TO "postgres";
+
 -- Guards the finance profile tables against a row silently changing owner:
 -- finance_budget_categories, finance_budget_items, finance_recurring_bills,
 -- finance_settings, finance_goals, finance_goal_contributions,
@@ -354,9 +427,30 @@ REVOKE EXECUTE ON FUNCTION "public"."log_watchlist_event"() FROM "authenticated"
 
 GRANT ALL ON FUNCTION "public"."log_watchlist_event"() TO "service_role";
 
--- Not revoked: this project's other (SECURITY INVOKER) trigger functions
--- above keep the default EXECUTE grant to anon/authenticated/service_role
--- rather than revoking it, matched here for consistency. It carries no
+-- The two touch_* trigger functions are SECURITY INVOKER and fire without an
+-- EXECUTE check, so no API role needs the grant: closed like
+-- log_watchlist_event() above. service_role keeps its grant.
+
+REVOKE EXECUTE ON FUNCTION "public"."touch_last_activity_at"() FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION "public"."touch_last_activity_at"() FROM "anon";
+
+REVOKE EXECUTE ON FUNCTION "public"."touch_last_activity_at"() FROM "authenticated";
+
+GRANT ALL ON FUNCTION "public"."touch_last_activity_at"() TO "service_role";
+
+REVOKE EXECUTE ON FUNCTION "public"."touch_show_last_activity_from_episode"() FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION "public"."touch_show_last_activity_from_episode"() FROM "anon";
+
+REVOKE EXECUTE ON FUNCTION "public"."touch_show_last_activity_from_episode"() FROM "authenticated";
+
+GRANT ALL ON FUNCTION "public"."touch_show_last_activity_from_episode"() TO "service_role";
+
+-- Not revoked: finance_keep_row_scope, like the older SECURITY INVOKER
+-- trigger functions above it (set_watched_at and the season/episode watched
+-- cascades), keeps the default EXECUTE grant to anon/authenticated/
+-- service_role; only log_watchlist_event and the touch_* functions revoke it. It carries no
 -- exploitable surface either way: Postgres refuses to run a trigger function
 -- outside trigger context ("trigger functions can only be called as
 -- triggers"), before this body ever executes, for any caller.

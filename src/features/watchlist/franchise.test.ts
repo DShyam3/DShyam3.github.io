@@ -9,9 +9,10 @@ import {
   entryState,
   filmUniversesFromMembers,
   hasWatchGap,
+  compareLastTouched,
+  lastTouched,
   libraryLookup,
-  newestAdded,
-  orderByNewestAdded,
+  orderByLastTouched,
   sortByRelease,
   tvFranchisesFromLinks,
   type LibraryLookup,
@@ -164,12 +165,17 @@ describe('libraryLookup', () => {
 
   it('maps films by TMDB id and skips items without one', () => {
     const lookup = libraryLookup([movie, noId], today);
-    expect(lookup.movies.get(7)).toEqual({ id: 'm1', watched: true });
+    expect(lookup.movies.get(7)).toEqual({ id: 'm1', watched: true, lastActivityAt: null });
     expect(lookup.movies.size).toBe(1);
   });
 
   it('counts aired episodes up to and including today, skipping specials and undated ones', () => {
-    expect(libraryLookup([show], today).shows.get(50)).toEqual({ id: 's1', airedEpisodes: 2, watchedEpisodes: 1 });
+    expect(libraryLookup([show], today).shows.get(50)).toEqual({ id: 's1', airedEpisodes: 2, watchedEpisodes: 1, lastActivityAt: null });
+  });
+
+  it('carries each title\'s last activity time', () => {
+    const touched = { ...movie, last_activity_at: '2026-11-20T21:00:00Z' } as WatchlistItem;
+    expect(libraryLookup([touched], today).movies.get(7)?.lastActivityAt).toBe('2026-11-20T21:00:00Z');
   });
 });
 
@@ -313,38 +319,85 @@ describe('customFranchisesFromLibrary', () => {
   });
 });
 
-describe('franchise ordering by newest add', () => {
-  const group = (name: string, media: 'movie' | 'tv', ids: string[]) => ({ name, media, added: newestAdded(ids.map((id) => ({ id }))) });
+describe('franchise ordering by last touch', () => {
+  type Row = { id: string; lastActivityAt?: string | null };
+  const group = (name: string, media: 'movie' | 'tv', rows: Row[]) => ({ name, media, touched: lastTouched(rows) });
+  const ids = (...list: string[]): Row[] => list.map((id) => ({ id }));
 
-  it('reads the newest row id, -1 with none', () => {
-    expect(newestAdded([{ id: '2544' }, { id: '2558' }, { id: '1400' }])).toBe(2558);
-    expect(newestAdded([])).toBe(-1);
-    expect(newestAdded([{ id: 'not-a-number' }])).toBe(-1);
+  it('reads the latest activity time and the newest row id, -1 for each with none', () => {
+    expect(lastTouched([
+      { id: '2544', lastActivityAt: '2026-11-21T09:00:00Z' },
+      { id: '2558', lastActivityAt: null },
+      { id: '1400', lastActivityAt: '2026-11-22T18:30:00Z' },
+    ])).toEqual({ at: Date.parse('2026-11-22T18:30:00Z'), id: 2558 });
+    expect(lastTouched([])).toEqual({ at: -1, id: -1 });
+    expect(lastTouched([{ id: 'not-a-number', lastActivityAt: 'not-a-date' }])).toEqual({ at: -1, id: -1 });
   });
 
-  it('puts the collection added to most recently first, whatever its release year', () => {
-    // Avengers has a 2027 entry; Harry Potter was added last.
-    const ordered = orderByNewestAdded([
-      group('The Avengers Collection', 'movie', ['2380', '2514']),
-      group('Harry Potter Collection', 'movie', ['2544', '2558']),
-      group('The Hangover Collection', 'movie', ['2304', '2539']),
+  it('ranks any activity time above none, a later time above an earlier one, then the newer row id', () => {
+    const watched = lastTouched([{ id: '10', lastActivityAt: '2026-11-21T09:00:00Z' }]);
+    const laterWatched = lastTouched([{ id: '9', lastActivityAt: '2026-11-22T09:00:00Z' }]);
+    const newestUntouched = lastTouched(ids('9000'));
+    const olderUntouched = lastTouched(ids('8000'));
+    const sorted = [newestUntouched, olderUntouched, watched, laterWatched].sort(compareLastTouched);
+    expect(sorted).toEqual([laterWatched, watched, newestUntouched, olderUntouched]);
+  });
+
+  it('moves a collection up when one of its films is watched, however long ago it was added', () => {
+    // Avengers was added first, so it trails on row id; watching one of its
+    // films since then puts it first.
+    const before = orderByLastTouched([
+      group('The Avengers Collection', 'movie', ids('2380', '2514')),
+      group('Harry Potter Collection', 'movie', ids('2544', '2558')),
+      group('The Hangover Collection', 'movie', ids('2304', '2539')),
     ]);
-    expect(ordered.map((g) => g.name)).toEqual(['Harry Potter Collection', 'The Hangover Collection', 'The Avengers Collection']);
+    expect(before.map((g) => g.name)).toEqual(['Harry Potter Collection', 'The Hangover Collection', 'The Avengers Collection']);
+
+    const after = orderByLastTouched([
+      group('The Avengers Collection', 'movie', [{ id: '2380', lastActivityAt: '2026-11-21T20:00:00Z' }, { id: '2514' }]),
+      group('Harry Potter Collection', 'movie', ids('2544', '2558')),
+      group('The Hangover Collection', 'movie', ids('2304', '2539')),
+    ]);
+    expect(after.map((g) => g.name)).toEqual(['The Avengers Collection', 'Harry Potter Collection', 'The Hangover Collection']);
   });
 
-  it('lets films and series take turns, each newest first, since their ids are not comparable', () => {
-    const ordered = orderByNewestAdded([
-      group('Old Spin-off', 'tv', ['100']),
-      group('Older Films', 'movie', ['1300']),
-      group('New Spin-off', 'tv', ['600']),
-      group('Newer Films', 'movie', ['2500']),
-      group('Oldest Films', 'movie', ['1290']),
+  it('orders touched films and series together by time, ahead of everything untouched', () => {
+    const ordered = orderByLastTouched([
+      group('Untouched Films', 'movie', ids('2600')),
+      group('Watched Spin-off', 'tv', [{ id: '100', lastActivityAt: '2026-11-22T08:00:00Z' }]),
+      group('Watched Films', 'movie', [{ id: '1300', lastActivityAt: '2026-11-21T08:00:00Z' }]),
+      group('Latest Films', 'movie', [{ id: '1200', lastActivityAt: '2026-11-23T08:00:00Z' }]),
+      group('Untouched Spin-off', 'tv', ids('600')),
+    ]);
+    expect(ordered.map((g) => g.name)).toEqual(['Latest Films', 'Watched Spin-off', 'Watched Films', 'Untouched Films', 'Untouched Spin-off']);
+  });
+
+  it('lets untouched films and series take turns, each newest first, since their ids are not comparable', () => {
+    const ordered = orderByLastTouched([
+      group('Old Spin-off', 'tv', ids('100')),
+      group('Older Films', 'movie', ids('1300')),
+      group('New Spin-off', 'tv', ids('600')),
+      group('Newer Films', 'movie', ids('2500')),
+      group('Oldest Films', 'movie', ids('1290')),
     ]);
     expect(ordered.map((g) => g.name)).toEqual(['Newer Films', 'New Spin-off', 'Older Films', 'Old Spin-off', 'Oldest Films']);
   });
 
-  it('breaks a tie by name', () => {
-    expect(orderByNewestAdded([group('B', 'movie', ['5']), group('A', 'movie', ['5'])]).map((g) => g.name)).toEqual(['A', 'B']);
+  it('breaks a tie by name, touched or not', () => {
+    expect(orderByLastTouched([group('B', 'movie', ids('5')), group('A', 'movie', ids('5'))]).map((g) => g.name)).toEqual(['A', 'B']);
+    const at = '2026-11-21T09:00:00Z';
+    expect(orderByLastTouched([
+      group('B', 'tv', [{ id: '5', lastActivityAt: at }]),
+      group('A', 'movie', [{ id: '9', lastActivityAt: at }]),
+    ]).map((g) => g.name)).toEqual(['A', 'B']);
+  });
+
+  it('carries each film\'s activity time into its collection', () => {
+    const [collection] = collectionsFromLibrary([
+      { id: '1', tmdbId: 11, title: 'A', watched: true, releaseDate: '2001-01-01', poster: null, collectionId: 5, collectionName: 'C', lastActivityAt: '2026-11-21T09:00:00Z' },
+      { id: '2', tmdbId: 12, title: 'B', watched: false, releaseDate: '2002-01-01', poster: null, collectionId: 5, collectionName: 'C' },
+    ]);
+    expect(lastTouched(collection.films)).toEqual({ at: Date.parse('2026-11-21T09:00:00Z'), id: 2 });
   });
 });
 
@@ -362,6 +415,14 @@ describe('filmUniversesFromMembers', () => {
     mcu(10138, 'Iron Man 2', '2010-04-28'),
   ];
 
+  it('ranks a universe by the latest activity on any of its library films', () => {
+    const library = owned([
+      [1726, { id: '2380', title: 'Iron Man', releaseDate: '2008-04-30', poster: null, lastActivityAt: '2026-11-21T09:00:00Z' }],
+      [24428, { id: '2514', title: 'The Avengers', releaseDate: '2012-04-25', poster: null }],
+    ]);
+    expect(filmUniversesFromMembers(members, library)[0].touched).toEqual({ at: Date.parse('2026-11-21T09:00:00Z'), id: 2514 });
+  });
+
   it('makes one universe of every film, in release order, once a film is in the library', () => {
     const library = owned([
       [1726, { id: '2380', title: 'Iron Man (2008)', releaseDate: '2008-04-30', poster: '/lib-ironman.jpg' }],
@@ -369,7 +430,7 @@ describe('filmUniversesFromMembers', () => {
     ]);
     const [universe, ...rest] = filmUniversesFromMembers(members, library, 'https://img');
     expect(rest).toEqual([]);
-    expect(universe).toMatchObject({ id: 'Q642878', name: 'Marvel Cinematic Universe', added: 2514 });
+    expect(universe).toMatchObject({ id: 'Q642878', name: 'Marvel Cinematic Universe', touched: { at: -1, id: 2514 } });
     expect(universe.entries.map((e) => e.title)).toEqual([
       'Iron Man', 'Iron Man 2', 'The Avengers', 'Avengers: Endgame', 'Avengers: Doomsday',
     ]);

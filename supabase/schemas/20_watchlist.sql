@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS "public"."movies" (
     "collection_id" integer,
     "collection_name" "text",
     "franchise" "text",
+    "last_activity_at" timestamp with time zone,
     CONSTRAINT "movies_imdb_id_check" CHECK ("imdb_id" ~ '^tt[0-9]{7,10}$'),
     CONSTRAINT "movies_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
     CONSTRAINT "movies_imdb_votes_check" CHECK ("imdb_votes" >= 0),
@@ -198,6 +199,7 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
     "tmdb_votes" integer,
     "scores_checked_at" timestamp with time zone,
     "franchise" "text",
+    "last_activity_at" timestamp with time zone,
     CONSTRAINT "tv_shows_imdb_id_check" CHECK ("imdb_id" ~ '^tt[0-9]{7,10}$'),
     CONSTRAINT "tv_shows_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
     CONSTRAINT "tv_shows_imdb_votes_check" CHECK ("imdb_votes" >= 0),
@@ -463,6 +465,27 @@ CREATE TRIGGER "tr_set_watched_at" BEFORE INSERT OR UPDATE OF "watched" ON "publ
 
 -- Film watch dates use the same transition-aware stamping as episodes.
 CREATE TRIGGER "tr_set_movie_watched_at" BEFORE INSERT OR UPDATE OF "watched" ON "public"."movies" FOR EACH ROW EXECUTE FUNCTION "public"."set_watched_at"();
+
+-- Owner-activity timestamp for ranking Discover franchises. BEFORE, so the
+-- stamp lands in the same write; the column lists keep a cron metadata
+-- UPDATE from firing these at all, and the function body is the second guard.
+-- See touch_last_activity_at() in 01_functions.sql.
+DROP TRIGGER IF EXISTS "tr_touch_movie_last_activity" ON "public"."movies";
+
+CREATE TRIGGER "tr_touch_movie_last_activity" BEFORE INSERT OR UPDATE OF "watched", "watched_at", "library_state" ON "public"."movies" FOR EACH ROW EXECUTE FUNCTION "public"."touch_last_activity_at"();
+
+DROP TRIGGER IF EXISTS "tr_touch_tv_show_last_activity" ON "public"."tv_shows";
+
+CREATE TRIGGER "tr_touch_tv_show_last_activity" BEFORE INSERT OR UPDATE OF "library_state" ON "public"."tv_shows" FOR EACH ROW EXECUTE FUNCTION "public"."touch_last_activity_at"();
+
+-- Series are watched on episodes, so an episode flip bumps its show. UPDATE
+-- only: episode INSERT is the cron adding newly aired episodes, not the owner.
+-- Row-level because Postgres refuses transition tables on a trigger with a
+-- column list; the function's IS DISTINCT guard collapses a season toggle to
+-- one show write.
+DROP TRIGGER IF EXISTS "tr_touch_show_last_activity_from_episode" ON "public"."tv_show_episodes";
+
+CREATE TRIGGER "tr_touch_show_last_activity_from_episode" AFTER UPDATE OF "watched", "watched_at" ON "public"."tv_show_episodes" FOR EACH ROW EXECUTE FUNCTION "public"."touch_show_last_activity_from_episode"();
 
 -- Records platform/status history into watchlist_events for the News page.
 -- One function (log_watchlist_event(), 01_functions.sql) on triggers over
@@ -1412,3 +1435,9 @@ COMMENT ON VIEW "public"."watchlist_show_last_watched" IS
 REVOKE ALL ON TABLE "public"."watchlist_show_last_watched" FROM PUBLIC, "anon", "authenticated";
 
 GRANT SELECT ON TABLE "public"."watchlist_show_last_watched" TO "anon", "authenticated";
+
+COMMENT ON COLUMN "public"."movies"."last_activity_at" IS
+    'Owner-activity timestamp: set when the film is added, and bumped when watched, watched_at or library_state changes (touch_last_activity_at()). Never moved by watchlist-cron-sync or the scores refresh, which is why it is not updated_at. NULL means no owner action since this column was added (existing rows are not backfilled).';
+
+COMMENT ON COLUMN "public"."tv_shows"."last_activity_at" IS
+    'Owner-activity timestamp: set when the show is added, and bumped when library_state changes (touch_last_activity_at()) or an episode is marked or unmarked watched (touch_show_last_activity_from_episode()). Never moved by watchlist-cron-sync, which inserts newly aired episodes and rewrites metadata, nor by the scores refresh. NULL means no owner action since this column was added (existing rows are not backfilled).';

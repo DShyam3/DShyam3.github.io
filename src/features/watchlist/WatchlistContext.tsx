@@ -189,6 +189,12 @@ export interface WatchlistItem {
   collection_name?: string;
   /** Custom franchise name stored directly in Supabase (movies + tv_shows). */
   franchise?: string | null;
+  /**
+   * When the owner last added, watched or re-filed this title, stamped by a
+   * database trigger (never by the sync). Null for a title untouched since
+   * the column was added; Discover then falls back to row-id order.
+   */
+  last_activity_at?: string | null;
 }
 
 export type { FavouriteCategory } from './favourite-category';
@@ -346,6 +352,13 @@ const WatchlistContext = createContext<WatchlistContextType | undefined>(
  * mid-run, so the run stops short and asks to be run again.
  */
 const FAVOURITE_FACTS_BATCH = 50;
+
+/**
+ * The local copy of the stamp a database trigger puts on `last_activity_at`
+ * after an add, a watch or a re-file, so Discover reorders before the next
+ * library read rather than after it.
+ */
+const touchedNow = () => ({ last_activity_at: new Date().toISOString() });
 
 /**
  * The next time the server-side cron will start, as a Date. pg_cron reads
@@ -776,6 +789,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               watched,
               watched_at: watchedAt,
               library_state: 'active',
+              last_activity_at: new Date().toISOString(),
               title: item.title,
               category: 'Movies',
               description: item.description || undefined,
@@ -992,6 +1006,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             const newShow: WatchlistItem = {
               id: showIdStr,
               library_state: 'active',
+              last_activity_at: new Date().toISOString(),
               watched_at: watchedAt,
               title: item.title,
               category: 'TV Shows',
@@ -1091,7 +1106,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         if (updateError || !data) throw updateError ?? new Error('Movie update failed');
         updated = data;
       }
-      setWatchlist((prev) => prev.map((row) => row.category === item.category && row.id === item.id ? { ...row, watched: updated.watched, watched_at: updated.watched_at } : row));
+      setWatchlist((prev) => prev.map((row) => row.category === item.category && row.id === item.id ? { ...row, watched: updated.watched, watched_at: updated.watched_at, ...touchedNow() } : row));
       await invalidateWatchDerived(queryClient);
     } catch (error) { reportPersonalUpdateError(error); }
   };
@@ -1102,7 +1117,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       const table = item.category === 'Movies' ? 'movies' : 'tv_shows';
       const { data, error } = await supabase.from(table).update({ library_state }).eq('id', Number(item.id)).select('id').single();
       if (error || !data) throw error ?? new Error('Library update failed');
-      setWatchlist((prev) => prev.map((row) => row.category === item.category && row.id === item.id ? { ...row, library_state } : row));
+      setWatchlist((prev) => prev.map((row) => row.category === item.category && row.id === item.id ? { ...row, library_state, ...touchedNow() } : row));
     } catch (error) { reportPersonalUpdateError(error); }
   };
 
@@ -1312,6 +1327,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   ) => {
     setWatchlist((prev) => prev.map((show) => !isShowWithId(show, showId) ? show : {
       ...show,
+      ...touchedNow(),
       ...(watchedAtOverride !== undefined ? { watched_at: watchedAtOverride } : {}),
       seasons: show.seasons?.map((season) => season.season_number !== seasonNumber ? season : {
         ...season,
@@ -1456,7 +1472,13 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     if (kind === 'movie') {
       const changed = new Set(ids.map(String));
       setWatchlist((prev) => prev.map((item) =>
-        item.category === 'Movies' && changed.has(item.id) ? { ...item, watched_at: watchedAt } : item));
+        item.category === 'Movies' && changed.has(item.id) ? { ...item, watched_at: watchedAt, ...touchedNow() } : item));
+    } else {
+      const changed = new Set(ids);
+      setWatchlist((prev) => prev.map((item) =>
+        item.category === 'TV Shows' && item.seasons?.some((season) => season.episodes.some((ep) => ep.id != null && changed.has(ep.id)))
+          ? { ...item, ...touchedNow() }
+          : item));
     }
   };
 

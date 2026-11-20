@@ -18,10 +18,10 @@ export interface OrderEntryInput {
 }
 
 export interface LibraryLookup {
-  /** Keyed by TMDB id. */
-  movies: Map<number, { id: string; watched: boolean }>;
+  /** Keyed by TMDB id. `lastActivityAt` is the row's `last_activity_at`. */
+  movies: Map<number, { id: string; watched: boolean; lastActivityAt?: string | null }>;
   /** Keyed by TMDB id; specials excluded by `libraryLookup`. */
-  shows: Map<number, { id: string; airedEpisodes: number; watchedEpisodes: number }>;
+  shows: Map<number, { id: string; airedEpisodes: number; watchedEpisodes: number; lastActivityAt?: string | null }>;
 }
 
 /**
@@ -36,7 +36,7 @@ export function libraryLookup(watchlist: WatchlistItem[], today: Date): LibraryL
   for (const item of watchlist) {
     if (item.tmdb_id == null) continue;
     if (item.category === 'Movies') {
-      movies.set(item.tmdb_id, { id: item.id, watched: !!item.watched });
+      movies.set(item.tmdb_id, { id: item.id, watched: !!item.watched, lastActivityAt: item.last_activity_at ?? null });
     } else if (item.category === 'TV Shows') {
       let airedEpisodes = 0;
       let watchedEpisodes = 0;
@@ -49,7 +49,7 @@ export function libraryLookup(watchlist: WatchlistItem[], today: Date): LibraryL
           if (ep.watched) watchedEpisodes++;
         }
       }
-      shows.set(item.tmdb_id, { id: item.id, airedEpisodes, watchedEpisodes });
+      shows.set(item.tmdb_id, { id: item.id, airedEpisodes, watchedEpisodes, lastActivityAt: item.last_activity_at ?? null });
     }
   }
   return { movies, shows };
@@ -123,6 +123,7 @@ export interface CollectionFilm {
   watched: boolean;
   releaseDate: string | null;
   poster: string | null;
+  lastActivityAt?: string | null;
 }
 
 export interface CollectionSummary {
@@ -143,6 +144,7 @@ export function collectionsFromLibrary(
     poster: string | null;
     collectionId: number | null;
     collectionName: string | null;
+    lastActivityAt?: string | null;
   }[],
 ): CollectionSummary[] {
   const groups = new Map<number, { name: string | null; films: CollectionFilm[] }>();
@@ -157,6 +159,7 @@ export function collectionsFromLibrary(
       watched: m.watched,
       releaseDate: m.releaseDate,
       poster: m.poster,
+      lastActivityAt: m.lastActivityAt ?? null,
     });
     groups.set(m.collectionId, group);
   }
@@ -325,8 +328,8 @@ export interface FilmUniverseSummary {
    * leaves out, so a collection holding one still folds into the universe.
    */
   memberKeys: string[];
-  /** Newest library row id among its films; see `newestAdded`. */
-  added: number;
+  /** When the owner last touched one of its library films; see `lastTouched`. */
+  touched: LastTouched;
 }
 
 /** A library film, by TMDB id, as `filmUniversesFromMembers` reads it. */
@@ -335,6 +338,7 @@ export interface UniverseLibraryFilm {
   title: string;
   releaseDate: string | null;
   poster: string | null;
+  lastActivityAt?: string | null;
 }
 
 /**
@@ -384,7 +388,7 @@ export function filmUniversesFromMembers(
       name: u.name,
       entries: sortByRelease([...u.entries.values()]),
       memberKeys: [...u.memberKeys],
-      added: newestAdded(u.owned),
+      touched: lastTouched(u.owned),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -456,33 +460,58 @@ export function customFranchisesFromLibrary(
 }
 
 /**
- * When a franchise was last added to: the newest row id among its library
- * titles, or -1 with none. Rows are numbered as they are added, so a higher
- * id was added later. The tables carry no add time, and `created_at` on a
- * library item is its release date, so this is the only add-order signal.
- * Ids only compare within one table: films and series are ranked apart.
+ * When a franchise was last touched. `at` is the latest `last_activity_at`
+ * among its library titles -- an add, a watch or a re-file, stamped by a
+ * database trigger and never by the sync -- as epoch ms, or -1 when none
+ * carries one. `id` is the newest row id, or -1 with none: the fallback for
+ * titles untouched since that column was added, whose only add-order signal
+ * is that rows are numbered as they are added. `created_at` on a library
+ * item is its release date and never counts. Ids only compare within one
+ * table; times compare across both.
  */
-export function newestAdded(items: Pick<WatchlistItem, 'id'>[]): number {
-  let newest = -1;
+export interface LastTouched {
+  at: number;
+  id: number;
+}
+
+export function lastTouched(items: { id: string; lastActivityAt?: string | null }[]): LastTouched {
+  let at = -1;
+  let id = -1;
   for (const item of items) {
-    const id = Number(item.id);
-    if (Number.isInteger(id) && id > newest) newest = id;
+    const stamp = item.lastActivityAt ? Date.parse(item.lastActivityAt) : Number.NaN;
+    if (Number.isFinite(stamp) && stamp > at) at = stamp;
+    const rowId = Number(item.id);
+    if (Number.isInteger(rowId) && rowId > id) id = rowId;
   }
-  return newest;
+  return { at, id };
 }
 
 /**
- * The order "Have you already watched?" shows franchises in, in full: the
- * film collection added to most recently first, and series spin-offs the
- * same way, the two taking turns (film first) because their ids come from
- * different tables. Release dates and watch dates never count. Name breaks
- * a tie.
+ * Most recently touched first: any time beats none, a later time beats an
+ * earlier one, and with no time on either the newer row id leads. Only
+ * meaningful between groups from one table; see `orderByLastTouched`.
  */
-export function orderByNewestAdded<T extends { media: 'movie' | 'tv'; name: string; added: number }>(groups: T[]): T[] {
-  const byAdded = (a: T, b: T) => b.added - a.added || a.name.localeCompare(b.name);
-  const films = groups.filter((g) => g.media === 'movie').sort(byAdded);
-  const series = groups.filter((g) => g.media === 'tv').sort(byAdded);
-  const ordered: T[] = [];
+export function compareLastTouched(a: LastTouched, b: LastTouched): number {
+  return b.at - a.at || b.id - a.id;
+}
+
+/**
+ * The order "Have you already watched?" shows franchises in, in full. Those
+ * touched since `last_activity_at` was added come first, latest first, films
+ * and series together. Every such time is later than any untouched title's
+ * add, so this tier always leads. The rest follow by newest row id, films and
+ * series taking turns (film first), because ids from different tables do not
+ * compare. Release dates never count. Name breaks a tie.
+ */
+export function orderByLastTouched<T extends { media: 'movie' | 'tv'; name: string; touched: LastTouched }>(groups: T[]): T[] {
+  const byName = (a: T, b: T) => a.name.localeCompare(b.name);
+  const recent = groups
+    .filter((g) => g.touched.at >= 0)
+    .sort((a, b) => b.touched.at - a.touched.at || byName(a, b));
+  const byId = (a: T, b: T) => b.touched.id - a.touched.id || byName(a, b);
+  const films = groups.filter((g) => g.touched.at < 0 && g.media === 'movie').sort(byId);
+  const series = groups.filter((g) => g.touched.at < 0 && g.media === 'tv').sort(byId);
+  const ordered: T[] = [...recent];
   for (let index = 0; index < Math.max(films.length, series.length); index++) {
     if (films[index]) ordered.push(films[index]);
     if (series[index]) ordered.push(series[index]);

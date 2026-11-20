@@ -26,8 +26,10 @@ import {
   filmUniversesFromMembers,
   hasWatchGap,
   libraryLookup,
-  newestAdded,
-  orderByNewestAdded,
+  compareLastTouched,
+  lastTouched,
+  orderByLastTouched,
+  type LastTouched,
   tvFranchisesFromLinks,
   type OrderEntryInput,
   type OrderView,
@@ -127,8 +129,8 @@ export interface DiscoveryFranchiseGroup {
   view: OrderView;
   missingCount: number;
   hasGap: boolean;
-  /** Newest library row id in the franchise; see `newestAdded`. */
-  added: number;
+  /** When the owner last touched a library title in it; see `lastTouched`. */
+  touched: LastTouched;
 }
 
 // tmdb-proxy allows 60 calls a minute per visitor. Opening Discover costs 26
@@ -359,9 +361,9 @@ export function useDiscovery(type: LibraryType) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
   const lookup = useMemo(() => libraryLookup(visibleLibrary, today), [visibleLibrary, week]);
 
-  // Fetched in this order, a batch at a time, so the collection added to most
-  // recently is looked up first. Never by release date: `created_at` on a
-  // library item is its release date.
+  // Fetched in this order, a batch at a time, so the collection touched most
+  // recently (added to, watched from, re-filed) is looked up first. Never by
+  // release date: `created_at` on a library item is its release date.
   const libraryCollections = useMemo(() => {
     return collectionsFromLibrary(
       visibleLibrary.flatMap((item) =>
@@ -375,12 +377,13 @@ export function useDiscovery(type: LibraryType) {
               poster: item.image_url ?? null,
               collectionId: item.collection_id,
               collectionName: item.collection_name ?? null,
+              lastActivityAt: item.last_activity_at ?? null,
             }]
           : [],
       ),
     )
-      .map((collection) => ({ ...collection, added: newestAdded(collection.films) }))
-      .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name));
+      .map((collection) => ({ ...collection, touched: lastTouched(collection.films) }))
+      .sort((a, b) => compareLastTouched(a.touched, b.touched) || a.name.localeCompare(b.name));
   }, [visibleLibrary]);
 
   const activeCollectionIds = useMemo(
@@ -428,6 +431,7 @@ export function useDiscovery(type: LibraryType) {
         title: item.title,
         releaseDate: item.release_date ?? null,
         poster: item.image_url ?? null,
+        lastActivityAt: item.last_activity_at ?? null,
       });
     }
     return films;
@@ -495,7 +499,7 @@ export function useDiscovery(type: LibraryType) {
             view,
             missingCount,
             hasGap: hasWatchGap(view),
-            added: universe.added,
+            touched: universe.touched,
           });
         }
       }
@@ -513,7 +517,7 @@ export function useDiscovery(type: LibraryType) {
             view,
             missingCount,
             hasGap: hasWatchGap(view),
-            added: byId.get(item.collectionId)?.added ?? -1,
+            touched: byId.get(item.collectionId)?.touched ?? { at: -1, id: -1 },
           });
         }
       }
@@ -532,12 +536,16 @@ export function useDiscovery(type: LibraryType) {
             view,
             missingCount,
             hasGap: hasWatchGap(view),
-            added: newestAdded(view.entries.flatMap((entry) => (entry.libraryId ? [{ id: entry.libraryId }] : []))),
+            touched: lastTouched(view.entries.flatMap((entry) => {
+              if (!entry.libraryId) return [];
+              const row = entry.mediaType === 'movie' ? lookup.movies.get(entry.tmdbId) : lookup.shows.get(entry.tmdbId);
+              return [{ id: entry.libraryId, lastActivityAt: row?.lastActivityAt }];
+            })),
           });
         }
       }
     }
-    return orderByNewestAdded(groups);
+    return orderByLastTouched(groups);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `dismissed` is read through filterDismissedEntries.
   }, [type, libraryCollections, expandedCollectionsData, filmUniverseSummaries, tvFranchiseSummaries, lookup, dismissed]);
 
@@ -662,7 +670,7 @@ export function useDiscovery(type: LibraryType) {
     void fetchNextUpcoming();
   }, [upcomingCurated.length, loading, upcomingPending, upcomingFetchingNext, upcomingError, upcomingHasNext, fetchNextUpcoming]);
 
-  // Collections are fetched newest-added first, and most turn out to be
+  // Collections are fetched most recently touched first, and most turn out to be
   // complete already; scan ahead until a healthy set of incomplete ones turns
   // up. Franchises lead this section, so "Likely seen" filling up never stops
   // the scan. Waits for the spin-off and universe lookups, whose groups count

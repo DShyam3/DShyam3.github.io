@@ -4,7 +4,7 @@ import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import { resolveFavouriteCategory, type TmdbFacts } from './favourite-category';
 import type { LibraryState } from './library-state';
 import { releaseYear } from './watchlist-utils';
-import { missingCategoryColumns } from './category-schema';
+import { missingActivityColumn, missingCategoryColumns } from './category-schema';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 
@@ -14,23 +14,47 @@ export interface WatchlistLibrary {
   favourites: FavouriteItem[];
 }
 
+// Every column except `overview`. Plot summaries are 218 kB of the movies
+// table's 357 kB and are only read by the detail dialog, so they load per
+// item in loadItemDescription instead.
+const MOVIE_COLUMNS = `id, title, platform, genre, genre_ids, original_language, origin_country, release_year, poster, release_date, tmdb_id, runtime,
+  watched, watched_at, library_state, collection_id, collection_name, franchise,
+  imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes` as const;
+
+// Deliberately not `tv_show_episodes (*)`. Every mount of this page was
+// pulling all ~7,600 episode rows in full (~474 kB) purely to render a grid
+// of posters. The grid needs episode_number and watched, runtime for the
+// watched total, and air dates for scheduling; episode titles load per show
+// when a detail dialog opens. As above: no `overview` (62 kB of tv_shows'
+// 108 kB).
+const SHOW_COLUMNS = `id, title, platform, genre, genre_ids, original_language, origin_country, status, poster, release_date, tmdb_id, library_state, franchise,
+  imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes,
+  tv_show_seasons (
+    id, season_number, release_date, watched,
+    tv_show_episodes (id, episode_number, watched, runtime, release_date)
+  )` as const;
+
+/** A column some stack has not been migrated to yet, so read without it. */
+const rolloutGap = (message: string) => missingActivityColumn(message) || missingCategoryColumns(message);
+
 async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
   // Each read is paged: the Data API stops at 1,000 rows without saying
   // so, and a single title-ordered read would drop the end of the
   // alphabet first. `id` breaks title ties so pages never overlap.
   const [moviesResult, showsResult, favouritesResult, lastWatchedResult] = await Promise.all([
-    // Every column except `overview`. Plot summaries are 218 kB of the
-    // movies table's 357 kB and are only read by the detail dialog, so
-    // they load per item in loadItemDescription instead.
+    // `last_activity_at` first; a stack without its migration reads the
+    // rest, and older stacks still drop the TMDB facts columns as before.
     (async () => {
+      const withActivity = await selectAllPages((from, to) => supabase
+      .from('movies')
+      .select(`${MOVIE_COLUMNS}, last_activity_at`, { count: 'exact' })
+      .order('title', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), (movie) => String(movie.id));
+      if (!withActivity.error || !rolloutGap(withActivity.error.message)) return withActivity;
       const withFacts = await selectAllPages((from, to) => supabase
       .from('movies')
-      .select(
-        `id, title, platform, genre, genre_ids, original_language, origin_country, release_year, poster, release_date, tmdb_id, runtime,
-          watched, watched_at, library_state, collection_id, collection_name, franchise,
-          imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes`,
-        { count: 'exact' },
-      )
+      .select(MOVIE_COLUMNS, { count: 'exact' })
       .order('title', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to), (movie) => String(movie.id));
@@ -41,25 +65,16 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
         .order('title', { ascending: true }).order('id', { ascending: true }).range(from, to), (movie) => String(movie.id));
     })(),
     (async () => {
+      const withActivity = await selectAllPages((from, to) => supabase
+      .from('tv_shows')
+      .select(`${SHOW_COLUMNS}, last_activity_at`, { count: 'exact' })
+      .order('title', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), (show) => String(show.id));
+      if (!withActivity.error || !rolloutGap(withActivity.error.message)) return withActivity;
       const withFacts = await selectAllPages((from, to) => supabase
       .from('tv_shows')
-      // Deliberately not `tv_show_episodes (*)`. Every mount of this page
-      // was pulling all ~7,600 episode rows in full (~474 kB) purely to
-      // render a grid of posters. The grid needs episode_number and
-      // watched, runtime for the watched total, and air dates for scheduling;
-      // episode titles load per show when a detail dialog opens.
-      // As above: no `overview` (62 kB of tv_shows' 108 kB).
-      .select(
-        `
-                id, title, platform, genre, genre_ids, original_language, origin_country, status, poster, release_date, tmdb_id, library_state, franchise,
-                imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes,
-                tv_show_seasons (
-                  id, season_number, release_date, watched,
-                  tv_show_episodes (id, episode_number, watched, runtime, release_date)
-                )
-            `,
-        { count: 'exact' },
-      )
+      .select(SHOW_COLUMNS, { count: 'exact' })
       .order('title', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to), (show) => String(show.id));
@@ -103,6 +118,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       watched: movie.watched,
       watched_at: movie.watched_at,
       library_state: movie.library_state as LibraryState,
+      last_activity_at: ('last_activity_at' in movie ? movie.last_activity_at : null) as string | null,
       title: movie.title,
       category: 'Movies',
       description: undefined,
@@ -142,6 +158,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
     (show) => ({
       id: show.id.toString(),
       library_state: show.library_state as LibraryState,
+      last_activity_at: ('last_activity_at' in show ? show.last_activity_at : null) as string | null,
       franchise: (('franchise' in show ? show.franchise : null) as string | null) ?? undefined,
       watched_at: lastWatched.get(String(show.id)) ?? null,
       title: show.title,

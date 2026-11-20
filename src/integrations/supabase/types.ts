@@ -2336,6 +2336,7 @@ export type Database = {
           collection_name: string | null
           directors: string[] | null
           franchise: string | null
+          last_activity_at: string | null
           genre: string | null
           id: number
           imdb_id: string | null
@@ -2370,6 +2371,7 @@ export type Database = {
           collection_name?: string | null
           directors?: string[] | null
           franchise?: string | null
+          last_activity_at?: string | null
           genre?: string | null
           id?: number
           imdb_id?: string | null
@@ -2404,6 +2406,7 @@ export type Database = {
           collection_name?: string | null
           directors?: string[] | null
           franchise?: string | null
+          last_activity_at?: string | null
           genre?: string | null
           id?: number
           imdb_id?: string | null
@@ -2775,6 +2778,7 @@ export type Database = {
           scores_checked_at: string | null
           status: string | null
           franchise: string | null
+          last_activity_at: string | null
           title: string
           tmdb_id: number | null
           top_cast: string[] | null
@@ -2804,6 +2808,7 @@ export type Database = {
           scores_checked_at?: string | null
           status?: string | null
           franchise?: string | null
+          last_activity_at?: string | null
           title: string
           tmdb_id?: number | null
           top_cast?: string[] | null
@@ -2833,6 +2838,7 @@ export type Database = {
           scores_checked_at?: string | null
           status?: string | null
           franchise?: string | null
+          last_activity_at?: string | null
           title?: string
           tmdb_id?: number | null
           top_cast?: string[] | null
