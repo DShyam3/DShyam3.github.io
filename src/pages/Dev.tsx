@@ -62,6 +62,8 @@ interface ServiceDefinition {
   id: ServiceGroupId;
   name: string;
   description: string;
+  howUsed: string;
+  whyUsed: string;
   providers: string[];
   limitLabel: string;
   rateLimitPrefix?: string;
@@ -73,7 +75,9 @@ const SERVICES: ServiceDefinition[] = [
   {
     id: 'tmdb',
     name: 'TMDB (Proxy & Cron)',
-    description: 'Film/TV metadata, collections, search, recommendations & nightly sync',
+    description: 'The Movie Database API for films, TV shows, posters, collections & recommendations.',
+    howUsed: 'Called via tmdb-proxy during Watchlist browsing/Discover/Franchises and via watchlist-cron-sync nightly.',
+    whyUsed: 'Keeps the TMDB API key server-side and fills in release dates, episodes, collections, and suggestions.',
     providers: ['tmdb'],
     limitLabel: '60 req / min per IP (proxy)',
     rateLimitPrefix: 'tmdb-proxy:',
@@ -83,28 +87,36 @@ const SERVICES: ServiceDefinition[] = [
   {
     id: 'omdb',
     name: 'OMDb',
-    description: 'IMDb, Metascore & Rotten Tomatoes ratings via weekly cron sync',
+    description: 'Open Movie Database ratings API (IMDb score, Metascore, Rotten Tomatoes).',
+    howUsed: 'Called server-side by watchlist-cron-sync using each title’s IMDb ID on a weekly refresh pass.',
+    whyUsed: 'TMDB does not include IMDb or Rotten Tomatoes ratings; OMDb supplies those critic and audience scores.',
     providers: ['omdb'],
     limitLabel: '1,000 req / day (free tier)',
   },
   {
     id: 'wikidata',
     name: 'Wikidata',
-    description: 'Connected TV series & spin-off graph via tmdb-proxy',
+    description: 'Public SPARQL knowledge graph linking TV series to their spin-offs and shared universes.',
+    howUsed: 'Queried by tmdb-proxy (wikidata/tv-spinoffs) using your library’s TV TMDB IDs, cached for 24 hours.',
+    whyUsed: 'TMDB has film collections but no TV franchise grouping; Wikidata links connected TV universes.',
     providers: ['wikidata'],
     limitLabel: 'Shared with tmdb-proxy (60 / min)',
   },
   {
     id: 'supabase',
     name: 'Supabase',
-    description: 'Database REST, RPCs, Edge Functions, Auth & Storage',
+    description: 'Backend platform powering Postgres REST tables, RPC functions, Edge Functions, Auth & Storage.',
+    howUsed: 'Called directly from the browser for all app data, admin authentication/MFA, and Edge Function invokes.',
+    whyUsed: 'Provides the database, row-level security, file storage, and serverless proxies for this static site.',
     providers: ['supabase_rest', 'supabase_rpc', 'supabase_functions', 'supabase_auth', 'supabase_storage'],
     limitLabel: '25s client REST timeout',
   },
   {
     id: 'truelayer',
     name: 'TrueLayer',
-    description: 'Open-banking accounts, balances & transactions for Finance',
+    description: 'UK Open Banking API connecting your bank accounts and credit cards.',
+    howUsed: 'Called server-side by truelayer-sync on the 05:00 daily cron and when you click Sync in Finance.',
+    whyUsed: 'Imports live balances and transaction history securely without storing banking credentials.',
     providers: ['truelayer'],
     limitLabel: '15m manual sync cooldown (05:00 cron)',
     rateLimitPrefix: 'truelayer-sync:',
@@ -112,21 +124,27 @@ const SERVICES: ServiceDefinition[] = [
   {
     id: 'brandfetch',
     name: 'Brandfetch',
-    description: 'Merchant logo search & CDN caching for Finance',
+    description: 'Brand search and icon CDN for merchant logos.',
+    howUsed: 'Called server-side once per new merchant by merchant-logo-cache and saved to Supabase Storage.',
+    whyUsed: 'Avoids sending your live spend history or IP to a third-party logo host on every Finance page render.',
     providers: ['brandfetch'],
     limitLabel: 'Cached permanently in Storage',
   },
   {
     id: 'bank_holidays',
     name: 'UK Bank Holidays',
-    description: 'GOV.UK bank holidays quarterly sync',
+    description: 'Official GOV.UK bank holidays JSON feed (England & Wales, Scotland, NI).',
+    howUsed: 'Fetched by sync-bank-holidays on a quarterly cron (or manual trigger) into uk_bank_holidays.',
+    whyUsed: 'Calculates accurate UK working-day paydays and recurring bill dates in Finance.',
     providers: ['bank_holidays'],
     limitLabel: 'Quarterly cron / manual',
   },
   {
     id: 'books',
     name: 'Book Catalogues',
-    description: 'Open Library & Google Books metadata lookups when adding books',
+    description: 'Open Library & Google Books public metadata APIs.',
+    howUsed: 'Queried from the browser only when searching for a book to add or backfill in the Books section.',
+    whyUsed: 'Auto-fills book titles, authors, covers, page counts, and publication dates.',
     providers: ['open_library', 'google_books'],
     limitLabel: 'On-demand browser lookups',
   },
@@ -586,6 +604,15 @@ export default function Dev() {
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground">{svc.description}</p>
+                      <details className="pt-1 text-xs text-muted-foreground">
+                        <summary className="cursor-pointer select-none text-[11px] font-mono text-muted-foreground/80 hover:text-foreground">
+                          How &amp; why it’s used
+                        </summary>
+                        <div className="mt-1.5 space-y-1 rounded-md border border-border/40 bg-background/40 p-2 text-[11px] leading-relaxed">
+                          <p><span className="font-mono text-foreground/85">How:</span> {svc.howUsed}</p>
+                          <p><span className="font-mono text-foreground/85">Why:</span> {svc.whyUsed}</p>
+                        </div>
+                      </details>
                     </div>
                     <Button
                       type="button"
