@@ -1,59 +1,60 @@
 # State
 
-Updated 2026-11-20 · `main` at `1a38256c`, pushed to `origin/main`. The `CollectionCard` stall fix and `franchise` column landed there (`20261120074000_watchlist_franchise.sql` applied on `yvtiybyuifkiwyrnjebe`), and the watchlist discovery work in `34e104f7`; the "to be pushed" wording below predates both. Travel hex-map performance followed in `1a38256c`; nothing of it is left uncommitted.
+Updated 2026-11-20 · `main` at `2f1601b8`, pushed to `origin/main`. `2f1601b8` is deployed (Pages run 44789914433 succeeded; the live CSS carries the 26rem Travel track). Uncommitted edits to `DiscoverySection.tsx` and `useDiscovery.ts` are from another session, not this round; inspect before attributing.
 
-## In the tree, still local
+## Pushed, this round
 
-- Watchlist UX & discovery updates (to be pushed): widened the right-hand inspector (`responsive.css`), added clickable person filmography (`PersonFilmographyDialog`, `person-credits.ts`, `person-credits-query.ts`, deployed `tmdb-proxy` `search/person` + `person/*/combined_credits`), added the **Cool facts** tab (`/watchlist/facts`, `WatchlistFacts.tsx`, `cool-facts.ts`, `cool-facts-query.ts`), switched News to inline `Your calendar` + `PosterCard`s (`WatchlistNews.tsx`, `YourWeek.tsx`, `PosterCard.tsx`, `PlatformLogo.tsx`, `surfaces.css`), tightened `Rate` spacing (`SeasonEpisodeList.tsx`, `PersonalRating.tsx`), and capped `interleaveBySeed` at 4 per non-filler seed (`discovery.ts`).
-- Discover has an owner-only full-width search bar above its suggestions. Clicking anywhere opens a TMDB film/series lookup, following the `All` / `Films` / `Series` switch. Each result offers `Seen it`, then asks when (now, release or episode air date, unknown, or a picked date) before adding a new title as watched; future-dated titles are disabled and pending/added results cannot be selected again. Library's Add search saves titles as unwatched (`To watch` once released, `Upcoming` before release). Both searches now clear outdated results as the query changes and ignore late replies from older requests; the same guard also covers Favourites and Franchises searches. This is uncommitted and not browser-verified.
-- Pushed (`2977e585`): Travel H3 res-3 hexagon map (`DotMatrixGlobe.tsx`, `hexMapData.ts`, `useCityMap.ts`, `TravelPage.tsx`, `public/data/hex-world-map-r3.json`, `scripts/generate-hex-map.py`, `h3-js@4.5.0`) with 12,390 cells across 234 countries/territories, small-island and overseas-territory splits, 16×8 spatial-bucket culling, city hex snapping, sub-national region hover labels, and curated island entries (`Tenerife`, `Fuerteventura`, etc.). Live Pages deployment remains unverified.
-- Pushed (`1a38256c`): Travel hex-map performance. The globe and flat map draw cells and borders with WebGL2 (`hexGlRenderer.ts`, new), canvas 2D as fallback; redraw only while moving, pause off screen; picking via `globeProjection.ts` (new), with a ~8 px island slop. Files: `src/components/dot-matrix/{DotMatrixGlobe.tsx, DotMatrixGlobe.css, hexMapData.ts, hexGlRenderer.ts, globeProjection.ts, globeProjection.test.ts, hexMapData.test.ts}`, `src/lib/equalEarth.ts`, `src/lib/equalEarth.test.ts` (new). Decision in `REHAUL_HISTORY.md`.
-  - Unverified: real-time fps on a visible, focused window (the preview throttled rAF to ~2/s, so frame costs came from calling the draw loop directly); Travel enter/exit lag (never timed before or after); touch and pinch on a real phone; shader compile on drivers other than this Mac's Chrome.
-  - Known, left as is: in WebGL mode the stars sit above the cells during the 500 ms morph; border width still multiplies by dpr twice, kept for the current look; pre-existing, a country selected within ~2 s of a drag lets leftover momentum turn the globe off the selection.
-- Dot-matrix UI chrome remains uncommitted: `DotMatrixText size="ui"` and Doto readout labels across the rail, header, dock, nav, Travel, Collection, Watchlist and Finance controls. Browser verification remains open.
-- Other edits and untracked drafts in this shared checkout may belong to other work; inspect their diffs before attributing them.
+- `2f1601b8` Travel globe and flat map (`DotMatrixGlobe.tsx`, `src/theme/responsive.css`):
+  - Zoom, pan, fly-to and spring-back ease per unit of time (`easeOver`, tuned to 60 Hz), so they no longer run 2–4x fast on 120/240 Hz screens. Rotation momentum friction is still per frame; touch pinch is unchanged.
+  - Wheel zoom is about 7% per 100 px notch (was 10%), exponential and symmetric in and out; Firefox line and page deltas are converted to pixels; one event is capped at 240 px.
+  - At 2200px+ wide and 600px+ tall (not centred wide mode), `.travel-layout` uses `26rem minmax(0, 1fr)`. The list keeps its width and the map fills the rest; the ~1000px gap is gone.
+  - Verified locally: 60 Hz preview, three notches ease and the draw loop sleeps after ~0.96 s; emulated 5120×1440, list 416px, map 4314px, no gap.
+  - Unverified: feel on a real 120/240 Hz monitor; the user's 49" screen; phone. The zoom-feel complaint is addressed in code, not yet confirmed by the user.
 
-## Landed elsewhere, with checks still open
+## Pushed earlier, still open
 
-- Travel double-flash (`37bae8a9`, `0763a04b`) and Finance tab/Home latency (`194093c2`, `22998cc7`) fixes are pushed and user-verified live.
-- About wide-screen layout fix (`76a56f9a`) was pushed and browser-verified locally at 2560×1080 and 1440×900; live Pages deployment remains unverified.
-- Payslip code (`d5120557`) and row-logo change (`234eeba2`) were pushed. The reimbursement migration `20261119150000_payslip_reimbursement_links.sql` is recorded as applied on `yvtiybyuifkiwyrnjebe`; linked table access, RLS and signed-in browser behavior remain unverified. PDF imports still capture summary figures, so reimbursement lines need manual entry.
-- Discover “Seen it” asks when; about 54 affected films were set to “date unknown” on 2026-11-18. Signed-in flow remains unverified in the browser.
-- `feat/watching-mid-season` narrows Watching to mid-season or current-as-aired series; signed-out preview was checked, signed-in shelves were not. Watchlist News, Franchises, Library, Diary, Import, scores, warmup and public cache changes were previously recorded as landed; browser checks remain open.
-- OMDb first pass completed 2026-11-19: films 1,064/1,070 checked (1,008 IMDb ratings); series 393/395 checked (354 IMDb ratings, 3 RT ratings).
+- `1a38256c` Travel hex-map performance (WebGL2 globe and flat map, canvas 2D fallback, redraw only while moving). Files and decision in `REHAUL_HISTORY.md`. Deployed (Pages run 44706048460 succeeded).
+  - Unverified: real-time fps on a visible, focused window (preview rAF was throttled, so frame costs came from calling the draw loop directly); Travel enter/exit lag (never timed); touch and pinch on a real phone; shader compile on drivers other than this Mac's Chrome.
+  - Known, left as is: in WebGL mode the stars sit above the cells during the 500 ms morph; border width multiplies by dpr twice; a country selected within ~2 s of a drag can let leftover momentum turn the globe off it.
+- `2977e585` Travel H3 res-3 hexagon map (12,390 cells, 234 countries/territories). Live Pages deployment was not separately confirmed.
+- `34e104f7` Watchlist person filmography, Cool facts tab, News layout, Discover cap and watched search (`Seen it` dating). Browser checks still open.
+- `c6cb54c7` CollectionCard stall fix and `franchise` column; `20261120074000_watchlist_franchise.sql` applied on `yvtiybyuifkiwyrnjebe`.
+- Dot-matrix UI chrome (`8886fe3c`). Browser verification remains open.
 
-## Checks (2026-11-19, current local tree)
+## Landed elsewhere, checks still open
+
+- Travel double-flash and Finance latency fixes: pushed and user-verified live.
+- About wide-screen layout (`76a56f9a`): browser-verified locally at 2560×1080 and 1440×900; live deploy not confirmed.
+- Payslip (`d5120557`) and row-logo (`234eeba2`) changes pushed. Reimbursement migration `20261119150000_payslip_reimbursement_links.sql` recorded as applied on `yvtiybyuifkiwyrnjebe`; linked table access, RLS and signed-in behaviour unverified. PDF imports capture summary figures only, so reimbursement lines need manual entry.
+- `feat/watching-mid-season`: signed-out preview checked; signed-in shelves not.
+- OMDb first pass completed 2026-11-19 (films 1,064/1,070; series 393/395).
+
+## Checks (2026-11-20, `2f1601b8`, as reported by the landing session)
 
 | Check | Result |
 |---|---|
-| `npm run lint` | pass, 0 errors and 0 warnings |
+| `npm run lint` | pass, 0 errors, 0 warnings |
 | `npm run typecheck` | pass |
-| `npm run typecheck:functions` | pass |
 | `npm run build` | pass |
+| `vitest` `src/components/dot-matrix` + `src/lib/equalEarth.test.ts` | pass, 3 files / 13 tests |
 | `graphify update .` | pass |
-| Watchlist Vitest (`src/features/watchlist/`) | 35 files, 486 tests pass (2026-11-20) |
-| `npm run ship-check` | command passed; **Do not launch yet**, 93/100. The reported AWS key at `airport-countries.data.ts:226` was previously inspected as an encoded lookup-string false positive; other findings remain open. |
-| Browser | Discover search, H3 map, dot-matrix chrome, payslip/reimbursement and other signed-in flows not verified this session |
-
-## Checks (2026-11-20, Travel hex map, `1a38256c`)
-
-| Check | Result |
-|---|---|
-| `npm run lint` | pass, 0 errors and 0 warnings |
-| `npm run typecheck` | pass |
-| `npm run typecheck:functions` | pass |
-| `npx vitest run` | pass, 115 files / 2841 tests |
-| `npm run build` | pass |
-| `npm run ship-check` | ran; 93/100, **Do not launch yet**, same findings as above, none in the hex-map files |
+| `npm run typecheck:functions` | not run (no functions changed) |
+| full `vitest run` | not run this round; last full run 2026-11-20 at `1a38256c`: 115 files / 2841 tests |
+| `npm run ship-check` | not run this round; last 93/100, **Do not launch yet** (2026-11-20, `1a38256c`) |
+| Browser | local preview at 60 Hz and emulated 5120×1440 only; real 120/240 Hz, 49" and phone not run |
 
 ## Next
 
-1. Verify linked reimbursement table access and RLS, then browser-check payslip rows/logos and reimbursement entry, suggestions, confirmation/unlink, stale links and ledger marker. Test a future leave year such as 2049.
-2. Browser-check Discover's full-width watched search for film, series and All on desktop and phone; compare identical queries with Library, including rapid typing and switching dialogs, then verify date choices, future releases, duplicate prevention, watched status and signed-in persistence. Check the separate Library Add path, suggestion “Seen it” dating, Watching/To watch shelves, Watchlist ↔ Finance navigation, IndexedDB cache/privacy boundary, scores, News, Franchises, Library, Travel signed URLs, countdown, light mode, H3 map and dot-matrix chrome.
-3. Hex-map performance: `1a38256c` is deployed (Pages run 44706048460 succeeded; the live `DotMatrixGlobe` chunk carries the WebGL renderer). Check the unverified items above on the live site and a phone. Check the first weekly OMDb refresh around 2026-11-25 in `sync_log` (roughly 900 titles, up to 300 per part).
-4. Carry forward ship-check findings; exit code zero does not grant launch approval. The 2026-11-19 Finance sync said Revolut bank access needs renewing and is not yet reconnected.
+1. Check zoom feel on a 120/240 Hz screen and the 49" display, and the wide layout on the real monitor.
+2. Hex-map unverified items above, on the live site and a phone. Check the first weekly OMDb refresh around 2026-11-25 in `sync_log`.
+3. Browser-check Discover's watched search (film, series, All; desktop and phone), Library Add, and Watchlist shelves, signed in.
+4. Browser-check reimbursement entry, suggestions, unlink, stale links and the ledger marker; test leave year 2049.
+5. Carry forward ship-check findings; exit code zero does not grant launch approval. Revolut bank access needs renewing (2026-11-19 Finance sync).
+
+## Blockers
+
+None recorded. Real-device checks depend on the user's hardware.
 
 ## Unverified carried context
 
-- Prior signed-in admin and show creator/cast browser flows remain open. The unrelated Supabase connector project that reported `INACTIVE` was not the linked site project.
-- Untracked drafts (`SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md`), `.claude/launch.json` stale `caught-up-worktree` entry and `.claude/worktrees/affectionate-lamarr-f2d2cb` were carried forward without re-checking ownership.
+- Signed-in admin and show creator/cast flows remain open. Untracked drafts (`SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md`), `.claude/launch.json` stale `caught-up-worktree` entry and `.claude/worktrees/affectionate-lamarr-f2d2cb` carried forward without re-checking ownership.

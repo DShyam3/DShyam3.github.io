@@ -376,7 +376,7 @@ window and are disabled until the next sync is allowed.
 Countries and cities visited, rendered as maps by continent and by city, with
 membership and region groupings.
 
-At 1024px wide and 600px tall, the map sits beside the country list, which scrolls on its own. Narrower or shorter, the map sits above the list in one scroll. Stacked, the city list's header scrolls with the list. Each country row keeps its UN marker and city count in fixed columns, so they line up down the list whether or not a row has either.
+At 1024px wide and 600px tall, the map sits beside the country list, which scrolls on its own. On a screen 2200px wide and 600px tall or taller, unless the wide layout is set to centred, the list keeps a fixed width and the map fills the rest of the row. Narrower or shorter, the map sits above the list in one scroll. Stacked, the city list's header scrolls with the list. Each country row keeps its UN marker and city count in fixed columns, so they line up down the list whether or not a row has either.
 
 Stacked, on a phone or a short window, each continent folds to one row showing its flags, and opens on tap. On a phone the flat map fills the height of its box and drags sideways. While the map is not zoomed in, a vertical swipe over it scrolls the page. A legend on the map says what gold means: Visited and Not yet, or in the Cities view City and Country, where visited countries are tinted. Country borders are drawn clearly at every zoom. A selected city is shown as its dot in green, at the size it would have anyway; a place too small for a dot of its own, such as Gibraltar, lights its grid square's dot instead.
 
