@@ -1,3 +1,5 @@
+import { recordExternalClientUsage } from '@/integrations/supabase/api-usage-fetch';
+
 /** Public catalogue metadata, shared by interactive lookup and the backfill. */
 export interface BookMetadataResult {
   id: string;
@@ -30,9 +32,30 @@ export function bookshopLinks(title: string, author: string) {
 
 async function catalogueJson(url: string, signal?: AbortSignal) {
   const timeout = AbortSignal.timeout(15000);
-  const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
-  if (!response.ok) throw new Error(`Catalogue request failed (${response.status})`);
-  return response.json();
+  const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const parsed = (() => {
+    try {
+      const u = new URL(url);
+      const provider = u.hostname.includes('openlibrary') ? 'open_library' : 'google_books';
+      const endpoint = u.pathname.replace(/^\/+|\/+$/g, '').replace(/OL\d+[WM]/g, ':id') || 'search';
+      return { provider, endpoint };
+    } catch {
+      return { provider: 'open_library', endpoint: 'search' };
+    }
+  })();
+  try {
+    const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+    const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
+    recordExternalClientUsage(parsed.provider, parsed.endpoint, response.status, elapsed);
+    if (!response.ok) throw new Error(`Catalogue request failed (${response.status})`);
+    return response.json();
+  } catch (err) {
+    const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
+    if (!(err instanceof Error && err.message.startsWith('Catalogue request failed'))) {
+      recordExternalClientUsage(parsed.provider, parsed.endpoint, null, elapsed);
+    }
+    throw err;
+  }
 }
 
 export async function searchOpenLibrary(query: string, signal?: AbortSignal): Promise<BookMetadataResult[]> {

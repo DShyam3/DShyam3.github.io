@@ -3,6 +3,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { requireAdmin } from '../_shared/require-admin.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
 import { selectAllPages } from '../_shared/select-all-pages.ts'
+import { createUsageBatcher } from '../_shared/api-usage.ts'
+
+const activeUsage = createUsageBatcher('edge')
 
 // Route C of the transaction-logo work: resolve a merchant's mark ONCE,
 // server-side, and cache it in our own bucket.
@@ -272,6 +275,7 @@ async function searchBrand(
   const url = `https://${BRANDFETCH_SEARCH_HOST}/v2/search/${encodeURIComponent(query)}?c=${encodeURIComponent(clientId)}`
 
   let res: Response
+  const t0 = Date.now()
   try {
     res = await fetch(url, {
       headers: { 'Accept': 'application/json' },
@@ -283,7 +287,20 @@ async function searchBrand(
       redirect: 'manual',
       signal: AbortSignal.timeout(8000),
     })
+    activeUsage.record({
+      provider: 'brandfetch',
+      endpoint: 'v2/search',
+      statusCode: res.status,
+      durationMs: Date.now() - t0,
+    })
   } catch {
+    activeUsage.record({
+      provider: 'brandfetch',
+      endpoint: 'v2/search',
+      statusCode: null,
+      outcome: 'error',
+      durationMs: Date.now() - t0,
+    })
     return null
   }
 
@@ -350,13 +367,27 @@ async function fetchImage(
   let res: Response
   let hops = 0
   for (;;) {
+    const t0 = Date.now()
     try {
       res = await fetch(url.toString(), {
         headers: { 'Accept': 'image/*' },
         redirect: 'manual',
         signal: AbortSignal.timeout(8000),
       })
+      activeUsage.record({
+        provider: 'brandfetch',
+        endpoint: 'cdn/icon',
+        statusCode: res.status,
+        durationMs: Date.now() - t0,
+      })
     } catch {
+      activeUsage.record({
+        provider: 'brandfetch',
+        endpoint: 'cdn/icon',
+        statusCode: null,
+        outcome: 'error',
+        durationMs: Date.now() - t0,
+      })
       return null
     }
 
@@ -742,5 +773,7 @@ serve(async (req) => {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
+  } finally {
+    await activeUsage.flush()
   }
 })

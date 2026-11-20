@@ -56,6 +56,23 @@ export function getSessionUsageSamples(): readonly ClientUsageSample[] {
   return sessionSamples;
 }
 
+/** Records a direct browser call to a public API (e.g. Open Library / Google Books). */
+export function recordExternalClientUsage(
+  provider: string,
+  endpoint: string,
+  statusCode: number | null,
+  durationMs: number,
+) {
+  recordSample({
+    occurredAt: new Date().toISOString(),
+    provider,
+    endpoint,
+    statusCode,
+    outcome: outcomeFromStatus(statusCode),
+    durationMs: Math.max(0, Math.round(durationMs)),
+  });
+}
+
 /** Classifies a Supabase request URL into provider + normalized endpoint, or null to skip. */
 export function classifySupabaseRequest(
   href: string,

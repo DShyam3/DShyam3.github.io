@@ -7,6 +7,7 @@ import { claimCooldown, cooldownResponse, releaseCooldown } from '../_shared/coo
 import { groupRowsByColumns } from '../_shared/upsert-batches.ts'
 import { corsOriginHeader, allowedRedirectUris } from '../_shared/site-origins.ts'
 import { clientAddress } from '../_shared/client-address.ts'
+import { createUsageBatcher } from '../_shared/api-usage.ts'
 
 // A callback is safe only when its destination is an exact, registered app
 // URL. This mirrors the browser origins but deliberately includes the
@@ -148,6 +149,26 @@ serve(async (req) => {
     const isSandbox = truelayerClientId.startsWith('sandbox-')
     const authBaseUrl = isSandbox ? 'https://auth.truelayer-sandbox.com' : 'https://auth.truelayer.com'
     const apiBaseUrl = isSandbox ? 'https://api.truelayer-sandbox.com' : 'https://api.truelayer.com'
+    const usage = createUsageBatcher(isServiceRole ? 'cron' : 'edge')
+    const tlFetch = async (url: string, init?: RequestInit): Promise<Response> => {
+      const t0 = Date.now()
+      const endpoint = (() => {
+        try {
+          return new URL(url).pathname.replace(/^\/+|\/+$/g, '').replace(/(accounts|cards)\/[^/]+/g, '$1/:id')
+        } catch {
+          return 'unknown'
+        }
+      })()
+      try {
+        const res = await fetch(url, init)
+        usage.record({ provider: 'truelayer', endpoint, statusCode: res.status, durationMs: Date.now() - t0 })
+        return res
+      } catch (err) {
+        usage.record({ provider: 'truelayer', endpoint, statusCode: null, outcome: 'error', durationMs: Date.now() - t0 })
+        throw err
+      }
+    }
+    try {
 
     // ACTION: get_auth_url
     if (action === 'get_auth_url') {
@@ -311,7 +332,7 @@ serve(async (req) => {
       }
 
       // Exchange code for token
-      const tokenResponse = await fetch(`${authBaseUrl}/connect/token`, {
+      const tokenResponse = await tlFetch(`${authBaseUrl}/connect/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -343,7 +364,7 @@ serve(async (req) => {
       let consentExpiresAt: string | null = null
 
       try {
-        const meRes = await fetch(`${apiBaseUrl}/data/v1/me`, {
+        const meRes = await tlFetch(`${apiBaseUrl}/data/v1/me`, {
           headers: trueLayerDataHeaders(access_token),
         })
         if (meRes.ok) {
@@ -367,10 +388,10 @@ serve(async (req) => {
       if (providerId === 'default') {
         try {
           const [accountsResponse, cardsResponse] = await Promise.all([
-            fetch(`${apiBaseUrl}/data/v1/accounts`, {
+            tlFetch(`${apiBaseUrl}/data/v1/accounts`, {
               headers: trueLayerDataHeaders(access_token),
             }),
-            fetch(`${apiBaseUrl}/data/v1/cards`, {
+            tlFetch(`${apiBaseUrl}/data/v1/cards`, {
               headers: trueLayerDataHeaders(access_token),
             }),
           ])
@@ -749,7 +770,7 @@ serve(async (req) => {
 
           // 2. Refresh token if expired or expiring within 5 minutes
           if (expiresAt.getTime() - Date.now() < 300000) {
-            const refreshResponse = await fetch(`${authBaseUrl}/connect/token`, {
+            const refreshResponse = await tlFetch(`${authBaseUrl}/connect/token`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
               body: new URLSearchParams({
@@ -795,10 +816,10 @@ serve(async (req) => {
           }
 
           // 3. Fetch Accounts & Cards for this connection
-          const accountsRes = await fetch(`${apiBaseUrl}/data/v1/accounts`, {
+          const accountsRes = await tlFetch(`${apiBaseUrl}/data/v1/accounts`, {
             headers: trueLayerDataHeaders(accessToken),
           })
-          const cardsRes = await fetch(`${apiBaseUrl}/data/v1/cards`, {
+          const cardsRes = await tlFetch(`${apiBaseUrl}/data/v1/cards`, {
             headers: trueLayerDataHeaders(accessToken),
           })
 
@@ -847,7 +868,7 @@ serve(async (req) => {
           // provider call itself failed.
           const balances = await Promise.all(sources.map(async ({ kind, raw }) => {
             const accId = accountRowId(kind, raw.account_id)
-            const balanceRes = await fetch(
+            const balanceRes = await tlFetch(
               `${apiBaseUrl}/data/v1/${kind}/${raw.account_id}/balance`,
               { headers: trueLayerDataHeaders(accessToken) },
             )
@@ -939,7 +960,7 @@ serve(async (req) => {
             // historical calls with HTTP 400, so use the supported shape.
             const qs = buildTrueLayerTransactionQuery(from, to)
             const { kind, raw } = source
-            const res = await fetch(
+            const res = await tlFetch(
               `${apiBaseUrl}/data/v1/${kind}/${raw.account_id}/transactions?${qs}`,
               { headers: trueLayerDataHeaders(accessToken) },
             )
@@ -1332,6 +1353,9 @@ serve(async (req) => {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
+    } finally {
+      await usage.flush()
+    }
 
   } catch (error) {
     console.error('truelayer-sync failed', error)

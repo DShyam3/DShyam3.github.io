@@ -431,8 +431,18 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {discovery.franchisesLoading && discovery.franchises.length === 0 && (
           <p role="status" className="text-sm text-muted-foreground">Checking series, trilogies and spin-offs…</p>
         )}
-        {!discovery.franchisesLoading && discovery.franchises.length === 0 && discovery.likelySeen.length === 0 && (
-          <p className="text-sm text-muted-foreground">No incomplete series, spin-offs or likely seen titles found in this view.</p>
+        {discovery.franchisesFailed && (
+          <div role="status" className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <p>Some collections couldn’t load (TMDB rate limit or network error). Wait a moment and retry.</p>
+            <Button variant="outline" size="sm" onClick={discovery.retryFranchises}>Retry</Button>
+          </div>
+        )}
+        {!discovery.franchisesLoading && !discovery.franchisesFailed && discovery.franchises.length === 0 && discovery.likelySeen.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            {discovery.hasMoreFranchises
+              ? 'No incomplete series in the newest collections checked so far. Click Show more to check older ones.'
+              : 'No incomplete series, spin-offs or likely seen titles found in this view.'}
+          </p>
         )}
         {discovery.franchises.length > 0 && (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] items-start gap-3">
@@ -451,8 +461,12 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         )}
         {discovery.hasMoreFranchises && (
           <div className="flex justify-center pt-1">
-            <Button variant="outline" onClick={discovery.loadMoreFranchises}>
-              Show more series &amp; collections
+            <Button
+              variant="outline"
+              onClick={discovery.loadMoreFranchises}
+              disabled={discovery.franchisesLoading}
+            >
+              {discovery.franchisesLoading ? 'Checking more collections…' : 'Show more series & collections'}
             </Button>
           </div>
         )}

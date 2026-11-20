@@ -634,6 +634,8 @@ export function useDiscovery(type: LibraryType) {
     loading ||
     (type !== 'tv' && collectionsPending) ||
     spinoffsPending;
+  const franchisesFailed =
+    type !== 'tv' && !collectionsPending && collectionQueries.some((q) => q.isError);
 
   return {
     recommendations,
@@ -641,8 +643,15 @@ export function useDiscovery(type: LibraryType) {
     upcoming: upcomingCurated,
     franchises: franchiseGroups,
     franchisesLoading,
+    franchisesFailed,
     hasMoreFranchises,
     loadMoreFranchises: () => setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH),
+    retryFranchises: () => {
+      for (const q of collectionQueries) {
+        if (q.isError && !q.isFetching) void q.refetch();
+      }
+      if (tvSpinoffs.isError && !tvSpinoffs.isFetching) void tvSpinoffs.refetch();
+    },
     loading: loading || ratingsStatus === 'loading' || isPending,
     upcomingLoading: loading || upcoming.isPending,
     upcomingLoadingMore: upcoming.isFetchingNextPage,

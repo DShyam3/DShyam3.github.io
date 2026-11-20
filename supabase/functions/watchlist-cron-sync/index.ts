@@ -5,6 +5,9 @@ import { isServiceRoleRequest } from '../_shared/service-role.ts'
 import { claimCooldown, cooldownResponse, releaseCooldown } from '../_shared/cooldown.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
 import { selectAllPages } from '../_shared/select-all-pages.ts'
+import { createUsageBatcher } from '../_shared/api-usage.ts'
+
+let activeUsage = createUsageBatcher('cron')
 
 // The one watchlist sync. pg_cron calls it nightly with the service role key,
 // in parts a few minutes apart (see parseShard and the scheduling
@@ -326,7 +329,14 @@ async function fetchTMDB<T>(endpoint: string, params: Record<string, string> = {
   const query = new URLSearchParams({ ...params, api_key: TMDB_API_KEY || '' })
   const url = `${TMDB_BASE_URL}/${endpoint}?${query.toString()}`
   for (let attempt = 0; ; attempt++) {
+    const t0 = Date.now()
     const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
+    activeUsage.record({
+      provider: 'tmdb',
+      endpoint,
+      statusCode: res.status,
+      durationMs: Date.now() - t0,
+    })
     if (res.ok) return res.json() as Promise<T>
     await res.body?.cancel()
     if (res.status === 404) {
@@ -548,6 +558,7 @@ serve(async (req) => {
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const isServiceRole = isServiceRoleRequest(authHeader, serviceRoleKey)
+  activeUsage = createUsageBatcher(isServiceRole ? 'cron' : 'edge')
   if (!isServiceRole) {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -1183,6 +1194,7 @@ serve(async (req) => {
         if (omdbStats.asked > 0) await new Promise((resolve) => setTimeout(resolve, OMDB_REQUEST_GAP_MS))
         omdbStats.asked++
         let outcome: OmdbOutcome
+        const omdbT0 = Date.now()
         try {
           const res = await fetch(
             `https://www.omdbapi.com/?${new URLSearchParams({ i: item.imdb_id!, apikey: omdbKey })}`,
@@ -1191,7 +1203,21 @@ serve(async (req) => {
           // OMDb reports a bad key or a spent daily limit as a 401 with a JSON
           // body, so the body is read whatever the status.
           outcome = parseOmdbResponse(await res.json().catch(() => null))
+          activeUsage.record({
+            provider: 'omdb',
+            endpoint: 'title-by-imdb',
+            statusCode: res.status,
+            outcome: outcome.kind === 'limit' ? 'rate_limited' : outcome.kind === 'error' ? 'error' : 'ok',
+            durationMs: Date.now() - omdbT0,
+          })
         } catch {
+          activeUsage.record({
+            provider: 'omdb',
+            endpoint: 'title-by-imdb',
+            statusCode: null,
+            outcome: 'error',
+            durationMs: Date.now() - omdbT0,
+          })
           outcome = { kind: 'error', message: 'OMDb request failed' }
         }
         if (outcome.kind === 'limit') {
@@ -1296,5 +1322,7 @@ serve(async (req) => {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
+  } finally {
+    await activeUsage.flush()
   }
 })
