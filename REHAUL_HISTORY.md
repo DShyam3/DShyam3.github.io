@@ -3185,3 +3185,13 @@ Hovering a hex in the city view names its largest town and that town's state, or
 The reasons are in the code. A hex takes the state of its own country that covers most of it, so a cell on a border never names a region across it. Each town takes the state under its point, sampled on the same grid as the admin-1 layer, because Natural Earth's own state-name field spells some states differently and garbles others. Only a town of the hex's own country is used, so a border hex never names a town across the border. Names are a fixed table rather than model output or a runtime geocoder, so the same rows always give the same label, and no outside service is asked at hover time. The files are fetched only in the city view, at the size showing, because level 5 is about 3.3 MB.
 
 Closure: `src/components/dot-matrix/hexRegions.ts`, `src/components/dot-matrix/hexRegions.test.ts`, `scripts/generate-hex-map.mjs`, `src/components/dot-matrix/DotMatrixGlobe.tsx`. Shipped in `3220ab6b`.
+
+### Discover orders collections by an owner-activity stamp, not row id — 2026-11-20
+
+The 2026-11-20 entry above ranks `HAVE YOU ALREADY WATCHED?` by the newest library row id. Row id was the only add signal, and it cannot say when a title was last touched: `created_at` on a library item is its release date. Marking an old film watched did not move its collection. A watched_at-based recent tier was tried and dropped, because one bulk logging session put 40 collections in it.
+
+The order now uses `last_activity_at` on `movies` and `tv_shows`, set by database triggers on owner actions only: adding a title; marking a film watched or unwatched, or changing its watch date; changing Library visibility (`library_state`, any value); and marking an episode, or a season through the existing cascade, watched, unwatched or re-dated, which stamps its show. Series are stamped from their episodes because `tv_shows` has no watched columns. Watchlist-cron-sync writes never move it: the triggers name the columns they watch, and an `IS DISTINCT FROM` check stops a no-op write from stamping.
+
+Collections with any touched title rank first, latest first, films and series together. Existing rows stay NULL with no backfill. Every stamp postdates every untouched add, so untouched collections rank after touched ones by row id, films and series taking turns, which is the old order. Until the migration is applied, every collection is untouched and the order is unchanged.
+
+Known and open: hiding a title or marking it Stopped watching also stamps it, and a history import stamps every imported title with one `now()`, so imported collections rise together. Both are open in `REHAUL_PLAN.md`.

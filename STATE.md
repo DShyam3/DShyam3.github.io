@@ -1,57 +1,50 @@
 # State
 
-Updated 2026-11-21. Worktree branch `claude/sleepy-solomon-a6e0fc`; head is `main` at `ec4a3578` plus this docs commit (local, not pushed; the main session pushes).
+Updated 2026-11-20. Branch `claude/beautiful-hawking-f6254a`, one commit (`eddd5532`) ahead of `main`, plus this docs commit. Not merged to `main`, not pushed. `main` is at `61ba81de`.
 
-## Closed 2026-11-21
+## Discover ordering by last activity (on this branch only)
 
-- Marvel Cinematic Universe as one Discover card: `30e0a877` (feature), `bb4a079a` (docs). On `main` and live on GitHub Pages. A universe lists its films in release order; a collection it lists in full is folded in; a collection with films outside it (Deadpool) keeps its own card. Visitors' franchise cards read only visible library rows.
-- `tmdb-proxy` deployed to Supabase project `yvtiybyuifkiwyrnjebe`, now version 22, `verify_jwt` false (`--no-verify-jwt`). Live v21 was diffed against `origin/main` first: identical except `_shared/api-usage.ts`; v22 ships main's version.
-- Live smoke test: `wikidata/film-universes` 200 in ~4.2 s, 45 MCU films, 42 with poster and date. The 3 undated (Armor Wars, untitled Shang-Chi sequel, Blade) are left off the client unless owned. `movie/1726` 200, `wikidata/tv-spinoffs?ids=1418` 200, `account/1` 403 (disallowed).
-- Live browser check as a visitor, `https://dshyam3.github.io/watchlist` → Discover: the MCU card renders "29 of 41 watched · 6 not in library · Gap in series", "Next up: The Incredible Hulk", posters in release order (Iron Man, The Incredible Hulk, Iron Man 2, Thor, ...). New section intro copy is live. `wikidata/film-universes` 200 from the page.
-- Travel hex review fixes: `7deea8d8`, on `main`, deployed. Phone checks still open (below).
-- Travel hex size control (−/+, size readout, Auto/120/45/17 km held at any zoom) and city-view hover names (largest town with its own state, else state and country; own-country towns only; `hex-regions-v1-r{3,4,5}.json`, fetched only in the city view): `3220ab6b`, on `main`. Checks on the combined tree: typecheck pass, eslint 0/0 on the touched dirs, vitest 47 files / 582 tests (dot-matrix, travel, watchlist); full suite 121 files / 2,914 tests and build passed on the main checkout before the rebase. Reviewer (Opus) findings fixed. Known costs: 45 km held over the whole globe ~4.5 ms/frame vs ~0.4 ms at 120 km; level-5 region file (3.3 MB raw, ~540 KB gzipped) parses ~50 ms once; overseas territories split from their sovereign get no state names.
+Closed in code: `eddd5532`. Discover's `HAVE YOU ALREADY WATCHED?` now orders collections by an owner-activity stamp (`last_activity_at` on `movies` and `tv_shows`, set by triggers), not by row id. Decision in `REHAUL_HISTORY.md` ("Discover orders collections by an owner-activity stamp", 2026-11-20).
 
-## Live, not verified
+Still open, not promoted:
+1. Migration `20261120230000_watchlist_last_activity.sql` is NOT applied to the live project `yvtiybyuifkiwyrnjebe`. It needs the owner's explicit OK. Order: apply the migration, then merge and push. The frontend falls back without the column, so either order is safe, but until the migration is live every collection is untouched and the order is the old row-id order.
+2. Not merged to `main`, not pushed.
+3. Open design questions (`REHAUL_PLAN.md` item 9): (a) hiding or Stopped-watching a title stamps it and raises its collection; (b) a history import stamps every imported title with one `now()`, so imported collections rise together.
+4. Pre-existing bug (`REHAUL_PLAN.md` item 10), unverified against a real run: `watchlist-cron-sync` episode upsert can revert an owner's watch made during a run, and the revert stamps `last_activity_at`. Fix: stop sending `watched` for existing episodes.
+5. Browser check of Discover order not done.
 
-- Collection folding on the live page: other collection lookups were rate-limited during the check, so whether The Avengers / Iron Man collection cards stay hidden beside the MCU card was not seen.
-- The 6-per-10-min universe limiter in `tmdb-proxy`: not exercised.
-- Owner (signed-in) view of Discover: not checked.
-- Phone or touch pinch to 32x, GPU memory with level-5 patches, frame rate on a high-refresh screen: not checked. Hex size menu and city-view names not yet checked on the live site.
-
-## Observed during the live check (note)
-
-- "Some collections couldn't load" banner. The proxy's 60/min limit is per address block, and the owner's signed-in session on the same network was active (`api_usage_events`: set_watched and search at 11:11 UTC; tmdb-proxy limiter key ~96–102 calls/min for 11:10–11:12). Two Discover pages behind one IP exceed the budget. Not a request loop: the checking page made no calls for 100 s between bursts.
-
-## Checks
-
-Code checks dated 2026-11-20, on `claude/sleepy-solomon-a6e0fc`; code unchanged since.
+Checks for `eddd5532`, read from the session on 2026-11-20:
 
 | Check | Result |
 |---|---|
 | `npm run lint` | pass, 0 errors, 0 warnings |
 | `npm run typecheck` | pass |
 | `npm run typecheck:functions` | pass |
+| `npm test` | pass, 2,891 tests |
 | `npm run build` | pass |
-| `npx vitest run` | pass, 119 files / 2,893 tests |
-| `graphify update .` | pass |
+| `supabase/tests/watchlist_last_activity.sql` | pass, 15 assertions, LOCAL stack only. The local stack stops at `20261111223000`, so the run used a scratch copy that added the missing score columns and swapped `paused` for `stopped`. Unverified against a fully migrated database |
+| `graphify update .` | not run (no graph in this worktree) |
 | `npm run ship-check` | not run |
-| GitHub Pages deploy (run 44897619687) | pass, 2026-11-21 |
 
-## Still open (other sessions and owner)
+## On main, not verified here
 
-- `/dev` dashboard, API/cron telemetry, Discover franchise retry, Franchises expansion, Watchlist News layout (`5296949c`, `a9e161c1`, `ec1fd147`, on `main`): awaiting a live browser check after the Pages deploy.
-- Discover: visitor view of the MCU card done (above). Collection folding, universe limiter and owner view still open.
-- Edge functions and `20261120201500_api_usage_metrics.sql`: applied remotely (`yvtiybyuifkiwyrnjebe`).
-- Real-device Travel checks (above).
-- OMDb weekly refresh, ~2026-11-25: verify the scores refresh.
-- Uncommitted edits in the main checkout from another session: `src/pages/Dev.tsx`, `STATE.md`, `FEATURES.md`, `REHAUL_HISTORY.md` (plus Travel hex files). They will conflict with what is now on `main` when that session rebases. Confirm them there before committing, and keep them out of this branch's commits.
+- Pushed earlier, awaiting a live browser check after the Pages deploy: `/dev` dashboard, API/cron telemetry, Discover franchise retry fixes, Franchises expansion, Watchlist News layout (`5296949c`, `a9e161c1`, `ec1fd147`).
+- Hex review fixes committed in `7deea8d8`. Phone or touch pinch to 32x, GPU memory on phones, and frame rate on a high-refresh screen are not verified. The `reviewer` pass on that diff is not recorded as done.
+- Not Interested dimming on Franchises committed in `61ba81de`. The signed-in owner path is covered by lint, typecheck and tests only.
+- Edge functions deployed and `20261120201500_api_usage_metrics.sql` applied remotely (`yvtiybyuifkiwyrnjebe`), per an earlier note.
 
-## Follow-ups, not done
+## Open, not started
 
-- Franchises page (`src/pages/WatchlistFranchises.tsx`) still groups by collection only. Universes appear on Discover, not there.
-- `wikidata/tv-spinoffs` has the same fan-out (up to 40 TMDB calls per call) and no limiter of its own.
-- More universes are a registry row each in `tmdb-proxy`.
+- Marvel as one group (needs a new `tmdb-proxy` universe lookup).
+- Verify the OMDb weekly refresh (~2026-11-25).
+
+## Next
+
+1. Owner's OK, then apply `20261120230000` to the live project; then merge and push this branch.
+2. Decide plan item 9 (a) and (b). Fix plan item 10 in its own commit.
+3. Browser-check Discover order on the owner's data once the migration is live (plan item 11).
 
 ## Blockers
 
-- Revolut bank access renewal (owner).
+- The migration needs the owner's explicit OK before it touches the live project.
+- Revolut bank access renewal.

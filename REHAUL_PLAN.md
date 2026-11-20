@@ -381,6 +381,26 @@ under 2026-11-18.
    watched more than once.
 7. **Favourites as a flag** and the other open items under "Watchlist News and
    Library" above still stand.
+8. **Discover order, migration and merge (branch `claude/beautiful-hawking-f6254a`,
+   commit `eddd5532`; not on main, not pushed).** Apply
+   `20261120230000_watchlist_last_activity` to hosted (needs the owner's OK), then
+   merge and push. The frontend falls back without the column, so either order is
+   safe, but until the migration is live every collection is untouched and the
+   order is row id. Decision in `REHAUL_HISTORY.md` ("Discover orders collections
+   by an owner-activity stamp", 2026-11-20).
+9. **Discover stamp, open design questions.** (a) Hiding a title or marking it
+   Stopped watching stamps it, which raises its collection in Discover; decide
+   whether only active and paused titles stamp. (b) A history import
+   (`import_watch_history`) gives every imported title one identical `now()`, so
+   imported collections rise together, tied and sorted by name; decide whether to
+   stamp each title with its own time.
+10. **Cron revert of a watch made during a run (pre-existing, unverified against a
+    real run).** `watchlist-cron-sync` episode upsert (`supabase/functions/watchlist-cron-sync/index.ts`,
+    about line 1070) sends `watched` from a snapshot read at the start of the run,
+    so an owner's watch made mid-run can be reverted, and the revert stamps
+    `last_activity_at` and clears `watched_at`. Fix: stop sending `watched` for
+    existing episodes.
+11. **Browser check of Discover order** on the signed-in owner's data: not run.
 
 ### Deferred by choice
 
