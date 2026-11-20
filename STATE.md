@@ -1,47 +1,53 @@
 # State
 
-Updated 2026-11-20. Branch `main`, head `ec1fd147`, pushed to `origin/main`.
+Updated 2026-11-20. Branch `claude/sleepy-solomon-a6e0fc`, head `30e0a877`. Local only: not pushed, not merged to `main`. `origin/main` includes `7deea8d8` (Travel hex fixes), which sits under this branch's head.
 
-Uncommitted in the tree:
-- Travel hex review fixes, 5 files: `src/components/dot-matrix/` `DotMatrixGlobe.tsx`, `hexDetail.ts`, `hexDetail.test.ts`, `hexLevels.ts`, `hexPatchWorker.ts`. Not committed, not deployed.
-- Watchlist: Franchises page dims titles marked Not interested (`EntryList.tsx`, `useDiscovery.ts`, `WatchlistFranchises.tsx`, untracked `useDismissedSuggestions.ts`). Not committed, not deployed. Browser-verified signed-out on the 8082 preview only (dimmed row, chip reads Not interested); the signed-in owner path and Discover's own dismiss after the hook move are covered by lint/typecheck/tests only. Commit separately from the hex diff, by path. When committing the hex diff, stage it by path.
+## Closed today
 
-## Pushed, still open (other sessions)
+- Marvel Cinematic Universe as one Discover card, committed as `30e0a877`. A universe lists its films in release order; a collection it lists in full is folded in; a collection with films outside it (Deadpool) keeps its own card. Visitors' franchise cards read only visible library rows.
+- Travel hex review fixes, committed as `7deea8d8` and on `origin/main`. Phone checks are still open (see below).
 
-- `/dev` dashboard, API/cron telemetry, Discover franchise retry fixes, Franchises expansion, Watchlist News layout (`5296949c`, `a9e161c1`, `ec1fd147`): pushed, awaiting a live browser check after the Pages deploy.
-- Edge functions deployed and `20261120201500_api_usage_metrics.sql` applied remotely (`yvtiybyuifkiwyrnjebe`).
-- Open: Marvel as one group (needs a new `tmdb-proxy` universe lookup); Revolut bank access needs renewing.
+## Deploy order (read before merging)
 
-## Travel hexes
+- `tmdb-proxy` is NOT deployed. Deploying it waits for the owner's OK.
+- Deploy `tmdb-proxy` BEFORE the frontend reaches `main` / GitHub Pages. If the frontend ships first, the old proxy answers the new endpoint with 403, Discover shows "Some collections couldn't load", and its Retry cannot work.
 
-- Shipped in `5296949c`: projection picker, Home constellation fix, first zoom-dependent hex levels.
-- Uncommitted: the review fixes. The worker builds each patch once and stops when zoomed out; built geometry lives on the GPU only, with caps of 200 (level 4) and 60 (level 5); level cross-fades land in one step under reduced motion; a level's lookup restyles patches; a remounted worker prepares its levels again; going back to a fading level swaps; the outline is judged at the finer cell's patch. New tests: every level code exists in `public/countries.json`; Antarctica has more than 900 level-3 cells.
-- Browser-verified locally (dev preview, not live): levels 4 and 5 draw on the globe and flat map; hover names the right country at level 5 (Spain/Portugal, Ivory Coast/Ghana/Nigeria); no task over 50 ms while zooming in; the draw loop sleeps after zooming out; a projection switch while zoomed in works; console clean apart from other sessions' watchlist HMR errors.
-- Earlier, before the review fixes: `vite preview` loaded the worker and the r4/r5 files and drew level 4 over Italy.
-- Not verified: phone or touch pinch at 32x; a real high-refresh monitor; the live site with these fixes; GPU memory on phones.
-- Decision recorded in `REHAUL_HISTORY.md` ("Hex levels are cut into patches built in a worker", 2026-11-20).
-- Undecided, not plan items: a hover label naming the state/province and largest town (needs Natural Earth admin-1 and populated places in the generator); a hex-size control (-/+ with a "45 km hexes" readout, and Auto/120/45/17 km presets).
+## Unverified
 
-## Checks (2026-11-20, on the tree with the uncommitted diffs above)
+- The `wikidata/film-universes` endpoint has not run end to end: no deploy, no local Supabase.
+- The SPARQL was checked live with curl (45 TMDB ids, 42 dated). The TMDB enrichment path (titles, posters, dates) was not run.
+- No browser check of the MCU card. The worktree has no `.env`, and the card needs the deployed proxy.
+- Phone or touch pinch to 32x, GPU memory with level-5 patches, and frame rate on a high-refresh screen: not checked.
+
+## Checks (2026-11-20, on `claude/sleepy-solomon-a6e0fc`)
 
 | Check | Result |
 |---|---|
 | `npm run lint` | pass, 0 errors, 0 warnings |
 | `npm run typecheck` | pass |
-| `npx vitest run` | pass, 119 files / 2,889 tests |
-| `npm run build` | pass; `hexPatchWorker-*.js` emitted |
+| `npm run typecheck:functions` | pass |
+| `npm run build` | pass |
+| `npx vitest run` | pass, 119 files / 2,893 tests |
 | `graphify update .` | pass |
-| `npm run typecheck:functions` | last pass 2026-11-20 (earlier run); not re-run on this tree |
-| `npm run ship-check` | not run; last 93/100 (`1a38256c`) |
+| `npm run ship-check` | not run |
 
-## Next
+## Still open (other sessions and owner)
 
-1. Review the 5-file hex diff with `reviewer` (Opus), then commit it by path. Not yet run.
-2. Verify on a phone: pinch to 32x, GPU memory with level-5 patches, frame rate on a high-refresh screen.
-3. Browser-verify `/dev` and Discover on live once Pages deploys (other session).
-4. Verify the OMDb weekly refresh (~2026-11-25).
+- `/dev` dashboard, API/cron telemetry, Discover franchise retry, Franchises expansion, Watchlist News layout (`5296949c`, `a9e161c1`, `ec1fd147`, on `main`): awaiting a live browser check after the Pages deploy.
+- Edge functions and `20261120201500_api_usage_metrics.sql`: applied remotely (`yvtiybyuifkiwyrnjebe`).
+- Discover live browser check, after Pages deploys.
+- Real-device Travel checks (above).
+- OMDb weekly refresh, ~2026-11-25: verify the scores refresh.
+- Revolut bank access renewal (owner).
+- Uncommitted Watchlist work from another session (Franchises "Not interested" dimming: `EntryList.tsx`, `useDiscovery.ts`, `WatchlistFranchises.tsx`, `useDismissedSuggestions.ts`) was in the main checkout at the last note. Not checked from this worktree; confirm there before it is committed, and keep it out of this branch's commits.
+
+## Follow-ups, not done
+
+- Franchises page (`src/pages/WatchlistFranchises.tsx`) still groups by collection only. Universes appear on Discover, not there.
+- `wikidata/tv-spinoffs` has the same fan-out (up to 40 TMDB calls per call) and no limiter of its own.
+- More universes are a registry row each in `tmdb-proxy`.
 
 ## Blockers
 
-- The other session's uncommitted Watchlist files must not be swept into the hex commit.
+- Owner's OK to deploy `tmdb-proxy`, then the frontend merge in that order.
 - Revolut bank access renewal.
