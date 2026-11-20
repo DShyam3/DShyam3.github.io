@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { EntryState, OrderEntryView, OrderView } from '@/features/watchlist/franchise';
 import { WatchedWhenMenu } from '@/features/watchlist/components/WatchedWhenMenu';
+import { useDismissedKeys } from '@/features/watchlist/useDismissedSuggestions';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
 
 /** Prefix for a TMDB poster path, as stored on an order entry. */
@@ -96,7 +97,8 @@ function NoteEditor({ initial, onSave, onCancel }: { initial: string; onSave: (n
 /**
  * The full list of an order or a film series: position, poster, title, kind,
  * state and note. An in-library title opens its details. Admin controls appear
- * only when the matching callback is given.
+ * only when the matching callback is given. A title marked "Not interested"
+ * (see `DismissedContext`) stays in place with its poster dimmed and says so.
  */
 export function EntryList({
   view,
@@ -116,6 +118,7 @@ export function EntryList({
   edits?: EntryEdits;
 }) {
   const [editing, setEditing] = useState<number | null>(null);
+  const dismissed = useDismissedKeys();
   const todayIso = new Date().toLocaleDateString('en-CA');
 
   if (view.entries.length === 0) {
@@ -129,6 +132,8 @@ export function EntryList({
         const adding = isAdding?.(entry.key) ?? false;
         const releaseDate = entry.releaseDate?.slice(0, 10);
         const released = !releaseDate || releaseDate <= todayIso;
+        // Once in the library a title is the library's, whatever was dismissed.
+        const notInterested = entry.state === 'not-in-library' && dismissed.has(entry.key);
         return (
           <li key={entry.key} className="flex gap-3 py-3">
             <span className="w-6 shrink-0 pt-1 text-right text-sm tabular-nums text-muted-foreground">{i + 1}</span>
@@ -138,7 +143,7 @@ export function EntryList({
               aria-label={`${entry.title} — open details`}
               className="shrink-0 self-start rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <Poster src={entry.poster} mediaType={entry.mediaType} className="w-12 transition-opacity hover:opacity-85" />
+              <Poster src={entry.poster} mediaType={entry.mediaType} className={cn('w-12 transition-opacity', notInterested ? 'opacity-60' : 'hover:opacity-85')} />
             </button>
             <div className="min-w-0 flex-1 space-y-1.5">
               <button
@@ -156,7 +161,7 @@ export function EntryList({
               <p>
                 <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium', CHIP[entry.state])}>
                   {entry.state === 'watched' && <Check className="h-3 w-3" aria-hidden="true" />}
-                  {stateLabel(entry)}
+                  {notInterested ? 'Not interested' : stateLabel(entry)}
                 </span>
               </p>
               {editing === i && edits ? (
@@ -200,7 +205,7 @@ export function EntryList({
                       Seen it
                     </WatchedWhenMenu>
                   )}
-                  {onDismiss && entry.state === 'not-in-library' && (
+                  {onDismiss && entry.state === 'not-in-library' && !notInterested && (
                     <Button
                       type="button"
                       variant="ghost"
