@@ -342,6 +342,31 @@ export function tvFranchisesFromLinks(
     });
   }
 
+  // Merge any TV show in the library whose custom `franchise` tag matches an
+  // existing TV franchise card by name (e.g. tagging She-Hulk or Moon Knight
+  // as "Marvel Cinematic Universe" adds it directly into the MCU TV card).
+  const groupByName = new Map(groups.map((g) => [g.name.trim().toLowerCase(), g]));
+  for (const item of watchlist) {
+    if (item.category !== 'TV Shows' || item.tmdb_id == null) continue;
+    const tag = item.franchise?.trim().toLowerCase();
+    if (!tag) continue;
+    const target = groupByName.get(tag);
+    if (!target) continue;
+    const key = `tv:${item.tmdb_id}`;
+    if (target.entries.some((e) => e.key === key)) continue;
+    target.entries = sortByRelease([
+      ...target.entries,
+      {
+        key,
+        mediaType: 'tv',
+        tmdbId: item.tmdb_id,
+        title: stripTrailingYear(item.title),
+        releaseDate: item.release_date?.slice(0, 10) || null,
+        poster: item.image_url ?? null,
+      },
+    ]);
+  }
+
   return groups.sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -366,6 +391,7 @@ export interface UniverseLibraryFilm {
   releaseDate: string | null;
   poster: string | null;
   lastActivityAt?: string | null;
+  franchise?: string | null;
 }
 
 /**
@@ -406,6 +432,24 @@ export function filmUniversesFromMembers(
       title,
       releaseDate,
       poster: member.posterPath ? posterBase + member.posterPath : owned?.poster ?? null,
+    });
+  }
+  // Merge any library movie whose custom `franchise` tag matches a universe's name.
+  const universeByName = new Map([...universes.values()].map((u) => [u.name.trim().toLowerCase(), u]));
+  for (const [tmdbId, film] of library) {
+    const tag = film.franchise?.trim().toLowerCase();
+    if (!tag) continue;
+    const universe = universeByName.get(tag);
+    if (!universe || universe.entries.has(tmdbId)) continue;
+    universe.memberKeys.add(`movie:${tmdbId}`);
+    universe.owned.push(film);
+    universe.entries.set(tmdbId, {
+      key: `movie:${tmdbId}`,
+      mediaType: 'movie',
+      tmdbId,
+      title: stripTrailingYear(film.title),
+      releaseDate: film.releaseDate?.slice(0, 10) || null,
+      poster: film.poster,
     });
   }
   return [...universes.entries()]

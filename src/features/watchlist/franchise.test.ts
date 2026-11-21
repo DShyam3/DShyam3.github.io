@@ -314,6 +314,30 @@ describe('tvFranchisesFromLinks', () => {
     expect(groups[0].name).toBe('Marvel Cinematic Universe');
     expect(groups[0].entries.map((e) => e.tmdbId)).toEqual([61889, 85271, 138501, 202555]);
   });
+
+  it('merges a library TV show tagged with a matching custom franchise name into that TV franchise card', () => {
+    const watchlist = [
+      { id: '1', category: 'TV Shows', tmdb_id: 85271, title: 'WandaVision', release_date: '2021-01-15' },
+      { id: '2', category: 'TV Shows', tmdb_id: 92783, title: 'She-Hulk: Attorney at Law', release_date: '2022-08-18', franchise: 'Marvel Cinematic Universe' },
+    ] as unknown as WatchlistItem[];
+    const groups = tvFranchisesFromLinks(
+      [
+        {
+          seedTmdbId: 85271,
+          seedTitle: 'WandaVision',
+          franchiseId: 'Q642878',
+          franchiseName: 'Marvel Cinematic Universe',
+          relatedMediaType: 'tv',
+          relatedTmdbId: 138501,
+          relatedTitle: 'Agatha All Along',
+          releaseDate: '2024-09-18',
+        },
+      ],
+      watchlist,
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].entries.map((e) => e.tmdbId)).toEqual([85271, 92783, 138501]);
+  });
 });
 
 describe('hasWatchGap', () => {

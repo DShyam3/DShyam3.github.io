@@ -389,6 +389,7 @@ export function useDiscovery(type: LibraryType) {
         releaseDate: item.release_date ?? null,
         poster: item.image_url ?? null,
         lastActivityAt: item.last_activity_at ?? null,
+        franchise: item.franchise ?? null,
       });
     }
     return films;
@@ -417,7 +418,7 @@ export function useDiscovery(type: LibraryType) {
     [visibleLibrary],
   );
   const tvSpinoffs = useQuery({
-    queryKey: ['watchlist', 'tv-spinoffs', tvSeedIds],
+    queryKey: ['watchlist', 'tv-spinoffs', 'v2', tvSeedIds],
     enabled: !loading && type !== 'movie' && tvSeedIds.length > 0,
     staleTime: 24 * 60 * 60 * 1000,
     retry: false,

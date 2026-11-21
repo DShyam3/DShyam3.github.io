@@ -166,6 +166,7 @@ export default function WatchlistFranchises() {
         releaseDate: item.release_date?.slice(0, 10) || null,
         poster: item.image_url ?? null,
         lastActivityAt: item.last_activity_at ?? null,
+        franchise: item.franchise ?? null,
       });
     }
     return map;
@@ -221,7 +222,7 @@ export default function WatchlistFranchises() {
     [visibleWatchlist],
   );
   const tvSpinoffsQuery = useQuery({
-    queryKey: ['watchlist', 'tv-spinoffs', tvSeedIds],
+    queryKey: ['watchlist', 'tv-spinoffs', 'v2', tvSeedIds],
     queryFn: () => getTvSpinoffs(tvSeedIds, { throwOnError: true }),
     enabled: !libraryLoading && tvSeedIds.length > 0,
     staleTime: 24 * 60 * 60 * 1000,

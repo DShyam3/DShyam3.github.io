@@ -180,7 +180,7 @@ export function useTMDB() {
         if (clean.length === 0) return [];
         try {
             return await queryClient.fetchQuery({
-                queryKey: ['watchlist', 'tmdb-spinoffs', clean],
+                queryKey: ['watchlist', 'tmdb-spinoffs', 'v2', clean],
                 staleTime: 24 * 60 * 60 * 1000,
                 retry: false,
                 queryFn: async () => {
