@@ -36,11 +36,18 @@ UPDATE public.movies SET imdb_rating = 7.5, scores_checked_at = now() WHERE id =
 UPDATE public.tv_shows SET status = 'Ended', platform = 'Elsewhere', imdb_rating = 8.0 WHERE id = 990000001;
 INSERT INTO public.tv_show_seasons (tv_show_id, season_number, release_date) VALUES (990000001, 1, '2020-01-01')
   ON CONFLICT (tv_show_id, season_number) DO UPDATE SET release_date = EXCLUDED.release_date;
-INSERT INTO public.tv_show_episodes (season_id, episode_number, title, runtime, release_date, watched) VALUES
- (990000001, 1, 'Renamed', 50, '2020-01-01', false),
- (990000001, 3, 'Newly aired', 50, '2020-01-15', false)
+-- The episode upsert's shape: PostgREST sets exactly the keys sent, and the
+-- sync sends no `watched`.
+INSERT INTO public.tv_show_episodes (season_id, episode_number, title, runtime, release_date) VALUES
+ (990000001, 1, 'Renamed', 50, '2020-01-01'),
+ (990000001, 3, 'Newly aired', 50, '2020-01-15')
   ON CONFLICT (season_id, episode_number) DO UPDATE
-  SET title = EXCLUDED.title, runtime = EXCLUDED.runtime, release_date = EXCLUDED.release_date, watched = EXCLUDED.watched;
+  SET season_id = EXCLUDED.season_id, episode_number = EXCLUDED.episode_number,
+      title = EXCLUDED.title, runtime = EXCLUDED.runtime, release_date = EXCLUDED.release_date;
+SELECT pg_temp.assert_true(
+  (SELECT watched IS FALSE FROM public.tv_show_episodes WHERE season_id = 990000001 AND episode_number = 3),
+  'a newly aired episode from the sync starts unwatched'
+);
 DELETE FROM public.tv_show_episodes WHERE season_id = 990000001 AND episode_number = 3;
 SELECT pg_temp.assert_true(pg_temp.movie_stamp() IS NULL, 'sync writes leave a film untouched');
 SELECT pg_temp.assert_true(pg_temp.show_stamp() IS NULL, 'sync writes leave a show untouched');
@@ -93,6 +100,22 @@ SELECT pg_temp.assert_true(
   (SELECT bool_and(watched) FROM public.tv_show_episodes WHERE season_id = 990000001),
   'the season toggle still cascades to its episodes'
 );
+RESET ROLE;
+
+-- A sync run that read the season before the owner's watch above must not
+-- undo it when TMDB has renamed an episode, nor stamp the show.
+UPDATE public.tv_shows SET last_activity_at = NULL WHERE id = 990000001;
+SET LOCAL ROLE service_role;
+INSERT INTO public.tv_show_episodes (season_id, episode_number, title, runtime, release_date) VALUES
+ (990000001, 1, 'Renamed again', 55, '2020-01-01')
+  ON CONFLICT (season_id, episode_number) DO UPDATE
+  SET season_id = EXCLUDED.season_id, episode_number = EXCLUDED.episode_number,
+      title = EXCLUDED.title, runtime = EXCLUDED.runtime, release_date = EXCLUDED.release_date;
+SELECT pg_temp.assert_true(
+  (SELECT watched IS TRUE AND watched_at IS NOT NULL FROM public.tv_show_episodes WHERE season_id = 990000001 AND episode_number = 1),
+  'a sync rewrite keeps the owner''s watch and its date'
+);
+SELECT pg_temp.assert_true(pg_temp.show_stamp() IS NULL, 'a sync rewrite of a watched episode does not stamp its show');
 RESET ROLE;
 
 SELECT pg_temp.assert_true(NOT has_function_privilege('anon', 'public.touch_last_activity_at()', 'EXECUTE'), 'anon cannot call touch_last_activity_at');

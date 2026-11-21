@@ -1061,13 +1061,19 @@ serve(async (req) => {
                           ) {
                             return []
                           }
+                          // No `watched`: the upsert's SET list is exactly the
+                          // keys sent, so leaving it out keeps the owner's
+                          // value. Sending the copy read at the start of the
+                          // run reverted any episode marked watched since,
+                          // cleared its watched_at and fired the watch
+                          // triggers as if the owner had unwatched it. A new
+                          // episode takes the column default, unwatched.
                           return [{
                             season_id: seasonId,
                             episode_number: v.episode_number,
                             title,
                             runtime,
                             release_date: releaseDate,
-                            watched: existing?.watched ?? false,
                           }]
                         })
                         if (epsToUpsert.length > 0) {

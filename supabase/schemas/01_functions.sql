@@ -137,12 +137,10 @@ $$;
 ALTER FUNCTION "public"."update_season_watched_status"() OWNER TO "postgres";
 
 -- Stamps watched_at from the `watched` boolean on tv_show_episodes and movies
--- (the function is generic over NEW.watched / NEW.watched_at), so the four
--- write paths that can flip it (WatchlistContext.tsx's single-episode toggle,
--- its bulk season toggle, its browser sync upsert, and watchlist-cron-sync's
--- Deno upsert -- see README.md:101 for why the last two duplicate the same
--- logic across two runtimes) get one shared, correct implementation instead
--- of four.
+-- (the function is generic over NEW.watched / NEW.watched_at), so every path
+-- that can flip it -- the owner's toggles in WatchlistContext.tsx,
+-- set_watched() and import_watch_history() -- shares one implementation.
+-- watchlist-cron-sync never names `watched` in its writes.
 --
 -- BEFORE, not AFTER: the function edits NEW and returns it, which only takes
 -- effect from a BEFORE trigger.
@@ -152,11 +150,11 @@ ALTER FUNCTION "public"."update_season_watched_status"() OWNER TO "postgres";
 -- (a real historical import) must not be overwritten.
 --
 -- UPDATE sets or clears watched_at only when `watched` itself is DISTINCT
--- FROM its old value. This is the load-bearing branch: watchlist-cron-sync's
--- nightly upsert runs over every episode whether or not anything changed. If
--- an unrelated column update (release_date, runtime, title) or a same-value
--- rewrite of `watched` touched watched_at, the nightly cron would reset the
--- entire watch history to now() on its first run.
+-- FROM its old value. This is the load-bearing branch: an unrelated column
+-- update (release_date, runtime, title) or a same-value rewrite of `watched`
+-- must leave the date alone. An earlier cron that rewrote `watched` on every
+-- episode would otherwise have reset the entire watch history to now() on its
+-- first run.
 --
 -- A row whose release_date is in the future is never stamped (watched_at stays
 -- NULL, "watched, date unknown"): it cannot have been watched today.
@@ -306,8 +304,9 @@ ALTER FUNCTION "public"."touch_last_activity_at"() OWNER TO "postgres";
 
 -- Series watching happens on episodes, so a watched flip there bumps the
 -- parent show. UPDATE only: the cron INSERTs newly aired episodes, which is
--- not owner activity, and its upsert rewrites `watched` with its existing
--- value, which the IS DISTINCT check keeps a no-op.
+-- not owner activity, and its upsert never names `watched` or `watched_at`,
+-- so this trigger does not fire for it. The IS DISTINCT check covers any
+-- other same-value write.
 --
 -- The `last_activity_at IS DISTINCT FROM now()` guard matters for a season
 -- toggle: update_episodes_watched_status() cascades it to every episode at
