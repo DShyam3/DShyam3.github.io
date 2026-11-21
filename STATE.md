@@ -24,10 +24,12 @@ Updated 2026-11-21. Branch `claude/beautiful-hawking-f6254a`, code head `b0e9395
 - Watchlist (`354995c2`): Favourites tab & search, Franchises search clear pills and padding, franchise undated-filtering, Coming soon priority & `watchlist_collection_upcoming` cache (`20261121130500_watchlist_collection_upcoming.sql` applied); not yet browser-verified on live.
 - Watchlist: Franchises dims titles marked Not interested (`9452aeb3`). Signed-in owner path not browser-verified; open: a dismissed title can still be named "Next up" on a collapsed card, and the poster strip does not dim it.
 - MCU card (`30e0a877`), Travel hex size control (`3220ab6b`), `/dev` dashboard & telemetry (`5296949c`, `a9e161c1`, `ec1fd147`).
+- Discover paced and steadied (`3bde0ecf`): one pacer for Discover's own TMDB calls (40/min, collection walk 24/min, per network attempt), walk-stall and failed-batch fixes, 404 collections make no card, Likely seen order fixed once suggestions settle, YOU MIGHT LIKE stops after two empty rounds, Franchises search across every collection (debounced). Its loading line replaces `989989d9`'s. Checked in a hidden dev preview only (data loads; ~40 calls/min in `api_usage_events`); timing, a cached revisit and the signed-in owner path are not browser-verified.
 - Discover loading line reads "most recent first" (`989989d9`, on origin/main). Travel hovered-hex outline and two-minute globe lock (`1046d14b`) and GeoNames town names with "near" towns (`b0e93952`) are also on origin/main.
 
 ## Still open
 
+- YOU MIGHT LIKE stays empty for the owner: all 1,120 suggestions from the first 28 seeds are already in the library, favourited or among 1,655 dismissals. Needs a decision on digging deeper per seed.
 - Discover order on the signed-in owner's data (`REHAUL_PLAN.md` item 11): not run. The visitor scan above did not reach the cards.
 - Cron sync, `REHAUL_PLAN.md` item 10 (b)–(d): episode-level delete drops watched episodes and their ratings; rated-then-unwatched seasons deleted with ratings; Season 0 specials deleted unchecked. Owner to decide.
 - Travel hexes not verified on phone (pinch to 32x, GPU memory, high-refresh frame rate). Travel hovered-hex outline, two-minute globe lock, GeoNames town names, "near" fallback, and the sea and land colours not yet checked on the live site. Regenerating hex data needs GeoNames' cities1000.zip unzipped into `.cache/geonames/`.
