@@ -394,12 +394,16 @@ under 2026-11-18.
    (`import_watch_history`) gives every imported title one identical `now()`, so
    imported collections rise together, tied and sorted by name; decide whether to
    stamp each title with its own time.
-10. **Cron revert of a watch made during a run (pre-existing, unverified against a
-    real run).** `watchlist-cron-sync` episode upsert (`supabase/functions/watchlist-cron-sync/index.ts`,
-    about line 1070) sends `watched` from a snapshot read at the start of the run,
-    so an owner's watch made mid-run can be reverted, and the revert stamps
-    `last_activity_at` and clears `watched_at`. Fix: stop sending `watched` for
-    existing episodes.
+10. **Cron sync, what is still open after the episode-upsert fix (`261065c4`, on this
+    branch, not deployed, unverified against a real run).** (a) Deploy
+    `watchlist-cron-sync` with `supabase functions deploy watchlist-cron-sync`. Needs the
+    owner's explicit OK. Until it is deployed the revert of a mid-run watch remains live.
+    (b) Pre-existing risk found in review, not fixed: the season-deletion guard in the
+    same function. `watchedEpisodes` is built from the start-of-run snapshot
+    (`index.ts` ~745-749) and read at ~1105 and ~1122. An episode watched mid-run, in a
+    season TMDB dropped or emptied, does not protect that season, and the delete at
+    ~1129 cascades to the episode. Fix: re-read `watched` for those season ids just
+    before the `tv_show_seasons` delete.
 11. **Browser check of Discover order** on the signed-in owner's data: not run.
 
 ### Deferred by choice
