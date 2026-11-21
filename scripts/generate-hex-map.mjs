@@ -9,10 +9,13 @@
  * children where they all belong to that country). The site expands them
  * with the same h3-js it draws with, so the cells match exactly.
  *
- * Also writes public/data/hex-regions-v1-r{3,4,5}.json: for each land cell, the
- * state or province of its own country that covers most of it, and the
- * largest town inside it, from Natural Earth's 1:10m admin-1 areas and
- * populated places. The Travel map's city view names these on hover.
+ * Also writes public/data/hex-regions-v2-r{3,4,5}.json: for each land cell, the
+ * state or province of its own country that covers most of it (Natural
+ * Earth's 1:10m admin-1 areas), and the largest town inside it (GeoNames'
+ * places of 1,000 people or more, CC BY 4.0, credited on the map). The Travel
+ * map's city view names these on hover. GeoNames is not fetched for you:
+ * download https://download.geonames.org/export/dump/cities1000.zip and
+ * unzip it into .cache/geonames/.
  *
  * A cell belongs to the country that covers most of it, judged by the
  * resolution-6 cells inside it (343 to a level-3 cell, 49 to a level-4 one,
@@ -176,6 +179,27 @@ function sampleCells(rings, code) {
     return [...cells];
 }
 
+/** Feature codes for places that are gone or were never towns: historical, abandoned, destroyed. */
+const NOT_TOWNS = new Set(['PPLH', 'PPLQ', 'PPLW', 'PPLCH']);
+
+/** GeoNames' cities1000: every place of 1,000 people or more, ~170,000 of them. */
+function loadGeoNames() {
+    const path = resolve(ROOT, '.cache/geonames/cities1000.txt');
+    if (!existsSync(path)) {
+        throw new Error('Missing .cache/geonames/cities1000.txt: download and unzip https://download.geonames.org/export/dump/cities1000.zip there.');
+    }
+    const places = [];
+    for (const line of readFileSync(path, 'utf8').split('\n')) {
+        const f = line.split('\t');
+        if (f.length < 15 || NOT_TOWNS.has(f[7])) continue;
+        const lat = Number(f[4]);
+        const lon = Number(f[5]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        places.push({ name: f[1], lat, lon, pop: Number(f[14]) || 0, cc: f[8] });
+    }
+    return places;
+}
+
 /** A Natural Earth layer, fetched once into .cache/. */
 async function naturalEarth(name) {
     const path = resolve(ROOT, `.cache/${name}.geojson`);
@@ -197,16 +221,16 @@ async function naturalEarth(name) {
 async function writeRegions(assignedByRes) {
     const t0 = Date.now();
     const admin1 = await naturalEarth('ne_10m_admin_1_states_provinces');
-    const places = await naturalEarth('ne_10m_populated_places_simple');
+    const places = loadGeoNames();
     const regions = [];
     const tallies = new Map(LEVELS.map((res) => [res, new Map()]));
     // The sample cell each town's point falls in, so its own state can be read
     // off the same sampling: Natural Earth's `adm1name` spells states
     // differently from the admin-1 layer, and some of its names are garbled.
     const townAt = new Map();
-    for (const feature of places.features) {
-        const p = feature.properties ?? {};
-        townAt.set(h3.latLngToCell(p.latitude, p.longitude, SAMPLE_RES), null);
+    for (const place of places) {
+        place.sample = h3.latLngToCell(place.lat, place.lon, SAMPLE_RES);
+        townAt.set(place.sample, null);
     }
     for (const feature of admin1.features) {
         const p = feature.properties ?? {};
@@ -253,32 +277,35 @@ async function writeRegions(assignedByRes) {
         // The largest town in each land cell, named with its own state -- the
         // hex's may be the one next door -- and only a town of the hex's own
         // country: a border hex never names a town across the border.
-        const towns = {};
-        const population = new Map();
-        for (const feature of places.features) {
-            const p = feature.properties ?? {};
-            const cell = h3.latLngToCell(p.latitude, p.longitude, res);
+        const best = new Map();
+        for (const place of places) {
+            const cell = h3.latLngToCell(place.lat, place.lon, res);
             const country = assigned.get(cell);
             if (!country) continue;
-            const region = townAt.get(h3.latLngToCell(p.latitude, p.longitude, SAMPLE_RES));
-            const [state, iso] = region == null ? ['', String(p.iso_a2 ?? '')] : regions[region];
+            const region = townAt.get(place.sample);
+            const iso = region == null ? place.cc : regions[region][1];
             if (iso !== country) continue;
-            const pop = Number(p.pop_max) || 0;
-            if (pop > (population.get(cell) ?? -1)) {
-                population.set(cell, pop);
-                towns[cell] = [String(p.name), state];
-            }
+            const kept = best.get(cell);
+            if (!kept || place.pop > kept.place.pop) best.set(cell, { place, region });
         }
 
         // Ordinal, so a rerun on another machine writes the same file.
         const used = [...byRegion.keys()].sort((a, b) => (regions[a][0] < regions[b][0] ? -1 : regions[a][0] > regions[b][0] ? 1 : a - b));
+        const position = new Map(used.map((region, i) => [region, i]));
+        // A town's state as an index into `regions`, -1 where its point fell
+        // outside every state: the names would otherwise repeat ~100,000 times.
+        const towns = {};
+        for (const cell of [...best.keys()].sort()) {
+            const { place, region } = best.get(cell);
+            towns[cell] = [place.name, region == null ? -1 : (position.get(region) ?? -1)];
+        }
         const out = {
             res,
             regions: used.map((i) => regions[i]),
             cells: used.map((i) => h3.compactCells(byRegion.get(i)).sort()),
             towns,
         };
-        const path = resolve(ROOT, `public/data/hex-regions-v1-r${res}.json`);
+        const path = resolve(ROOT, `public/data/hex-regions-v2-r${res}.json`);
         writeFileSync(path, JSON.stringify(out));
         const named = [...byRegion.values()].reduce((n, cells) => n + cells.length, 0);
         console.log(

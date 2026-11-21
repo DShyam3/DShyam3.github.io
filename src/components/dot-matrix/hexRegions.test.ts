@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { buildRegionLevel, hexPlaceLabel, regionOf } from './hexRegions';
 
 const level = (res: number) =>
-    buildRegionLevel(JSON.parse(readFileSync(resolve(__dirname, `../../../public/data/hex-regions-v1-r${res}.json`), 'utf8')));
+    buildRegionLevel(JSON.parse(readFileSync(resolve(__dirname, `../../../public/data/hex-regions-v2-r${res}.json`), 'utf8')));
 
 describe('hex regions', () => {
     const r3 = level(3);
@@ -23,16 +23,26 @@ describe('hex regions', () => {
         expect(label?.split(', ')[0]).not.toBe('Karnataka');
     });
 
-    it('falls back to the state and country with no town in the hex', () => {
-        // Central Australian desert: a state, no town.
-        expect(hexPlaceLabel(latLngToCell(-25.5, 131.5, 5), 'Australia', r5)).toBe('Northern Territory, Australia');
+    it('falls back to the nearest town, then the state and country', () => {
+        // A hex with no town of its own but one a ring or two away.
+        const empty = [...r5.compact.keys()].length > 0
+            ? latLngToCell(47.0, -109.2, 5) // central Montana, near Lewistown
+            : '';
+        const near = hexPlaceLabel(empty, 'United States', r5);
+        expect(near).toMatch(/^(near )?.+, Montana$/);
+        // The Gibson Desert: no town for 35 km in any direction.
+        expect(hexPlaceLabel(latLngToCell(-24.0, 126.0, 5), 'Australia', r5)).toBe('Western Australia, Australia');
     });
 
     it('never names a state the same as its country, nor a town across a border', () => {
         expect(hexPlaceLabel(latLngToCell(-80, 0, 5), 'Antarctica', r5)).toBeNull();
         for (const res of [3, 4, 5]) {
-            const json = JSON.parse(readFileSync(resolve(__dirname, `../../../public/data/hex-regions-v1-r${res}.json`), 'utf8')) as { towns: Record<string, [string, string]> };
-            expect(Object.values(json.towns).filter(([, state]) => state.includes('?'))).toEqual([]);
+            const json = JSON.parse(readFileSync(resolve(__dirname, `../../../public/data/hex-regions-v2-r${res}.json`), 'utf8')) as {
+                regions: [string, string][];
+                towns: Record<string, [string, number]>;
+            };
+            // Every town's state is a real row of `regions`, or -1.
+            expect(Object.values(json.towns).filter(([, index]) => index < -1 || index >= json.regions.length)).toEqual([]);
         }
         // Edirne (Turkey) sits beside Bulgaria: no Bulgarian hex is named after it.
         const bg = level(3);

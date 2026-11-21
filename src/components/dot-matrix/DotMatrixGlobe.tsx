@@ -1713,6 +1713,11 @@ export function DotMatrixGlobe({
             hoveredCountryRef.current = code;
             stylesDirtyRef.current = true;
             requestDraw();
+        } else if (dotKey !== drag.hoveredDotKey) {
+            // Same country, another hex: no restyle, but the outline has to
+            // move with the pointer. Without this frame it stayed on the hex
+            // the pointer first entered the country by.
+            requestDraw();
         }
         drag.hoveredDotKey = dotKey;
         const canvas = canvasRef.current;
@@ -2019,6 +2024,15 @@ export function DotMatrixGlobe({
                             <>
                                 <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: legendPalette.city, boxShadow: `0 0 0 2px ${legendPalette.visitedTint}` }} />City</span>
                                 <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: legendPalette.visitedTint }} />Country</span>
+                                {/* GeoNames' licence (CC BY 4.0) asks for this wherever its town names show. */}
+                                <a
+                                    href="https://www.geonames.org/"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="pointer-events-auto underline-offset-2 hover:underline"
+                                >
+                                    Places: GeoNames
+                                </a>
                             </>
                         ) : (
                             <>

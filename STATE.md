@@ -31,7 +31,7 @@ Updated 2026-11-21. Branch `claude/beautiful-hawking-f6254a`, code head `989989d
 - Cron sync, `REHAUL_PLAN.md` item 10 (b)–(d): episode-level delete drops watched episodes and their ratings; rated-then-unwatched seasons deleted with ratings; Season 0 specials deleted unchecked. Owner to decide.
 - Design questions (`REHAUL_PLAN.md` item 9): hiding/Stopped-watching stamping `last_activity_at`; history import stamping all imported titles with one `now()`.
 - `989989d9` to push to origin/main: not pushed.
-- Travel hexes not verified on phone (pinch to 32x, GPU memory, high-refresh frame rate). Travel hovered-hex outline and two-minute globe lock not yet checked on the live site.
+- Travel hexes not verified on phone (pinch to 32x, GPU memory, high-refresh frame rate). Travel hovered-hex outline, two-minute globe lock, GeoNames town names and "near" fallback not yet checked on the live site. Regenerating hex data needs GeoNames' cities1000.zip unzipped into `.cache/geonames/`.
 - Local DB drifted: `supabase migration up --local` fails at `20261117193741`; `supabase db reset` restores it.
 - Verify OMDb weekly refresh (~2026-11-25).
 

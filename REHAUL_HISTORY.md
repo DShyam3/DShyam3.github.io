@@ -3180,11 +3180,13 @@ Closure: `src/features/dev/api-status.ts`, shown in `src/pages/Dev.tsx`. Uncommi
 
 ### City-view hex names are baked per hex at generation time, not looked up at runtime — 2026-11-21
 
-Hovering a hex in the city view names its largest town and that town's state, or else the state and country. The names are computed once by `scripts/generate-hex-map.mjs` from Natural Earth 1:10m admin-1 areas and populated places, and written per hex level to `public/data/hex-regions-v1-r{3,4,5}.json`. The browser only reads them.
+Hovering a hex in the city view names its largest town and that town's state, or else the state and country. The names are computed once by `scripts/generate-hex-map.mjs` from Natural Earth 1:10m admin-1 areas and, for towns, GeoNames' places of 1,000 people or more, and written per hex level to `public/data/hex-regions-v2-r{3,4,5}.json`. The browser only reads them, apart from walking a ring or two of neighbours for a "near" town where a hex has none of its own.
 
 The reasons are in the code. A hex takes the state of its own country that covers most of it, so a cell on a border never names a region across it. Each town takes the state under its point, sampled on the same grid as the admin-1 layer, because Natural Earth's own state-name field spells some states differently and garbles others. Only a town of the hex's own country is used, so a border hex never names a town across the border. Names are a fixed table rather than model output or a runtime geocoder, so the same rows always give the same label, and no outside service is asked at hover time. The files are fetched only in the city view, at the size showing, because level 5 is about 3.3 MB.
 
-Closure: `src/components/dot-matrix/hexRegions.ts`, `src/components/dot-matrix/hexRegions.test.ts`, `scripts/generate-hex-map.mjs`, `src/components/dot-matrix/DotMatrixGlobe.tsx`. Shipped in `3220ab6b`.
+Towns first came from Natural Earth's populated places, about 7,300 worldwide: at 17 km hexes only about 1 hex in 85 had a town, so whole states read as their state name. GeoNames' cities1000 (about 172,000 places, CC BY 4.0, so the map credits it) names about ten times as many hexes; the level-5 file is about 5.6 MB raw, 1.1 MB gzipped, still fetched only in the city view. Each town's state is stored as an index into the file's region list, since the names would otherwise repeat about 100,000 times.
+
+Closure: `src/components/dot-matrix/hexRegions.ts`, `src/components/dot-matrix/hexRegions.test.ts`, `scripts/generate-hex-map.mjs`, `src/components/dot-matrix/DotMatrixGlobe.tsx`. Shipped in `3220ab6b`; GeoNames towns and the "near" fallback in the commit after `39dd268a`.
 
 ### Discover orders collections by an owner-activity stamp, not row id — 2026-11-20
 
