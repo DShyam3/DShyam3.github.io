@@ -381,26 +381,15 @@ under 2026-11-18.
    watched more than once.
 7. **Favourites as a flag** and the other open items under "Watchlist News and
    Library" above still stand.
-8. **Discover order, migration and merge (branch `claude/beautiful-hawking-f6254a`,
-   commit `eddd5532`; not on main, not pushed).** Apply
-   `20261120230000_watchlist_last_activity` to hosted (needs the owner's OK), then
-   merge and push. The frontend falls back without the column, so either order is
-   safe, but until the migration is live every collection is untouched and the
-   order is row id. Decision in `REHAUL_HISTORY.md` ("Discover orders collections
-   by an owner-activity stamp", 2026-11-20).
 9. **Discover stamp, open design questions.** (a) Hiding a title or marking it
    Stopped watching stamps it, which raises its collection in Discover; decide
    whether only active and paused titles stamp. (b) A history import
    (`import_watch_history`) gives every imported title one identical `now()`, so
    imported collections rise together, tied and sorted by name; decide whether to
    stamp each title with its own time.
-10. **Cron sync, what is still open (`261065c4` episode upsert and `f99bbc8a` season-delete
-    guard, both on this branch; both in code, NOT deployed, unverified against a real run).**
-    (a) Deploy `watchlist-cron-sync` with `supabase functions deploy watchlist-cron-sync`.
-    Needs the owner's explicit OK. Until it is deployed the mid-run revert and the
-    season-delete risk both stay live. The season guard was checked on the LOCAL stack
-    only, with the same query chain against fixture rows; no automated test covers the
-    function. (b) Episode-level delete (`index.ts` ~1090-1094) removes episodes TMDB no
+10. **Cron sync, what is still open.** The episode upsert and season-delete fixes
+    (`261065c4`, `f99bbc8a`) are live in `watchlist-cron-sync` v27 (2026-11-21); no
+    automated test covers the function. Items (b) to (d) are not fixed. (b) Episode-level delete (`index.ts` ~1090-1094) removes episodes TMDB no
     longer lists, or whose air date TMDB blanked (`hasAirDate`), with no watched guard.
     A watched episode is lost, and its rating (`watchlist_ratings.episode_id` ON DELETE
     CASCADE) with it. One-statement fix: `.delete().in('id', toDeleteIds).or('watched.is.null,watched.eq.false')`.

@@ -3195,3 +3195,5 @@ The order now uses `last_activity_at` on `movies` and `tv_shows`, set by databas
 Collections with any touched title rank first, latest first, films and series together. Existing rows stay NULL with no backfill. Every stamp postdates every untouched add, so untouched collections rank after touched ones by row id, films and series taking turns, which is the old order. Until the migration is applied, every collection is untouched and the order is unchanged.
 
 Known and open: hiding a title or marking it Stopped watching also stamps it, and a history import stamps every imported title with one `now()`, so imported collections rise together. Both are open in `REHAUL_PLAN.md`.
+
+Status: the migration is applied to hosted (`yvtiybyuifkiwyrnjebe`, 2026-11-21) and the code is on main as `36324d8d`, deployed by Pages run `44899327331`. Read-only check: both columns, the three triggers, and 0 of 1,227 films and 0 of 423 series stamped, as designed. Not verified: the owner's own order on live. The visitor check saw the copy and the library read, but no cards rendered.
