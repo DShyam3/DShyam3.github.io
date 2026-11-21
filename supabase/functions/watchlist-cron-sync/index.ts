@@ -860,7 +860,11 @@ serve(async (req) => {
               }
               if (data.runtime) movieUpdates.runtime = data.runtime
               const collection = pickCollection(data)
-              if (collection) Object.assign(movieUpdates, collection)
+              if (collection) {
+                Object.assign(movieUpdates, collection)
+                item.collection_id = collection.collection_id
+                item.collection_name = collection.collection_name
+              }
               // Written only when the block came back, so a response without
               // it never wipes what is stored.
               if (data.credits) {
@@ -1280,6 +1284,163 @@ serve(async (req) => {
       console.log(
         `[Sync ${runLabel}] OMDb: asked ${omdbStats.asked}, updated ${omdbStats.updated}, not found ${omdbStats.notFound}, stopped by limit ${omdbStats.stoppedByLimit ? 'yes' : 'no'}.`,
       )
+    }
+
+    // Collection upcoming pass: check each active film collection once a night
+    // (sharded by collection_id % shard.count) or on a single-movie resync,
+    // caching any dated future instalments in watchlist_collection_upcoming so
+    // Discover's Coming soon catches newly announced sequels across every
+    // franchise without hammering TMDB from the browser. Best-effort only.
+    if (shard || target) {
+      const todayIso = new Date().toISOString().slice(0, 10)
+      const allActiveCollectionIds = new Set<number>()
+      const collectionsToCheck = new Map<number, string>()
+      for (const movie of movies) {
+        // Never cache collections for hidden or stopped movies (even on a
+        // single-movie resync), since watchlist_collection_upcoming is public-read.
+        if (movie.library_state === 'hidden' || movie.library_state === 'stopped' || !movie.collection_id) continue
+        allActiveCollectionIds.add(movie.collection_id)
+        if (target && (target.category !== 'Movies' || Number(movie.id) !== target.id)) continue
+        if (shard && movie.collection_id % shard.count !== shard.index) continue
+        if (!collectionsToCheck.has(movie.collection_id)) {
+          collectionsToCheck.set(movie.collection_id, movie.collection_name || `Collection ${movie.collection_id}`)
+        }
+      }
+      // Pre-read existing cached collection IDs once so we only issue DELETE
+      // calls for collections that actually have cached rows, and prune any
+      // orphaned collections whose movies were removed/hidden/stopped.
+      const existingCachedCollectionIds = new Set<number>()
+      const { data: existingCachedRows, error: existingCachedError } = await supabaseAdmin
+        .from('watchlist_collection_upcoming')
+        .select('collection_id')
+      if (existingCachedError) {
+        console.warn(`[Sync ${runLabel}] Collection upcoming pre-read failed:`, existingCachedError.message)
+      } else {
+        for (const row of existingCachedRows ?? []) {
+          if (typeof row.collection_id === 'number') existingCachedCollectionIds.add(row.collection_id)
+        }
+      }
+      if (!target && shard?.index === 0) {
+        const { error: pruneError } = await supabaseAdmin
+          .from('watchlist_collection_upcoming')
+          .delete()
+          .lte('release_date', todayIso)
+        if (pruneError) {
+          console.warn(`[Sync ${runLabel}] Collection upcoming prune failed:`, pruneError.message)
+        }
+        const orphanedIds = [...existingCachedCollectionIds].filter((id) => !allActiveCollectionIds.has(id))
+        if (orphanedIds.length > 0) {
+          const { error: orphanError } = await supabaseAdmin
+            .from('watchlist_collection_upcoming')
+            .delete()
+            .in('collection_id', orphanedIds)
+          if (orphanError) {
+            console.warn(`[Sync ${runLabel}] Collection upcoming orphan prune failed:`, orphanError.message)
+          }
+        }
+      }
+      const collectionQueue = [...collectionsToCheck.entries()]
+      let collectionCursor = 0
+      let collectionsChecked = 0
+      let upcomingUpserted = 0
+      const COLLECTION_CONCURRENCY = 6
+      await Promise.all(
+        Array.from({ length: Math.min(COLLECTION_CONCURRENCY, collectionQueue.length) }, async () => {
+          while (collectionCursor < collectionQueue.length) {
+            if (Date.now() - startTime >= MAX_EXECUTION_TIME_MS) break
+            const [collectionId, fallbackName] = collectionQueue[collectionCursor++]
+            try {
+              const col = await fetchTMDB<{
+                id?: number
+                name?: string
+                parts?: { id?: number; title?: string; release_date?: string | null; poster_path?: string | null }[]
+              }>(`collection/${collectionId}`)
+              if (!col) {
+                if (existingCachedCollectionIds.has(collectionId)) {
+                  await supabaseAdmin.from('watchlist_collection_upcoming').delete().eq('collection_id', collectionId)
+                }
+                continue
+              }
+              collectionsChecked++
+              const colName = col.name?.trim() || fallbackName
+              const syncedAt = new Date().toISOString()
+              const futureRows: {
+                collection_id: number
+                tmdb_id: number
+                collection_name: string
+                title: string
+                release_date: string
+                poster_path: string | null
+                synced_at: string
+              }[] = []
+              const seenIds = new Set<number>()
+              for (const part of col.parts ?? []) {
+                const partId = part.id
+                const title = part.title?.trim()
+                const releaseDate = part.release_date?.trim()
+                if (
+                  typeof partId !== 'number' ||
+                  !Number.isInteger(partId) ||
+                  partId <= 0 ||
+                  seenIds.has(partId) ||
+                  !title ||
+                  !releaseDate ||
+                  !/^\d{4}-\d{2}-\d{2}$/.test(releaseDate) ||
+                  releaseDate <= todayIso
+                ) {
+                  continue
+                }
+                seenIds.add(partId)
+                futureRows.push({
+                  collection_id: collectionId,
+                  tmdb_id: partId,
+                  collection_name: colName,
+                  title,
+                  release_date: releaseDate,
+                  poster_path: part.poster_path || null,
+                  synced_at: syncedAt,
+                })
+              }
+              if (futureRows.length > 0) {
+                const { error: upsertError } = await supabaseAdmin
+                  .from('watchlist_collection_upcoming')
+                  .upsert(futureRows, { onConflict: 'collection_id,tmdb_id' })
+                if (upsertError) {
+                  console.warn(`[Sync ${runLabel}] Collection upcoming upsert failed for ${collectionId}:`, upsertError.message)
+                  continue
+                }
+                upcomingUpserted += futureRows.length
+                if (existingCachedCollectionIds.has(collectionId)) {
+                  const keepList = `(${futureRows.map((r) => r.tmdb_id).join(',')})`
+                  const { error: cleanError } = await supabaseAdmin
+                    .from('watchlist_collection_upcoming')
+                    .delete()
+                    .eq('collection_id', collectionId)
+                    .not('tmdb_id', 'in', keepList)
+                  if (cleanError) {
+                    console.warn(`[Sync ${runLabel}] Collection upcoming cleanup failed for ${collectionId}:`, cleanError.message)
+                  }
+                }
+              } else if (existingCachedCollectionIds.has(collectionId)) {
+                const { error: clearError } = await supabaseAdmin
+                  .from('watchlist_collection_upcoming')
+                  .delete()
+                  .eq('collection_id', collectionId)
+                if (clearError) {
+                  console.warn(`[Sync ${runLabel}] Collection upcoming clear failed for ${collectionId}:`, clearError.message)
+                }
+              }
+            } catch (e) {
+              console.warn(`[Sync ${runLabel}] Collection upcoming check failed for ${collectionId}:`, e)
+            }
+          }
+        }),
+      )
+      if (collectionQueue.length > 0) {
+        console.log(
+          `[Sync ${runLabel}] Collection upcoming: checked ${collectionsChecked}/${collectionQueue.length}, future titles saved ${upcomingUpserted}.`,
+        )
+      }
     }
 
     const durationMs = Date.now() - startTime

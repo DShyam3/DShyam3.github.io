@@ -70,7 +70,7 @@ export function CollectionCard({
     [collection.films, lookup],
   );
   const view = useMemo(
-    () => (resolvedCollection ? buildOrderView(collectionPartsToEntries(resolvedCollection.parts ?? [], POSTER_BASE), lookup) : null),
+    () => (resolvedCollection ? buildOrderView(collectionPartsToEntries(resolvedCollection.parts ?? [], POSTER_BASE, lookup.movies), lookup) : null),
     [resolvedCollection, lookup],
   );
   const activeView = view ?? libraryView;

@@ -8,8 +8,12 @@ import {
   curateDiscovery,
   discoveryKey,
   discoverySeeds,
+  filmGroupsNeeded,
+  franchiseUpcomingItems,
   interleaveBySeed,
   interleaveUpcoming,
+  keepFirstSeenOrder,
+  knownDiscoveryKeys,
   likelySeenConsensus,
   weekIndex,
   type DiscoveryItem,
@@ -34,7 +38,7 @@ import {
   type UniverseLibraryFilm,
 } from './franchise';
 import { POSTER_BASE } from './components/franchise/EntryList';
-import { useTMDB } from './useTMDB';
+import { detailRetry, detailRetryDelay, useTMDB } from './useTMDB';
 import { useDismissedSuggestions } from './useDismissedSuggestions';
 import type { LibraryType } from './library-state';
 import type { TMDBSearchResponse } from './tmdb-types';
@@ -42,11 +46,19 @@ import type { TMDBSearchResponse } from './tmdb-types';
 /** TMDB stops paging at 500; the filler never needs to go that far. */
 const MAX_PAGES = 200;
 
+/**
+ * One tmdb-proxy call. A 429 waits and tries again (5s, 20s, 40s: together
+ * longer than the proxy's one-minute window), so a busy minute slows a page
+ * down instead of emptying it.
+ */
 async function request(endpoint: string, params: Record<string, string>): Promise<TMDBSearchResponse> {
   const query = new URLSearchParams({ endpoint, language: 'en-GB', page: '1', ...params });
-  const { data, error } = await supabase.functions.invoke(`tmdb-proxy?${query}`, { method: 'GET' });
-  if (error) throw error;
-  return data as TMDBSearchResponse;
+  for (let failures = 0; ; failures += 1) {
+    const { data, error } = await supabase.functions.invoke(`tmdb-proxy?${query}`, { method: 'GET' });
+    if (!error) return data as TMDBSearchResponse;
+    if (!detailRetry(failures, error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, detailRetryDelay(failures)));
+  }
 }
 
 interface Source {
@@ -133,15 +145,14 @@ export interface DiscoveryFranchiseGroup {
 // the season calls do not. Franchises lead the page, so they get the largest
 // share. Show more buttons are the owner's own call and are not budgeted.
 const COLLECTIONS_PER_BATCH = 12;
-const MAX_UPCOMING_PAGES = 5;
-const AUTO_UPCOMING_PAGES = 2;
+const FRANCHISES_PER_STEP = 6;
+const MAX_UPCOMING_PAGES = 10;
+const TARGET_UPCOMING = 12;
 const LIKELY_SEEN_ROTATION_WEEKS = 15;
 const TARGET_RECOMMENDATIONS = 12;
 const TARGET_LIKELY_SEEN = 12;
-const TARGET_FRANCHISES = 6;
-const AUTO_PAGE_CAP = 1;
-const AUTO_COLLECTION_BATCH_CAP = 1;
-const AUTO_LIKELY_SEEN_PAGES = 1;
+const AUTO_PAGE_CAP = 6;
+const AUTO_LIKELY_SEEN_PAGES = 5;
 
 export function useDiscovery(type: LibraryType) {
   const { watchlist, favourites, loading, ratingsStatus } = useWatchlist();
@@ -149,6 +160,7 @@ export function useDiscovery(type: LibraryType) {
   const { isAdmin } = useAuth();
   const { dismissed, dismissMany, resetDismissed, resettable, ownerSynced } = useDismissedSuggestions();
   const [collectionLimit, setCollectionLimit] = useState(COLLECTIONS_PER_BATCH);
+  const [franchiseTarget, setFranchiseTarget] = useState(FRANCHISES_PER_STEP);
   const today = new Date();
   const week = weekIndex(today);
 
@@ -228,20 +240,26 @@ export function useDiscovery(type: LibraryType) {
     ),
   });
 
+  // Known titles (in the library, favourited, dismissed) leave before each
+  // seed is capped at four, not after: with a large library, a seed's first
+  // four were usually all known and whole pages came to nothing. A dismissed
+  // tile is replaced in place by that seed's next title.
+  const knownKeys = useMemo(() => knownDiscoveryKeys(watchlist, favourites, dismissed), [watchlist, favourites, dismissed]);
   const recommendationItems = useMemo(() => {
+    const fresh = (items: DiscoveryItem[]) => interleaveBySeed(items.filter((item) => !knownKeys.has(discoveryKey(item.media, item.id))));
     const moviePages = movieRecommendations.data?.pages ?? [];
     const tvPages = tvRecommendations.data?.pages ?? [];
-    if (type === 'movie') return moviePages.flatMap((page) => interleaveBySeed(page.items));
-    if (type === 'tv') return tvPages.flatMap((page) => interleaveBySeed(page.items));
+    if (type === 'movie') return moviePages.flatMap((page) => fresh(page.items));
+    if (type === 'tv') return tvPages.flatMap((page) => fresh(page.items));
     const pageCount = Math.max(moviePages.length, tvPages.length);
     const interleaved: DiscoveryItem[] = [];
     for (let i = 0; i < pageCount; i += 1) {
-      const m = moviePages[i] ? interleaveBySeed(moviePages[i].items) : [];
-      const t = tvPages[i] ? interleaveBySeed(tvPages[i].items) : [];
+      const m = moviePages[i] ? fresh(moviePages[i].items) : [];
+      const t = tvPages[i] ? fresh(tvPages[i].items) : [];
       interleaved.push(...interleaveUpcoming([...m, ...t]));
     }
     return interleaved;
-  }, [type, movieRecommendations.data, tvRecommendations.data]);
+  }, [type, movieRecommendations.data, tvRecommendations.data, knownKeys]);
 
   const upcomingItems = useMemo(
     () => (upcoming.data?.pages.flatMap((page) => page.items) ?? []).filter((item) => type === 'all' || item.media === type),
@@ -351,9 +369,9 @@ export function useDiscovery(type: LibraryType) {
       activeCollectionIds.flatMap((collectionId, idx) => {
         const data = collectionQueries[idx]?.data;
         if (!data) return [];
-        return [{ collectionId, entries: collectionPartsToEntries(data.parts ?? [], POSTER_BASE) }];
+        return [{ collectionId, entries: collectionPartsToEntries(data.parts ?? [], POSTER_BASE, lookup.movies) }];
       }),
-    [activeCollectionIds, collectionQueries],
+    [activeCollectionIds, collectionQueries, lookup.movies],
   );
   const collectionsPending = activeCollectionIds.length > 0 && collectionQueries.some((q) => q.isPending);
 
@@ -495,14 +513,22 @@ export function useDiscovery(type: LibraryType) {
   // Multi-seed consensus first, topped up with a weekly-rotating pool of
   // widely-watched released titles so HAVE YOU ALREADY WATCHED? always has
   // familiar titles to log or dismiss; excluded from YOU MIGHT LIKE.
+  // Shown in the order titles first turned up, so a title already on screen
+  // never moves when a later page finds a stronger match; new ones join the
+  // end.
+  const likelySeenOrder = useRef(new Map<string, number>());
   const likelySeen = useMemo(
     () =>
-      curateDiscovery(
-        [...likelySeenConsensus(recommendationItems, today), ...likelySeenPoolItems],
-        watchlist,
-        favourites,
-        dismissed,
-        franchiseEntryKeys,
+      keepFirstSeenOrder(
+        curateDiscovery(
+          [...likelySeenConsensus(recommendationItems, today), ...likelySeenPoolItems],
+          watchlist,
+          favourites,
+          dismissed,
+          franchiseEntryKeys,
+        ),
+        (item) => discoveryKey(item.media, item.id),
+        likelySeenOrder.current,
       ).slice(0, TARGET_LIKELY_SEEN),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
     [recommendationItems, likelySeenPoolItems, watchlist, favourites, dismissed, franchiseEntryKeys, week],
@@ -532,24 +558,95 @@ export function useDiscovery(type: LibraryType) {
   const hasMore = activeQueries.some((q) => q.hasNextPage);
   const loadingMore = activeQueries.some((q) => q.isFetchingNextPage);
 
+  const cachedCollectionUpcoming = useQuery({
+    queryKey: ['watchlist', 'collection-upcoming', start],
+    enabled: !loading && type !== 'tv' && libraryCollections.length > 0,
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('watchlist_collection_upcoming')
+        .select('collection_id, tmdb_id, collection_name, title, release_date, poster_path')
+        .gt('release_date', start)
+        .order('release_date', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const upcomingFranchiseItems = useMemo(() => {
+    const stripPosterBase = (poster: string | null) =>
+      poster && poster.startsWith(POSTER_BASE) ? poster.slice(POSTER_BASE.length) : poster;
+    const byId = new Map(libraryCollections.map((c) => [c.collectionId, c.name]));
+    // Only include cached rows whose collection belongs to a visible film in
+    // this viewer's library (so hidden/stopped collections never leak to visitors).
+    const cachedByCollection = new Map<number, { name: string; entries: { mediaType: 'movie'; tmdbId: number; title: string; releaseDate: string; posterPath: string | null }[] }>();
+    for (const row of cachedCollectionUpcoming.data ?? []) {
+      const libraryName = byId.get(row.collection_id);
+      if (!libraryName) continue;
+      const group = cachedByCollection.get(row.collection_id) ?? {
+        name: row.collection_name || libraryName,
+        entries: [],
+      };
+      group.entries.push({
+        mediaType: 'movie',
+        tmdbId: row.tmdb_id,
+        title: row.title,
+        releaseDate: row.release_date,
+        posterPath: row.poster_path,
+      });
+      cachedByCollection.set(row.collection_id, group);
+    }
+    const sources = [
+      ...(type !== 'tv'
+        ? expandedCollectionsData.map((item) => ({
+            name: byId.get(item.collectionId) ?? 'your franchise',
+            entries: item.entries.map((entry) => ({
+              mediaType: entry.mediaType,
+              tmdbId: entry.tmdbId,
+              title: entry.title,
+              releaseDate: entry.releaseDate,
+              posterPath: stripPosterBase(entry.poster),
+            })),
+          }))
+        : []),
+      ...(type !== 'tv' ? [...cachedByCollection.values()] : []),
+      ...(type !== 'movie'
+        ? tvFranchiseSummaries.map((franchise) => ({
+            name: franchise.name,
+            entries: franchise.entries.map((entry) => ({
+              mediaType: entry.mediaType,
+              tmdbId: entry.tmdbId,
+              title: entry.title,
+              releaseDate: entry.releaseDate,
+              posterPath: stripPosterBase(entry.poster),
+            })),
+          }))
+        : []),
+    ];
+    return franchiseUpcomingItems(sources, start).filter(
+      (item) => type === 'all' || item.media === type,
+    );
+  }, [type, libraryCollections, cachedCollectionUpcoming.data, expandedCollectionsData, tvFranchiseSummaries, start]);
+
   const recommendations = useMemo(
     () => curateDiscovery(recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys),
     [recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys],
   );
   const upcomingCurated = useMemo(
-    () => curateDiscovery(upcomingItems, watchlist, favourites, dismissed),
-    [upcomingItems, watchlist, favourites, dismissed],
+    () => curateDiscovery([...upcomingFranchiseItems, ...upcomingItems], watchlist, favourites, dismissed),
+    [upcomingFranchiseItems, upcomingItems, watchlist, favourites, dismissed],
   );
 
   const collectionsAllFailed = activeCollectionIds.length > 0 && !collectionsPending && collectionQueries.every((q) => q.isError);
-  const hasMoreFranchises = type !== 'tv' && collectionLimit < libraryCollections.length;
+  const hasMoreCollections = type !== 'tv' && collectionLimit < libraryCollections.length;
+  const collectionsChecked = collectionQueries.filter((q) => !q.isPending).length;
+  const filmGroupCount = franchiseGroups.filter((group) => group.kind === 'collection').length;
+  const filmGroupsWanted = filmGroupsNeeded(type, franchiseTarget, franchiseGroups.length - filmGroupCount);
 
-  // Automatic top-ups, counted once per visit to Discover and never re-armed
-  // (not by a target being met, a type switch or a click), so the request
-  // budget above holds for the whole visit.
-  const autoUpcomingRef = useRef(0);
+  // Automatic pages of suggestions, counted once per visit to Discover and
+  // never re-armed (not by a target being met, a type switch or a click).
   const autoLikelySeenRef = useRef(0);
-  const autoFranchiseBatchesRef = useRef(0);
   const autoRecPagesRef = useRef(0);
 
   // If the current page of widely-watched titles is mostly logged/dismissed,
@@ -569,8 +666,8 @@ export function useDiscovery(type: LibraryType) {
     void fetchNextLikelySeen();
   }, [likelySeen.length, loading, likelySeenPending, likelySeenFetchingNext, likelySeenError, likelySeenHasNext, fetchNextLikelySeen]);
 
-  // If page 1 of Coming Soon is entirely in the library or dismissed, keep
-  // paging (up to AUTO_UPCOMING_PAGES more) so the column is not left empty.
+  // Page on until the grid is full: with a large library and many dismissals,
+  // whole pages of popular releases can curate down to nothing.
   const {
     isPending: upcomingPending,
     isFetchingNextPage: upcomingFetchingNext,
@@ -579,10 +676,8 @@ export function useDiscovery(type: LibraryType) {
     fetchNextPage: fetchNextUpcoming,
   } = upcoming;
   useEffect(() => {
-    if (upcomingCurated.length > 0) return;
+    if (upcomingCurated.length >= TARGET_UPCOMING) return;
     if (loading || upcomingPending || upcomingFetchingNext || upcomingError || !upcomingHasNext) return;
-    if (autoUpcomingRef.current >= AUTO_UPCOMING_PAGES) return;
-    autoUpcomingRef.current += 1;
     void fetchNextUpcoming();
   }, [upcomingCurated.length, loading, upcomingPending, upcomingFetchingNext, upcomingError, upcomingHasNext, fetchNextUpcoming]);
 
@@ -592,13 +687,11 @@ export function useDiscovery(type: LibraryType) {
   // the scan. Waits for the spin-off and universe lookups, whose groups count
   // too.
   const spinoffsPending = type !== 'movie' && tvSeedIds.length > 0 && tvSpinoffs.isPending;
+  const walking = type !== 'tv' && hasMoreCollections && !collectionsAllFailed && filmGroupCount < filmGroupsWanted;
   useEffect(() => {
-    if (franchiseGroups.length >= TARGET_FRANCHISES) return;
-    if (loading || collectionsPending || spinoffsPending || universesPending || collectionsAllFailed || !hasMoreFranchises) return;
-    if (autoFranchiseBatchesRef.current >= AUTO_COLLECTION_BATCH_CAP) return;
-    autoFranchiseBatchesRef.current += 1;
+    if (!walking || loading || collectionsPending || spinoffsPending || universesPending) return;
     setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH);
-  }, [franchiseGroups.length, loading, collectionsPending, spinoffsPending, universesPending, collectionsAllFailed, hasMoreFranchises]);
+  }, [walking, loading, collectionsPending, spinoffsPending, universesPending]);
 
   // With a large library, a whole page of seed recommendations can curate down
   // to only a couple of titles; keep paging until a full grid is ready.
@@ -615,9 +708,10 @@ export function useDiscovery(type: LibraryType) {
 
   const franchisesLoading =
     loading ||
-    (type !== 'tv' && collectionsPending) ||
+    (type !== 'tv' && (collectionsPending || walking)) ||
     spinoffsPending ||
     universesPending;
+  const shownFranchises = useMemo(() => franchiseGroups.slice(0, franchiseTarget), [franchiseGroups, franchiseTarget]);
   const franchisesFailed =
     type !== 'tv' && (
       (!collectionsPending && collectionQueries.some((q) => q.isError)) ||
@@ -628,11 +722,13 @@ export function useDiscovery(type: LibraryType) {
     recommendations,
     likelySeen,
     upcoming: upcomingCurated,
-    franchises: franchiseGroups,
+    franchises: shownFranchises,
     franchisesLoading,
     franchisesFailed,
-    hasMoreFranchises,
-    loadMoreFranchises: () => setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH),
+    hasMoreFranchises: franchiseGroups.length > franchiseTarget || hasMoreCollections,
+    collectionsChecked: type === 'tv' ? 0 : collectionsChecked,
+    collectionsTotal: type === 'tv' ? 0 : libraryCollections.length,
+    loadMoreFranchises: () => setFranchiseTarget((prev) => prev + FRANCHISES_PER_STEP),
     retryFranchises: () => {
       for (const q of collectionQueries) {
         if (q.isError && !q.isFetching) void q.refetch();

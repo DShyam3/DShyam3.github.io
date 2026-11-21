@@ -265,9 +265,8 @@ export function matchesLibraryType(item: WatchlistItem, type: LibraryType): bool
  * Old `?category=` slugs still land somewhere sensible: links to the former
  * TV Shows and Movies tabs open To watch with the matching type.
  */
-export function shelfFromParam(param: string | null): { shelf: LibraryShelf | 'Favourites'; type?: LibraryType } | null {
+export function shelfFromParam(param: string | null): { shelf: LibraryShelf; type?: LibraryType } | null {
   switch (param) {
-    case 'favourites': return { shelf: 'Favourites' };
     case 'watching': case 'currently-watching': return { shelf: 'Watching' };
     case 'to-watch': return { shelf: 'To watch' };
     case 'tv-shows': return { shelf: 'To watch', type: 'tv' };

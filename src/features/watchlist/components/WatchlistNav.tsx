@@ -1,14 +1,15 @@
 import { Link } from 'react-router-dom';
-import { Library, ListOrdered, Newspaper, NotebookPen, Sparkles } from 'lucide-react';
+import { Heart, Library, ListOrdered, Newspaper, NotebookPen, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { cn } from '@/lib/utils';
 
-export type WatchlistView = 'news' | 'library' | 'diary' | 'franchises' | 'facts';
+export type WatchlistView = 'news' | 'library' | 'favourites' | 'diary' | 'franchises' | 'facts';
 
 const VIEWS: { view: WatchlistView; to: string; label: string; Icon: typeof Library }[] = [
   { view: 'news', to: '/watchlist', label: 'News', Icon: Newspaper },
   { view: 'library', to: '/watchlist/library', label: 'Library', Icon: Library },
+  { view: 'favourites', to: '/watchlist/favourites', label: 'Favourites', Icon: Heart },
   { view: 'diary', to: '/watchlist/diary', label: 'Diary', Icon: NotebookPen },
   { view: 'franchises', to: '/watchlist/franchises', label: 'Franchises', Icon: ListOrdered },
   { view: 'facts', to: '/watchlist/facts', label: 'Cool facts', Icon: Sparkles },

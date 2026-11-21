@@ -48,6 +48,10 @@ const UNIQUE_VIOLATION = '23505';
 const COLLECTIONS_PER_BATCH = 20;
 
 type FranchiseCategory = 'all' | 'film-series' | 'tv-spinoffs' | 'orders' | 'library';
+
+/** A collection's name and its films' titles, for the search box. */
+const collectionSearchText = (c: { name: string; films: { title: string }[] }) =>
+  [c.name, ...c.films.map((f) => f.title)].join(' ').toLowerCase();
 type FranchiseProgress = 'all' | 'in-progress' | 'completed';
 
 /** Franchises: viewing orders for film series and cinematic universes. */
@@ -69,7 +73,11 @@ export default function WatchlistFranchises() {
   const [progressFilter, setProgressFilter] = useState<FranchiseProgress>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const lookup = useMemo(() => libraryLookup(watchlist, new Date()), [watchlist]);
+  const visibleWatchlist = useMemo(
+    () => (isAdmin ? watchlist : watchlist.filter((item) => item.library_state !== 'hidden')),
+    [watchlist, isAdmin],
+  );
+  const lookup = useMemo(() => libraryLookup(visibleWatchlist, new Date()), [visibleWatchlist]);
 
   const savedOrders = useMemo(() => orders.data ?? [], [orders.data]);
   const savedCollectionIds = new Set(savedOrders.flatMap((o) => (o.tmdbCollectionId == null ? [] : [o.tmdbCollectionId])));
@@ -100,9 +108,19 @@ export default function WatchlistFranchises() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- savedCollectionIds is derived from savedOrders.
     [collections, savedOrders],
   );
+  // The search reaches every collection in the library, not just the ones
+  // loaded so far: names and film titles are known before TMDB is asked.
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const searchedCollections = useMemo(
+    () =>
+      normalizedQuery
+        ? openCollections.filter((c) => collectionSearchText(c).includes(normalizedQuery))
+        : openCollections,
+    [openCollections, normalizedQuery],
+  );
   const activeCollections = useMemo(
-    () => openCollections.slice(0, collectionLimit),
-    [openCollections, collectionLimit],
+    () => searchedCollections.slice(0, collectionLimit),
+    [searchedCollections, collectionLimit],
   );
   const collectionQueries = useQueries({
     queries: activeCollections.map((c) => ({
@@ -126,7 +144,7 @@ export default function WatchlistFranchises() {
     return map;
   }, [activeCollections, collectionQueries]);
   const collectionsChecking = activeCollections.length > 0 && collectionQueries.some((q) => q.isPending);
-  const hasMoreCollections = collectionLimit < openCollections.length;
+  const hasMoreCollections = collectionLimit < searchedCollections.length;
 
   // Show a film series whenever TMDB confirms 2+ parts (even if only 1 is in
   // the library or unwatched), or while pending if 2+ films are already in the library.
@@ -134,7 +152,7 @@ export default function WatchlistFranchises() {
     return activeCollections.flatMap((collection) => {
       const prefetched = expandedCollections.get(collection.collectionId);
       if (prefetched) {
-        const entries = collectionPartsToEntries(prefetched.parts ?? [], POSTER_BASE);
+        const entries = collectionPartsToEntries(prefetched.parts ?? [], POSTER_BASE, lookup.movies);
         if (entries.length < 2) return [];
         const view = buildOrderView(entries, lookup);
         return [{ collection, prefetched, watched: view.watched, total: view.total }];
@@ -162,8 +180,8 @@ export default function WatchlistFranchises() {
     retry: false,
   });
   const tvFranchises = useMemo(
-    () => tvFranchisesFromLinks(tvSpinoffsQuery.data ?? [], watchlist, POSTER_BASE),
-    [tvSpinoffsQuery.data, watchlist],
+    () => tvFranchisesFromLinks(tvSpinoffsQuery.data ?? [], visibleWatchlist, POSTER_BASE),
+    [tvSpinoffsQuery.data, visibleWatchlist],
   );
   const openTvFranchises = tvFranchises.filter((f) => !savedOrderNames.has(f.name.trim().toLowerCase()));
 
@@ -232,7 +250,6 @@ export default function WatchlistFranchises() {
     [openTvFranchises, lookup],
   );
 
-  const normalizedQuery = searchQuery.trim().toLowerCase();
   const matchesFilters = (name: string, watched: number, total: number) => {
     if (normalizedQuery && !name.toLowerCase().includes(normalizedQuery)) return false;
     if (progressFilter === 'in-progress') return watched < total;
@@ -256,26 +273,27 @@ export default function WatchlistFranchises() {
     [tvFranchiseItems, normalizedQuery, progressFilter],
   );
   const filteredCollections = useMemo(
-    () => multiPartCollections.filter((item) => matchesFilters(item.collection.name, item.watched, item.total)),
+    () => multiPartCollections.filter((item) => matchesFilters(collectionSearchText(item.collection), item.watched, item.total)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilters reads normalizedQuery & progressFilter.
     [multiPartCollections, normalizedQuery, progressFilter],
   );
 
   const showCategory = (cat: Exclude<FranchiseCategory, 'all'>) => categoryFilter === 'all' || categoryFilter === cat;
+  // Every film collection in the library counts, loaded or not.
   const totalCount =
-    customFranchises.length + savedOrders.length + openTvFranchises.length + multiPartCollections.length;
+    customFranchises.length + savedOrders.length + openTvFranchises.length + openCollections.length;
 
   return (
     <AppShell title="Watchlist" subtitle="Franchises" toolbar={<WatchlistNav current="franchises" />}>
     <DismissedContext.Provider value={dismissed}>
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
       <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/40 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Franchise categories">
             {(
               [
                 { id: 'all', label: 'All', count: totalCount },
-                { id: 'film-series', label: 'Film Series', count: multiPartCollections.length },
+                { id: 'film-series', label: 'Film Series', count: openCollections.length },
                 { id: 'tv-spinoffs', label: 'TV & Spin-offs', count: openTvFranchises.length },
                 { id: 'orders', label: 'Viewing Orders', count: savedOrders.length },
                 ...(customFranchises.length > 0

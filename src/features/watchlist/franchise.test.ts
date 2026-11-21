@@ -118,25 +118,39 @@ describe('collectionsFromLibrary', () => {
 });
 
 describe('collectionPartsToEntries', () => {
-  it('filters, dedupes, normalises and sorts', () => {
+  it('filters undated unconfirmed parts, dedupes, normalises and sorts', () => {
     const out = collectionPartsToEntries(
       [
         { id: 3, title: 'Late', release_date: '2010-01-01', poster_path: '/l.jpg' },
         { id: 1, title: 'Early', release_date: '2000-01-01', poster_path: null },
-        { id: 2, title: 'Undated', release_date: '', poster_path: '/u.jpg' },
+        { id: 2, title: 'Undated TBA', release_date: '', poster_path: '/u.jpg' },
+        { id: 6, title: 'Undated null', release_date: null, poster_path: null },
         { id: 1, title: 'Early dup', release_date: '2000-01-01' },
-        { title: 'No id' },
-        { id: 0, title: 'Zero' },
-        { id: 1.5, title: 'Frac' },
-        { id: 4, title: '  ' },
-        { id: 5 },
+        { title: 'No id', release_date: '2020-01-01' },
+        { id: 0, title: 'Zero', release_date: '2020-01-01' },
+        { id: 1.5, title: 'Frac', release_date: '2020-01-01' },
+        { id: 4, title: '  ', release_date: '2020-01-01' },
+        { id: 5, release_date: '2020-01-01' },
       ],
       'https://img/',
     );
-    expect(out.map((e) => e.key)).toEqual(['movie:1', 'movie:3', 'movie:2']);
+    expect(out.map((e) => e.key)).toEqual(['movie:1', 'movie:3']);
     expect(out[0]).toMatchObject({ mediaType: 'movie', tmdbId: 1, title: 'Early', poster: null });
     expect(out[1].poster).toBe('https://img//l.jpg');
-    expect(out[2]).toMatchObject({ releaseDate: null, poster: 'https://img//u.jpg' });
+  });
+
+  it('keeps an undated part if it is already in the user library', () => {
+    const out = collectionPartsToEntries(
+      [
+        { id: 1, title: 'First', release_date: '2020-01-01', poster_path: '/a.jpg' },
+        { id: 2, title: 'Saved Undated', release_date: '', poster_path: null },
+        { id: 3, title: 'Unconfirmed Sequel', release_date: null, poster_path: null },
+      ],
+      'https://img/',
+      new Set([2]),
+    );
+    expect(out.map((e) => e.key)).toEqual(['movie:1', 'movie:2']);
+    expect(out[1]).toMatchObject({ releaseDate: null, poster: null });
   });
 });
 
@@ -240,6 +254,28 @@ describe('tvFranchisesFromLinks', () => {
         },
       ],
       [],
+    );
+    expect(groups).toEqual([]);
+  });
+
+  it('skips undated non-library spin-offs until a release date is known', () => {
+    const watchlist = [
+      { id: '1', category: 'TV Shows', tmdb_id: 100, title: 'Original Show', release_date: '2019-01-01', image_url: '/o.jpg' },
+    ] as unknown as WatchlistItem[];
+    const groups = tvFranchisesFromLinks(
+      [
+        {
+          seedTmdbId: 100,
+          seedTitle: 'Original Show',
+          franchiseId: 'Q1',
+          franchiseName: 'Original Universe',
+          relatedMediaType: 'tv',
+          relatedTmdbId: 200,
+          relatedTitle: 'Rumoured Spin-off',
+          releaseDate: null,
+        },
+      ],
+      watchlist,
     );
     expect(groups).toEqual([]);
   });

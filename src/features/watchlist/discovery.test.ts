@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { curateDiscovery, discoverySeeds, dismissalHandover, interleaveBySeed, interleaveUpcoming, likelySeenConsensus, type DiscoveryItem } from './discovery';
+import { curateDiscovery, discoverySeeds, dismissalHandover, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveUpcoming, keepFirstSeenOrder, likelySeenConsensus, type DiscoveryItem } from './discovery';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -233,6 +233,64 @@ describe('interleaveUpcoming', () => {
     expect(interleaveUpcoming(series)).toEqual(series);
     expect(interleaveUpcoming([])).toEqual([]);
   });
+
+  it('keeps priority franchise upcoming items at the front before alternating general items, without breaking recommendations with shortReason', () => {
+    const franchiseFilm = makeDiscoveryItem({ id: 90, media: 'movie', kind: 'upcoming', shortReason: 'In your franchise', reason: 'In your franchise · Johnny English Collection' });
+    const franchiseShow = makeDiscoveryItem({ id: 91, media: 'tv', kind: 'upcoming', shortReason: 'In your franchise', reason: 'In your franchise · Example Universe' });
+    const film = makeDiscoveryItem({ id: 1, media: 'movie', kind: 'upcoming' });
+    const show = makeDiscoveryItem({ id: 2, media: 'tv', kind: 'upcoming' });
+    expect(interleaveUpcoming([franchiseFilm, franchiseShow, film, show]).map((item) => `${item.media}:${item.id}`)).toEqual([
+      'movie:90', 'tv:91', 'movie:1', 'tv:2',
+    ]);
+    // Recommendation items always carry shortReason and must still alternate movie/tv.
+    const recMovie1 = makeDiscoveryItem({ id: 10, media: 'movie', kind: 'recommendation', shortReason: 'Widely watched' });
+    const recMovie2 = makeDiscoveryItem({ id: 11, media: 'movie', kind: 'recommendation', shortReason: 'Widely watched' });
+    const recTv1 = makeDiscoveryItem({ id: 20, media: 'tv', kind: 'recommendation', shortReason: 'Widely watched' });
+    expect(interleaveUpcoming([recMovie1, recMovie2, recTv1]).map((item) => `${item.media}:${item.id}`)).toEqual([
+      'movie:10', 'tv:20', 'movie:11',
+    ]);
+  });
+});
+
+describe('franchiseUpcomingItems', () => {
+  it('turns dated future franchise instalments into priority Coming soon items sorted soonest first, ignoring past or undated ones', () => {
+    const out = franchiseUpcomingItems(
+      [
+        {
+          name: 'Johnny English Collection',
+          entries: [
+            { mediaType: 'movie', tmdbId: 1, title: 'Johnny English', releaseDate: '2003-04-11', posterPath: '/je1.jpg' },
+            { mediaType: 'movie', tmdbId: 4, title: 'Johnny English 4', releaseDate: '2027-03-15', posterPath: '/je4.jpg' },
+            { mediaType: 'movie', tmdbId: 5, title: 'Johnny English 5', releaseDate: null, posterPath: null },
+          ],
+        },
+        {
+          name: 'Dune Collection',
+          entries: [
+            { mediaType: 'movie', tmdbId: 10, title: 'Dune: Messiah', releaseDate: '2026-12-18', posterPath: '/dm.jpg' },
+            // Duplicate of Johnny English 4 should be deduped.
+            { mediaType: 'movie', tmdbId: 4, title: 'Johnny English 4', releaseDate: '2027-03-15', posterPath: '/je4.jpg' },
+          ],
+        },
+      ],
+      '2026-11-21',
+    );
+    expect(out.map((item) => item.id)).toEqual([10, 4]);
+    expect(out[0]).toMatchObject({
+      id: 10,
+      media: 'movie',
+      title: 'Dune: Messiah',
+      release_date: '2026-12-18',
+      poster_path: '/dm.jpg',
+      kind: 'upcoming',
+      shortReason: 'In your franchise',
+      reason: 'In your franchise · Dune Collection',
+    });
+    expect(out[1]).toMatchObject({
+      id: 4,
+      reason: 'In your franchise · Johnny English Collection',
+    });
+  });
 });
 
 describe('likelySeenConsensus', () => {
@@ -278,5 +336,37 @@ describe('dismissalHandover', () => {
     const { release, send } = dismissalHandover(new Set(['book:1', 'movie:abc', 'movie:0']), undefined, new Set());
     expect([...release].sort()).toEqual(['book:1', 'movie:0', 'movie:abc']);
     expect(send).toEqual([]);
+  });
+});
+
+describe('keepFirstSeenOrder', () => {
+  const key = (item: { id: string }) => item.id;
+
+  it('keeps titles already shown in place as new ones arrive', () => {
+    const seen = new Map<string, number>();
+    expect(keepFirstSeenOrder([{ id: 'b' }, { id: 'a' }], key, seen).map(key)).toEqual(['b', 'a']);
+    // A later page ranks `c` first; it still goes after what was on screen.
+    expect(keepFirstSeenOrder([{ id: 'c' }, { id: 'a' }, { id: 'b' }], key, seen).map(key)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('closes the gap when a title leaves, and remembers it if it returns', () => {
+    const seen = new Map<string, number>();
+    keepFirstSeenOrder([{ id: 'a' }, { id: 'b' }, { id: 'c' }], key, seen);
+    expect(keepFirstSeenOrder([{ id: 'c' }, { id: 'a' }], key, seen).map(key)).toEqual(['a', 'c']);
+    expect(keepFirstSeenOrder([{ id: 'd' }, { id: 'b' }, { id: 'c' }], key, seen).map(key)).toEqual(['b', 'c', 'd']);
+  });
+});
+
+describe('filmGroupsNeeded', () => {
+  it('needs none for series only, and the whole target for films only', () => {
+    expect(filmGroupsNeeded('tv', 6, 9)).toBe(0);
+    expect(filmGroupsNeeded('movie', 6, 9)).toBe(6);
+  });
+
+  it('in All, fills what series leave and never drops below half', () => {
+    expect(filmGroupsNeeded('all', 6, 0)).toBe(6);
+    expect(filmGroupsNeeded('all', 6, 2)).toBe(4);
+    expect(filmGroupsNeeded('all', 6, 9)).toBe(3);
+    expect(filmGroupsNeeded('all', 12, 9)).toBe(6);
   });
 });

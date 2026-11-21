@@ -158,7 +158,10 @@ export function useTMDB() {
             return await queryClient.fetchQuery({
                 queryKey: ['watchlist', 'tmdb-collection', id],
                 staleTime: 24 * 60 * 60 * 1000,
-                retry: false,
+                // Discover walks many collections in a row; a 429 waits out
+                // the proxy's minute instead of losing the collection.
+                retry: detailRetry,
+                retryDelay: detailRetryDelay,
                 queryFn: () => fetchTMDB<TMDBCollection>(`collection/${id}`, {}),
             });
         } catch (error) {

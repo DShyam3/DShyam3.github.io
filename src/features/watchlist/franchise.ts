@@ -179,6 +179,7 @@ export function collectionsFromLibrary(
 export function collectionPartsToEntries(
   parts: { id?: number; title?: string; release_date?: string | null; poster_path?: string | null }[],
   posterBase: string,
+  inLibraryMovieIds?: { has(id: number): boolean },
 ): OrderEntryInput[] {
   const seen = new Set<number>();
   const entries: OrderEntryInput[] = [];
@@ -187,13 +188,17 @@ export function collectionPartsToEntries(
     if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) continue;
     const title = p.title?.trim();
     if (!title || seen.has(id)) continue;
+    const releaseDate = p.release_date?.trim() || null;
+    // Skip unconfirmed / undated TBA instalments until TMDB has a release date,
+    // unless the user already saved that title in their own library.
+    if (!releaseDate && !inLibraryMovieIds?.has(id)) continue;
     seen.add(id);
     entries.push({
       key: `movie:${id}`,
       mediaType: 'movie',
       tmdbId: id,
       title,
-      releaseDate: p.release_date || null,
+      releaseDate,
       poster: p.poster_path ? posterBase + p.poster_path : null,
     });
   }
@@ -267,6 +272,9 @@ export function tvFranchisesFromLinks(
   for (const link of links) {
     if (!Number.isInteger(link.seedTmdbId) || link.seedTmdbId <= 0) continue;
     if (!Number.isInteger(link.relatedTmdbId) || link.relatedTmdbId <= 0) continue;
+    const relatedCandidateKey = `${link.relatedMediaType}:${link.relatedTmdbId}`;
+    // Skip unconfirmed / undated spin-offs not already in the user's library.
+    if (!libraryByKey.has(relatedCandidateKey) && !link.releaseDate?.trim()) continue;
     const seedKey = ensureNode('tv', link.seedTmdbId, link.seedTitle, null);
     const relatedKey = ensureNode(link.relatedMediaType, link.relatedTmdbId, link.relatedTitle, link.releaseDate, link.posterPath);
     if (seedKey === relatedKey) continue;

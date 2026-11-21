@@ -183,7 +183,7 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
   ): Fact | null => {
     if (!pick) {
       return favourites.isLoading
-        ? { id: kind, kicker: `Favourite ${noun.one}`, icon, palette, value: LOADING, label: '', more: 'See my favourites', onOpen: () => navigate('/watchlist/library?category=favourites') }
+        ? { id: kind, kicker: `Favourite ${noun.one}`, icon, palette, value: LOADING, label: '', more: 'See my favourites', onOpen: () => navigate('/watchlist/favourites') }
         : null;
     }
     return {
@@ -197,7 +197,7 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
         : `Today's pick from ${items.length} ${items.length === 1 ? 'favourite' : 'favourites'}`,
       more: 'See my favourites',
       media: pick.item.poster ? <img className="fact-card-poster" src={pick.item.poster} alt="" loading="lazy" decoding="async" /> : undefined,
-      onOpen: () => navigate('/watchlist/library?category=favourites'),
+      onOpen: () => navigate('/watchlist/favourites'),
       admin: isAdmin ? picker(kind, items, noun) : undefined,
     };
   };

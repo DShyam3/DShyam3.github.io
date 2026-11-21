@@ -195,7 +195,6 @@ describe('library shelves', () => {
     expect(matchesLibraryType(show, 'tv')).toBe(true);
     expect(shelfFromParam('tv-shows')).toEqual({ shelf: 'To watch', type: 'tv' });
     expect(shelfFromParam('watched')).toEqual({ shelf: 'Finished' });
-    expect(shelfFromParam('favourites')).toEqual({ shelf: 'Favourites' });
     expect(shelfFromParam('up-to-date')).toEqual({ shelf: 'Up to date' });
     expect(shelfFromParam('nonsense')).toBeNull();
   });

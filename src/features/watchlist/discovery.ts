@@ -167,6 +167,44 @@ export function dismissalHandover(
   return { release, send };
 }
 
+/**
+ * Orders items by when each key was first seen, oldest first, and records new
+ * keys in `seen` as they turn up. A list that fills in as pages load then only
+ * grows at its end: nothing already on screen moves.
+ */
+export function keepFirstSeenOrder<T>(items: readonly T[], keyOf: (item: T) => string, seen: Map<string, number>): T[] {
+  for (const item of items) {
+    const key = keyOf(item);
+    if (!seen.has(key)) seen.set(key, seen.size);
+  }
+  return [...items].sort((a, b) => (seen.get(keyOf(a)) ?? 0) - (seen.get(keyOf(b)) ?? 0));
+}
+
+/**
+ * How many film collections with something unanswered HAVE YOU ALREADY
+ * WATCHED? needs before it can stop checking older ones. Films and series
+ * take turns on screen, a film first, so in All at least half the cards are
+ * films whenever there are enough, however many spin-off groups there are.
+ */
+export function filmGroupsNeeded(type: LibraryType, target: number, seriesGroups: number): number {
+  if (type === 'tv') return 0;
+  if (type === 'movie') return target;
+  return Math.max(target - seriesGroups, Math.ceil(target / 2));
+}
+
+/** Titles never to suggest: in the library, favourited, or dismissed. */
+export function knownDiscoveryKeys(
+  watchlist: WatchlistItem[],
+  favourites: FavouriteItem[],
+  dismissed: ReadonlySet<string>,
+): Set<string> {
+  return new Set([
+    ...dismissed,
+    ...watchlist.filter((item) => item.tmdb_id).map((item) => discoveryKey(mediaOf(item), item.tmdb_id!)),
+    ...favourites.filter((item) => item.tmdb_id).map((item) => discoveryKey(item.media_type, item.tmdb_id!)),
+  ]);
+}
+
 /** Identity always includes media type: TMDB film/show IDs can collide. */
 export function curateDiscovery(
   items: DiscoveryItem[],
@@ -175,12 +213,8 @@ export function curateDiscovery(
   dismissed: ReadonlySet<string>,
   excludedKeys?: ReadonlySet<string>,
 ): DiscoveryItem[] {
-  const seen = new Set([
-    ...dismissed,
-    ...(excludedKeys ?? []),
-    ...watchlist.filter((item) => item.tmdb_id).map((item) => discoveryKey(mediaOf(item), item.tmdb_id!)),
-    ...favourites.filter((item) => item.tmdb_id).map((item) => discoveryKey(item.media_type, item.tmdb_id!)),
-  ]);
+  const seen = knownDiscoveryKeys(watchlist, favourites, dismissed);
+  for (const key of excludedKeys ?? []) seen.add(key);
   return items.filter((item) => {
     const key = discoveryKey(item.media, item.id);
     if (!Number.isInteger(item.id) || item.id <= 0 || !(item.title || item.name) || seen.has(key)) return false;
@@ -189,12 +223,69 @@ export function curateDiscovery(
   });
 }
 
-/** Give films and series space before the display limit, preserving each source's order. */
+export interface UpcomingFranchiseSource {
+  name: string;
+  entries: {
+    mediaType: DiscoveryMedia;
+    tmdbId: number;
+    title: string;
+    releaseDate: string | null;
+    posterPath: string | null;
+  }[];
+}
+
+/**
+ * Turns dated future instalments from the user's film collections and TV
+ * franchises into high-priority Coming soon items, sorted soonest first.
+ */
+export function franchiseUpcomingItems(
+  sources: UpcomingFranchiseSource[],
+  todayIso: string,
+): DiscoveryItem[] {
+  const seen = new Set<string>();
+  const items: DiscoveryItem[] = [];
+  for (const source of sources) {
+    for (const entry of source.entries) {
+      if (!entry.releaseDate || entry.releaseDate <= todayIso) continue;
+      const key = discoveryKey(entry.mediaType, entry.tmdbId);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        id: entry.tmdbId,
+        media: entry.mediaType,
+        title: entry.mediaType === 'movie' ? entry.title : undefined,
+        name: entry.mediaType === 'tv' ? entry.title : undefined,
+        release_date: entry.mediaType === 'movie' ? entry.releaseDate : undefined,
+        first_air_date: entry.mediaType === 'tv' ? entry.releaseDate : undefined,
+        poster_path: entry.posterPath,
+        overview: '',
+        kind: 'upcoming',
+        reason: `In your franchise · ${source.name}`,
+        shortReason: 'In your franchise',
+      });
+    }
+  }
+  return items.sort(
+    (a, b) =>
+      discoveryDate(a).localeCompare(discoveryDate(b)) ||
+      (a.title || a.name || '').localeCompare(b.title || b.name || ''),
+  );
+}
+
+/**
+ * Keep priority franchise releases at the front of Coming soon, then give
+ * general films and series alternating space while preserving each source's order.
+ */
 export function interleaveUpcoming(items: DiscoveryItem[]): DiscoveryItem[] {
-  return takeTurns([
-    items.filter((item) => item.media === 'movie'),
-    items.filter((item) => item.media === 'tv'),
-  ]);
+  const priority = items.filter((item) => item.kind === 'upcoming' && Boolean(item.shortReason));
+  const rest = items.filter((item) => !(item.kind === 'upcoming' && Boolean(item.shortReason)));
+  return [
+    ...priority,
+    ...takeTurns([
+      rest.filter((item) => item.media === 'movie'),
+      rest.filter((item) => item.media === 'tv'),
+    ]),
+  ];
 }
 
 /**

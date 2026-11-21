@@ -40,14 +40,22 @@ type Detail = NonNullable<Awaited<ReturnType<ReturnType<typeof useTMDB>['getMovi
 const titleOf = (item: DiscoveryItem) => item.title || item.name || 'Untitled';
 const mediaLabel = (item: DiscoveryItem) => (item.media === 'movie' ? 'Film' : 'Series');
 
-/** "2014 · Film" for the back catalogue, "Thu 27 Nov · Film" for what is coming. */
+/** "2014 · Film" for the back catalogue, "Thu 27 Nov · Film" (with year if another year) for what is coming. */
 function metaLine(item: DiscoveryItem): string {
   const date = discoveryDate(item);
   if (!date) return mediaLabel(item);
-  const when = item.kind === 'upcoming'
-    ? new Date(`${date.slice(0, 10)}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-    : date.slice(0, 4);
-  return `${when} · ${mediaLabel(item)}`;
+  if (item.kind === 'upcoming') {
+    const parsed = new Date(`${date.slice(0, 10)}T12:00:00`);
+    const includeYear = parsed.getFullYear() !== new Date().getFullYear();
+    const when = parsed.toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      ...(includeYear && { year: 'numeric' }),
+    });
+    return `${when} · ${mediaLabel(item)}`;
+  }
+  return `${date.slice(0, 4)} · ${mediaLabel(item)}`;
 }
 
 /**
@@ -152,6 +160,10 @@ function SuggestionTile({ item, onDismiss }: { item: DiscoveryItem; onDismiss: (
               <span className="truncate text-xs text-muted-foreground" title={item.reason}>
                 {item.shortReason ?? item.reason}
               </span>
+            ) : item.shortReason ? (
+              <span className="truncate text-xs font-medium text-primary" title={item.reason}>
+                {item.shortReason}
+              </span>
             ) : <span />}
             {actions.pending ? (
               <span role="status" className="truncate text-xs text-muted-foreground">Adding…</span>
@@ -187,6 +199,9 @@ function SuggestionTile({ item, onDismiss }: { item: DiscoveryItem; onDismiss: (
               </div>
             )}
             {item.kind === 'recommendation' && <p className="text-sm">{item.reason}</p>}
+            {item.kind === 'upcoming' && item.shortReason && (
+              <p className="text-sm font-medium text-primary">{item.reason}</p>
+            )}
             <p className="text-sm leading-relaxed text-muted-foreground">
               {actions.detail?.overview || item.overview || (actions.pending ? 'Loading…' : 'No synopsis available.')}
             </p>
@@ -428,8 +443,12 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
             Most recent first, by the last time you added, watched, unwatched or re-dated a title in it, or changed its Library visibility. Release dates don’t count.
           </p>
         </div>
-        {discovery.franchisesLoading && discovery.franchises.length === 0 && (
-          <p role="status" className="text-sm text-muted-foreground">Checking series, trilogies and spin-offs…</p>
+        {discovery.franchisesLoading && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {discovery.collectionsTotal > 0
+              ? `Checking your film collections, newest added first: ${discovery.collectionsChecked} of ${discovery.collectionsTotal}…`
+              : 'Checking series, trilogies and spin-offs…'}
+          </p>
         )}
         {discovery.franchisesFailed && (
           <div role="status" className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -461,12 +480,8 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         )}
         {discovery.hasMoreFranchises && (
           <div className="flex justify-center pt-1">
-            <Button
-              variant="outline"
-              onClick={discovery.loadMoreFranchises}
-              disabled={discovery.franchisesLoading}
-            >
-              {discovery.franchisesLoading ? 'Checking more collections…' : 'Show more series & collections'}
+            <Button variant="outline" onClick={discovery.loadMoreFranchises}>
+              Show more series &amp; collections
             </Button>
           </div>
         )}
@@ -501,7 +516,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {!discovery.loading && !discovery.loadingMore && discovery.recommendations.length === 0 && !discovery.failed && (
           <p className="text-sm text-muted-foreground">
             {discovery.hasMore
-              ? 'Nothing new on this page — automatic loading paused to stay within API rate limits. Click Show more to keep looking.'
+              ? 'Nothing new in the suggestions checked so far. Show more keeps looking.'
               : 'No more suggestions to show.'}
           </p>
         )}

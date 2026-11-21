@@ -1441,3 +1441,41 @@ COMMENT ON COLUMN "public"."movies"."last_activity_at" IS
 
 COMMENT ON COLUMN "public"."tv_shows"."last_activity_at" IS
     'Owner-activity timestamp: set when the show is added, and bumped when library_state changes (touch_last_activity_at()) or an episode is marked or unmarked watched (touch_show_last_activity_from_episode()). Never moved by watchlist-cron-sync, which inserts newly aired episodes and rewrites metadata, nor by the scores refresh. NULL means no owner action since this column was added (existing rows are not backfilled).';
+
+-- Cached future dated instalments for TMDB film collections present in the
+-- library, refreshed nightly by watchlist-cron-sync so Discover's Coming soon
+-- catches newly announced sequels across every franchise (including older
+-- watched films) without hammering TMDB from the browser. Public read matches
+-- movies/viewing_orders; only service_role writes.
+CREATE TABLE IF NOT EXISTS "public"."watchlist_collection_upcoming" (
+    "collection_id" integer NOT NULL,
+    "tmdb_id" integer NOT NULL,
+    "collection_name" "text" NOT NULL,
+    "title" "text" NOT NULL,
+    "release_date" "date" NOT NULL,
+    "poster_path" "text",
+    "synced_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "watchlist_collection_upcoming_pkey" PRIMARY KEY ("collection_id", "tmdb_id"),
+    CONSTRAINT "watchlist_collection_upcoming_collection_id_pos" CHECK ("collection_id" > 0),
+    CONSTRAINT "watchlist_collection_upcoming_tmdb_id_pos" CHECK ("tmdb_id" > 0),
+    CONSTRAINT "watchlist_collection_upcoming_title_check" CHECK (char_length(btrim("title")) BETWEEN 1 AND 300)
+);
+
+ALTER TABLE "public"."watchlist_collection_upcoming" OWNER TO "postgres";
+
+COMMENT ON TABLE "public"."watchlist_collection_upcoming" IS
+    'Nightly-synced cache of dated future films belonging to TMDB collections in the library, used to prioritise franchise sequels in Discover Coming soon. Public read; service_role write only.';
+
+CREATE INDEX IF NOT EXISTS "idx_watchlist_collection_upcoming_release_date"
+    ON "public"."watchlist_collection_upcoming" USING "btree" ("release_date");
+
+ALTER TABLE "public"."watchlist_collection_upcoming" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public Read Access" ON "public"."watchlist_collection_upcoming"
+    FOR SELECT TO "anon", "authenticated" USING (true);
+
+REVOKE ALL ON TABLE "public"."watchlist_collection_upcoming" FROM PUBLIC, "anon", "authenticated";
+
+GRANT SELECT ON TABLE "public"."watchlist_collection_upcoming" TO "anon", "authenticated";
+
+GRANT ALL ON TABLE "public"."watchlist_collection_upcoming" TO "service_role";

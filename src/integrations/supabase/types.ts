@@ -2971,6 +2971,36 @@ export type Database = {
         }
         Relationships: []
       }
+      watchlist_collection_upcoming: {
+        Row: {
+          collection_id: number
+          collection_name: string
+          poster_path: string | null
+          release_date: string
+          synced_at: string
+          title: string
+          tmdb_id: number
+        }
+        Insert: {
+          collection_id: number
+          collection_name: string
+          poster_path?: string | null
+          release_date: string
+          synced_at?: string
+          title: string
+          tmdb_id: number
+        }
+        Update: {
+          collection_id?: number
+          collection_name?: string
+          poster_path?: string | null
+          release_date?: string
+          synced_at?: string
+          title?: string
+          tmdb_id?: number
+        }
+        Relationships: []
+      }
       watchlist_dismissed_suggestions: {
         Row: {
           created_at: string

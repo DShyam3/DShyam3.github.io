@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { ChevronDown, Globe, Map as MapIcon, Minus, Plus } from 'lucide-react';
+import { ChevronDown, Globe, Lock, LockOpen, Map as MapIcon, Minus, Plus } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { cellToLatLng, latLngToCell } from 'h3-js';
+import { cellToLatLng, getResolution, latLngToCell } from 'h3-js';
 import {
     DEFAULT_MAP_PROJECTION,
     MAP_PROJECTIONS,
@@ -81,6 +81,10 @@ interface SelectedHex {
  * again -- easing up to speed over the ramp rather than lurching off.
  */
 const IDLE_SPIN_DELAY_MS = 12000;
+/** How long the lock button holds the globe still before it may turn again. */
+const SPIN_LOCK_MS = 2 * 60 * 1000;
+/** The hovered hex is outlined once hexes are at least this many pixels across. */
+const HOVER_OUTLINE_MIN_PX = 6;
 const IDLE_SPIN_RAMP_MS = 4000;
 
 /** How close each kind of selection is brought in. */
@@ -651,6 +655,12 @@ export function DotMatrixGlobe({
     const shownResRef = useRef<ShownRes>(3);
     // Whether the WebGL renderer is up: the finer sizes, and so the size menu, need it.
     const [glReady, setGlReady] = useState(false);
+    // The lock button: until this time (performance.now) the globe does not
+    // spin by itself or ease back level; 0 when unlocked.
+    const spinLockUntilRef = useRef(0);
+    const [spinLocked, setSpinLocked] = useState(false);
+    // The hovered cell's outline at a finer level, kept between frames.
+    const hoverCellRef = useRef<{ key: string; projection: string; cell: HexCell } | null>(null);
     // The last frame's view, so a pointer can be worked back to a place.
     const viewRef = useRef<GlobeView | null>(null);
     // Off screen, the loop sleeps rather than drawing what nobody can see.
@@ -798,6 +808,28 @@ export function DotMatrixGlobe({
         levels.setLock(hexSize === 'auto' ? null : (hexSize as HexSizeLock));
         requestDraw();
     }, [levels, hexSize, requestDraw]);
+
+    /**
+     * The lock button: stops the globe turning by itself, and easing back
+     * level, for two minutes; a second press lets it go sooner.
+     */
+    const toggleSpinLock = useCallback(() => {
+        const locking = spinLockUntilRef.current <= performance.now();
+        spinLockUntilRef.current = locking ? performance.now() + SPIN_LOCK_MS : 0;
+        setSpinLocked(locking);
+        requestDraw();
+    }, [requestDraw]);
+
+    // Unlocks the button once its two minutes are up.
+    useEffect(() => {
+        if (!spinLocked) return;
+        const timer = window.setTimeout(() => {
+            spinLockUntilRef.current = 0;
+            setSpinLocked(false);
+            requestDraw();
+        }, Math.max(0, spinLockUntilRef.current - performance.now()));
+        return () => window.clearTimeout(timer);
+    }, [spinLocked, requestDraw]);
 
     /** Zooms in or out by a step, about the middle of the view. */
     const zoomBy = useCallback((factor: number) => {
@@ -1039,7 +1071,7 @@ export function DotMatrixGlobe({
             } else if (Math.abs(drag.velocityX) > 0.0001) {
                 anim.rotation += drag.velocityX;
                 drag.velocityX *= 0.95; // friction
-            } else if (gl && !reduced && !drag.holding && time - drag.lastInteractionTime > IDLE_SPIN_DELAY_MS) {
+            } else if (gl && !reduced && !drag.holding && performance.now() >= spinLockUntilRef.current && time - drag.lastInteractionTime > IDLE_SPIN_DELAY_MS) {
                 // WebGL only: on the canvas 2D path every frame of a spin
                 // that never ends is the 40ms path rebuild, for ever.
                 spinning = true;
@@ -1425,6 +1457,37 @@ export function DotMatrixGlobe({
             }
         }
 
+        // The hex under the pointer, outlined, so a name on hover is plainly
+        // this hex's -- once hexes are big enough to point at one by one.
+        const hoverKey = drag.hoveredDotKey;
+        if (hoverKey && hoverKey !== selectedKey && !drag.isDragging) {
+            const res = getResolution(hoverKey);
+            const pxPerRad = progress >= 0.5 ? R : W_zoom / (2 * Math.PI);
+            if (hexSpacingRad(res) * pxPerRad >= HOVER_OUTLINE_MIN_PX) {
+                let cell: HexCell | undefined;
+                if (res === 3) {
+                    const index = baseTier.cellIndexByH3.get(hoverKey);
+                    cell = index === undefined ? undefined : baseTier.cells[index];
+                } else {
+                    const kept = hoverCellRef.current;
+                    cell = kept && kept.key === hoverKey && kept.projection === projection.id ? kept.cell : hexCellOf(hoverKey, projection);
+                    hoverCellRef.current = { key: hoverKey, projection: projection.id, cell };
+                }
+                const hex = cell ? placeSelectedHex(cell, view, 0) : null;
+                if (hex) {
+                    ctx.save();
+                    ctx.globalAlpha = hex.opacity;
+                    ctx.strokeStyle = palette.selected;
+                    ctx.lineWidth = 1.5;
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    traceHexIntoPath(hex.x, hex.y, hex.vertsX, hex.vertsY, 0.92);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        }
+
         // Ask for another frame only while something is still moving.
         const moving =
             levelsFading ||
@@ -1450,8 +1513,12 @@ export function DotMatrixGlobe({
         }
         anim.lastTime = -1;
         if (gl && anim.progress > 0 && !reduced && !drag.holding) {
-            // At rest on the globe: wake when the idle spin is due to start.
-            const wait = IDLE_SPIN_DELAY_MS - (time - drag.lastInteractionTime);
+            // At rest on the globe: wake when the idle spin is due to start,
+            // or when the lock runs out, whichever is later.
+            const wait = Math.max(
+                IDLE_SPIN_DELAY_MS - (time - drag.lastInteractionTime),
+                spinLockUntilRef.current - performance.now(),
+            );
             spinTimerRef.current = window.setTimeout(requestDraw, Math.max(0, wait) + 16);
         }
     }, [baseTier, projection, levels, detailInfo, visitedSet, visitedCityHexes, viewMode, mode, stars, focusedDotKey, selectedKey, markerCell, requestDraw]);
@@ -1989,9 +2056,27 @@ export function DotMatrixGlobe({
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>
                     </DropdownMenu>
+                    {/* The map's own controls, kept together on the right. */}
+                    <div className="ml-auto flex items-center gap-2">
+                    {/* Holds the globe still for two minutes: no idle spin, no easing
+                        back level. Only over the globe, which is all that turns. */}
+                    {mode === '3d' && (
+                        <button
+                            type="button"
+                            onClick={toggleSpinLock}
+                            className={`flex h-9 w-9 items-center justify-center rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted pointer-events-auto ${
+                                spinLocked ? 'text-foreground' : 'text-muted-foreground'
+                            }`}
+                            aria-label={spinLocked ? 'Globe held still. Let it turn again' : 'Hold the globe still for two minutes'}
+                            aria-pressed={spinLocked}
+                            title={spinLocked ? 'Held still: turns again after two minutes' : 'Hold still for two minutes'}
+                        >
+                            {spinLocked ? <Lock aria-hidden="true" className="w-3.5 h-3.5" /> : <LockOpen aria-hidden="true" className="w-3.5 h-3.5" />}
+                        </button>
+                    )}
                     {/* Zoom, and the hex size: what is showing, and a size to hold.
                         Left out on a phone, where a pinch zooms and the bar has no room. */}
-                    <div className="ml-auto hidden sm:flex min-h-9 items-center rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground pointer-events-auto">
+                    <div className="hidden sm:flex min-h-9 items-center rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground pointer-events-auto">
                         <button
                             type="button"
                             onClick={() => zoomBy(1 / ZOOM_BUTTON_STEP)}
@@ -2031,7 +2116,7 @@ export function DotMatrixGlobe({
                     </div>
                     <button
                         onClick={() => setMode(m => m === '2d' ? '3d' : '2d')}
-                        className="sm:ml-0 ml-auto flex min-h-9 items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
+                        className="flex min-h-9 items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
                         aria-label="Toggle 3D View"
                         aria-pressed={mode === '3d'}
                     >
@@ -2040,6 +2125,7 @@ export function DotMatrixGlobe({
                         <span className="sm:hidden">{mode === '2d' ? '3D' : '2D'}</span>
                         <span className="hidden sm:inline">{mode === '2d' ? '3D Globe' : '2D Map'}</span>
                     </button>
+                    </div>
                 </div>
             )}
             </div>

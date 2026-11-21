@@ -77,8 +77,16 @@ export function FilterBar<T extends CollectionRow, R>({
             className="h-11 w-full pl-9 pr-10"
           />
           {search && (
-            <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-11 w-11" aria-label="Clear search" onClick={() => setSearch('')}>
-              <X className="h-4 w-4" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="group/clear absolute right-0 top-0 h-11 w-11 text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+              aria-label="Clear search"
+              onClick={() => setSearch('')}
+            >
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors group-hover/clear:bg-secondary group-hover/clear:text-secondary-foreground group-focus-visible/clear:ring-2 group-focus-visible/clear:ring-ring">
+                <X className="h-4 w-4" />
+              </span>
             </Button>
           )}
         </div>

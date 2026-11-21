@@ -12,7 +12,6 @@ import React, {
 import {
   useWatchlist,
   WatchlistItem,
-  FavouriteItem,
 } from '@/features/watchlist/useWatchlist';
 import { useSchedule } from '@/features/watchlist/useSchedule';
 import { useTMDB } from '@/features/watchlist/useTMDB';
@@ -20,10 +19,6 @@ import type { TMDBResult } from '@/features/watchlist/useTMDB';
 import { newItemFromDetails } from '@/features/watchlist/new-item';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
 import { LIBRARY_CATEGORIES, libraryCategories, type LibraryCategory } from '@/features/watchlist/library-categories';
-import {
-  resolveFavouriteCategory,
-  type TmdbFacts,
-} from '@/features/watchlist/favourite-category';
 import { groupByLanguage } from '@/features/watchlist/language-groups';
 import { LanguageGroupedSections } from '@/features/watchlist/components/LanguageGroupedSections';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,8 +66,6 @@ import {
   XCircle,
   AlertTriangle,
   Timer,
-  Heart,
-  Trash2,
   Loader2,
   Newspaper,
   Library,
@@ -80,7 +73,6 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/format-date';
-import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { formatCooldownEnd } from '@/hooks/useCooldown';
 import { Filter } from 'lucide-react';
 import { SyncHistoryIcon } from '@/components/shared/SyncHistoryIcon';
@@ -121,9 +113,9 @@ import {
  */
 type LibrarySort = 'alphabetical' | 'recent' | 'finish' | 'watched' | 'rating';
 
-/** Status shelves first, then Favourites, then the two set-aside shelves. */
-type Shelf = LibraryShelf | 'Favourites';
-const MAIN_SHELVES: Shelf[] = [...LIBRARY_SHELVES, 'Favourites'];
+/** Status shelves first, then the two set-aside shelves. */
+type Shelf = LibraryShelf;
+const MAIN_SHELVES: Shelf[] = [...LIBRARY_SHELVES];
 const SHELVES: Shelf[] = [...MAIN_SHELVES, ...MORE_SHELVES];
 
 /** Each shelf's own orders, default first. Upcoming runs by date. */
@@ -133,7 +125,6 @@ const SHELF_SORTS: Record<Shelf, LibrarySort[]> = {
   Upcoming: [],
   'Up to date': ['alphabetical', 'recent'],
   Finished: ['watched', 'rating', 'alphabetical'],
-  Favourites: [],
   'Stopped watching': ['alphabetical', 'rating'],
   Hidden: ['alphabetical'],
 };
@@ -145,7 +136,6 @@ const SHELF_HINTS: Record<Shelf, string> = {
   Upcoming: 'Nothing to watch until a dated release: new titles, and the return of a series you are up to date on. Soonest first.',
   'Up to date': 'Running series with every aired episode watched and no next date known. A series moves to Upcoming once its return has a date, or to Watching when its next episode is due within two weeks.',
   Finished: 'Films you have watched, and ended series watched to the last episode.',
-  Favourites: 'Titles you have hearted. A favourite also stays on its own shelf.',
   'Stopped watching': 'Set aside, with your progress and ratings kept.',
   Hidden: 'Kept off every other shelf, with your history kept.',
 };
@@ -206,11 +196,6 @@ const ALL_GENRES = [
   'Western',
 ];
 
-const favouriteAutoCategories = (favourite: FavouriteItem) => libraryCategories({
-  category: favourite.media_type === 'tv' ? 'TV Shows' : 'Movies',
-  ...favourite.facts,
-});
-
 const Watchlist = () => {
   const { isAdmin, isAuthLoading } = useAuth();
   const {
@@ -231,7 +216,6 @@ const Watchlist = () => {
     autoSyncEnabled,
     syncWatchlist,
     syncSingleItem,
-    syncFavouriteFacts,
     cancelSync,
     toggleEpisodeWatched,
     toggleSeasonWatched,
@@ -249,8 +233,6 @@ const Watchlist = () => {
   // (watchlist and schedule are separate hooks/tables) -- always clear the
   // schedule entry too so deleting a show doesn't leave a stale "scheduled"
   // count on some day of the week.
-  const { askDelete, deleteDialog } = useDeleteConfirm();
-
   const removeWatchlistItemAndSchedule = useCallback(
     async (ref: TitleRef) => {
       await removeWatchlistItem(ref);
@@ -332,42 +314,6 @@ const Watchlist = () => {
     loading: searchLoading,
   } = useTMDB();
 
-  const [favDialogOpen, setFavDialogOpen] = useState(false);
-  const [favSearchQuery, setFavSearchQuery] = useState('');
-  const [favAddedItems, setFavAddedItems] = useState<Set<string>>(new Set());
-
-  /**
-   * The TMDB facts a search row already carries. `search/tv` returns all
-   * three; `search/movie` omits origin_country, which the derivation covers
-   * from original_language instead.
-   */
-  const factsFor = (result: TMDBResult): TmdbFacts => ({
-    original_language: result.original_language ?? null,
-    origin_country: result.origin_country ?? null,
-    genre_ids: result.genre_ids ?? null,
-  });
-
-  const handleAddFavourite = useCallback(
-    async (result: TMDBResult) => {
-      const resultKey = `${result.media_type}-${result.id}`;
-      try {
-        await addFavourite({
-          title: result.title || result.name || '',
-          poster: result.poster_path
-            ? getPosterUrl(result.poster_path) || undefined
-            : undefined,
-          media_type: result.media_type,
-          tmdb_id: result.id,
-          facts: factsFor(result),
-        });
-        setFavAddedItems((prev) => new Set(prev).add(resultKey));
-      } catch {
-        // addFavourite has already shown the failure.
-      }
-    },
-    [addFavourite, getPosterUrl],
-  );
-
   const handleAddWatchlistItem = useCallback(
     async (result: TMDBResult) => {
       // pendingResultIds covers the whole click-to-completion span, including
@@ -445,24 +391,6 @@ const Watchlist = () => {
       setAddedItems(new Set());
     }
   }, [open]);
-
-  // Reset favourites dialog when it closes
-  useEffect(() => {
-    if (!favDialogOpen) {
-      setFavSearchQuery('');
-      setFavAddedItems(new Set());
-    }
-  }, [favDialogOpen]);
-
-  // TMDB search for favourites
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (favSearchQuery.length >= 2) {
-        tmdbSearchMulti(favSearchQuery);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [favSearchQuery, tmdbSearchMulti]);
 
   // The add search follows the type filter; with All it searches films and
   // series together.
@@ -713,38 +641,12 @@ const Watchlist = () => {
         return <CalendarClock className="h-4 w-4" />;
       case 'Finished':
         return <CheckCircle className="h-4 w-4" />;
-      case 'Favourites':
-        return <Heart className="h-4 w-4" />;
       case 'Stopped watching':
         return <PauseCircle className="h-4 w-4" />;
       case 'Hidden':
         return <EyeOff className="h-4 w-4" />;
     }
   };
-
-  const favouriteCategoryCounts = useMemo(() => {
-    const counts = Object.fromEntries(LIBRARY_CATEGORIES.map((category) => [category, 0])) as Record<LibraryCategory, number>;
-    favourites.filter((favourite) => libraryType === 'all' || favourite.media_type === libraryType)
-      .forEach((favourite) => favouriteAutoCategories(favourite).forEach((category) => { counts[category]++; }));
-    return counts;
-  }, [favourites, libraryType]);
-
-  const typedFavourites = useMemo(
-    () => favourites.filter((favourite) =>
-      (libraryType === 'all' || favourite.media_type === libraryType) &&
-      (!selectedAutoCategory || favouriteAutoCategories(favourite).includes(selectedAutoCategory))),
-    [favourites, libraryType, selectedAutoCategory],
-  );
-
-  const favouriteGroups = useMemo(
-    () =>
-      groupByLanguage(typedFavourites, (fav) => ({
-        original_language: fav.facts.original_language,
-        genre_ids: fav.facts.genre_ids,
-        mediaType: fav.media_type,
-      })),
-    [typedFavourites],
-  );
 
   const finishedGroups = useMemo(() => {
     if (selectedCategory !== 'Finished') return [];
@@ -759,10 +661,6 @@ const Watchlist = () => {
   const categoryCounts = useMemo(() => {
     const counts = Object.fromEntries(SHELVES.map((shelf) => [shelf, 0])) as Record<Shelf, number>;
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    counts.Favourites = favourites.filter((favourite) =>
-      (libraryType === 'all' || favourite.media_type === libraryType) &&
-      (!normalizedQuery || favourite.title.toLowerCase().includes(normalizedQuery)),
-    ).length;
     watchlist.forEach((item) => {
       const shelf = shelfByItem.get(titleKey(item));
       if (
@@ -774,13 +672,11 @@ const Watchlist = () => {
       }
     });
     return counts;
-  }, [watchlist, favourites, shelfByItem, libraryType, searchQuery]);
+  }, [watchlist, shelfByItem, libraryType, searchQuery]);
 
   const totalSearchMatches = useMemo(() => {
     if (!searching) return 0;
-    const visibleShelves = isAdmin
-      ? SHELVES.filter((s) => s !== 'Favourites')
-      : MAIN_SHELVES.filter((s) => s !== 'Favourites');
+    const visibleShelves = isAdmin ? SHELVES : MAIN_SHELVES;
     return visibleShelves.reduce((sum, shelf) => sum + categoryCounts[shelf], 0);
   }, [searching, isAdmin, categoryCounts]);
 
@@ -865,47 +761,7 @@ const Watchlist = () => {
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <WatchlistNav current="library" />
         <div className="ml-auto flex items-center gap-1">
-        {isAdmin && selectedCategory === 'Favourites' && (
-          <div className="flex items-center gap-2">
-            <TmdbSearchDialog
-              open={favDialogOpen}
-              onOpenChange={setFavDialogOpen}
-              triggerLabel="Add"
-              title="Add to Favourites"
-              description="Search and add movies or TV shows to your favourites."
-              searchLabel="Search Movies & TV Shows"
-              placeholder="Type a movie or TV show name..."
-              query={favSearchQuery}
-              onQueryChange={(value) => { clearTmdbSearch(); setFavSearchQuery(value); }}
-              results={searchResults}
-              loading={searchLoading}
-              getPosterUrl={getPosterUrl}
-              resultKey={(r) => `${r.media_type}-${r.id}`}
-              isDisabled={(r) => favAddedItems.has(`${r.media_type}-${r.id}`)}
-              onSelect={handleAddFavourite}
-              renderStatus={(r) => (
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      'text-xs px-2 py-0.5 rounded font-medium bg-secondary text-muted-foreground',
-                    )}
-                  >
-                    {r.media_type === 'movie' ? 'Movie' : 'TV Show'}
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
-                    Auto: {resolveFavouriteCategory(factsFor(r))}
-                  </span>
-                  {favAddedItems.has(`${r.media_type}-${r.id}`) && (
-                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                      Added
-                    </span>
-                  )}
-                </div>
-              )}
-            />
-          </div>
-        )}
-        {isAdmin && selectedCategory !== 'Favourites' && (
+        {isAdmin && (
           <TmdbSearchDialog
             open={open}
             onOpenChange={setOpen}
@@ -1130,7 +986,7 @@ const Watchlist = () => {
             setSelectedCategory(shelf);
             setSortOrder(SHELF_SORTS[shelf][0] ?? 'alphabetical');
             setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null);
-            if (searching && shelf !== 'Favourites') {
+            if (searching) {
               setSearchAllShelves(false);
             } else {
               setSearchQuery('');
@@ -1172,33 +1028,35 @@ const Watchlist = () => {
           </SelectContent>
         </Select>
         <SegmentedControl label="Show films, series or both" options={LIBRARY_TYPE_OPTIONS} value={libraryType} onChange={setLibraryType} />
-        {selectedCategory === 'Favourites' && <Select value={selectedAutoCategory ?? 'all'} onValueChange={(value) => setSelectedAutoCategory(value === 'all' ? null : value as LibraryCategory)}>
-          <SelectTrigger aria-label="Automatic category" className="h-11 w-[180px] shrink-0 text-sm"><SelectValue placeholder="Category" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            {LIBRARY_CATEGORIES.filter((category) => favouriteCategoryCounts[category] > 0 || selectedAutoCategory === category).map((category) => (
-              <SelectItem key={category} value={category}>{category} ({favouriteCategoryCounts[category]})</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>}
-        {selectedCategory !== 'Favourites' && <>
-          {/* 12rem holds the whole placeholder; narrower, the box drops below the category picker. */}
-          <div className="relative min-w-[12rem] flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              aria-label="Search your whole library"
-              placeholder="Search library…"
-              value={searchQuery}
-              onChange={(event) => {
-                const next = event.target.value;
-                if (!searchQuery && next) setSearchAllShelves(true);
-                setSearchQuery(next);
-              }}
-              className={cn('h-11 w-full pl-9', searchQuery && 'pr-10')}
-            />
-            {searchQuery && <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-11 w-11" aria-label="Clear search" onClick={() => { setSearchQuery(''); setSearchAllShelves(true); }}><X className="h-4 w-4" /></Button>}
-          </div>
-          <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+        {/* 12rem holds the whole placeholder; narrower, the box drops below the category picker. */}
+        <div className="relative min-w-[12rem] flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            aria-label="Search your whole library"
+            placeholder="Search library…"
+            value={searchQuery}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (!searching && next.trim()) setSearchAllShelves(true);
+              setSearchQuery(next);
+            }}
+            className={cn('h-11 w-full pl-9', searchQuery && 'pr-10')}
+          />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="group/clear absolute right-0 top-0 h-11 w-11 text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+              aria-label="Clear search"
+              onClick={() => { setSearchQuery(''); setSearchAllShelves(true); }}
+            >
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors group-hover/clear:bg-secondary group-hover/clear:text-secondary-foreground group-focus-visible/clear:ring-2 group-focus-visible/clear:ring-ring">
+                <X className="h-4 w-4" />
+              </span>
+            </Button>
+          )}
+        </div>
+        <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
             <PopoverTrigger asChild><Button variant="outline" className="h-11 gap-2"><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}</Button></PopoverTrigger>
             <PopoverContent align="end" collisionPadding={12} className="w-80 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain space-y-3" style={{ maxHeight: 'min(480px, var(--radix-popover-content-available-height))' }} aria-label="Library filters">
               <div className="flex items-center justify-between"><h3 className="font-medium">Filter library</h3><Button variant="ghost" size="sm" onClick={() => { setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null); }}>Reset</Button></div>
@@ -1332,139 +1190,68 @@ const Watchlist = () => {
               ))}
             </SelectContent>
           </Select>}
-        </>}
       </div>
     </div>
   );
 
   if (viewParams.get('view') === 'schedule') return <Navigate to="/watchlist" replace />;
+  if (viewParams.get('category') === 'favourites') return <Navigate to="/watchlist/favourites" replace />;
 
   return (
     <AppShell title="Watchlist" subtitle="What I'm watching" toolbar={toolbar}>
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2 py-3">
           <div className="space-y-1">
-            <CountLabel count={loading ? undefined : selectedCategory === 'Favourites' ? typedFavourites.length : filteredWatchlist.length} noun={searching ? `${filteredWatchlist.length === 1 ? 'result' : 'results'} ${searchAllShelves ? 'across your library' : `on ${selectedCategory}`}` : selectedCategory.toLowerCase()} />
+            <CountLabel
+              count={loading ? undefined : filteredWatchlist.length}
+              noun={searching
+                ? `${filteredWatchlist.length === 1 ? 'result' : 'results'} ${searchAllShelves ? 'across your library' : `on ${selectedCategory}`}`
+                : selectedCategory.toLowerCase()}
+            />
             <p className="text-sm text-muted-foreground">{searching ? (searchAllShelves ? 'Search looks on every shelf; each result sits under the shelf it is on.' : `Searching on ${selectedCategory} only.`) : SHELF_HINTS[selectedCategory]}</p>
           </div>
-          {isAdmin && selectedCategory === 'Favourites' && <Button variant="outline" size="sm" onClick={syncFavouriteFacts} disabled={syncing}><RefreshCcw className="mr-2 h-4 w-4" />Refresh favourite details</Button>}
         </div>
-        {selectedCategory === 'Favourites' ? (
-          <div className="px-4 md:px-0 py-6 space-y-8">
-            {loading ? (
-              <CardGrid>
-                {[...Array(12)].map((_, i) => (
-                  <Skeleton key={i} className="h-64 rounded-lg" />
-                ))}
-              </CardGrid>
-            ) : typedFavourites.length === 0 ? (
-              <p className="text-center py-16 text-muted-foreground">
-                {selectedAutoCategory ? `No favourites in ${selectedAutoCategory}` : 'No favourites yet'}
-              </p>
-            ) : (
-              <LanguageGroupedSections
-                groups={favouriteGroups}
-                forceExpand={Boolean(selectedAutoCategory)}
-                renderGrid={(items) => (
-                  <CardGrid>
-                    {items.map((fav) => (
-                      <div key={fav.id} className="item-card group">
-                        <div className="aspect-[2/3] bg-muted relative overflow-hidden">
-                          {fav.poster ? (
-                            <img
-                              src={fav.poster}
-                              alt={fav.title}
-                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-secondary/30">
-                              <Heart className="h-8 w-8 text-muted-foreground/30" />
-                            </div>
-                          )}
-                          {isAdmin && (
-                            <div
-                              className="card-actions absolute top-2 right-2"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Button
-                                variant="secondary"
-                                size="icon"
-                                className="h-11 w-11 bg-background/80 backdrop-blur-sm"
-                                onClick={() =>
-                                  askDelete({
-                                    name: fav.title,
-                                    onConfirm: () => removeFavourite(fav.id),
-                                  })
-                                }
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-3">
-                          <h3 className="font-serif text-sm font-medium leading-tight">
-                            <span
-                              className="line-clamp-2"
-                              style={{ textWrap: 'balance' }}
-                            >
-                              {fav.title}
-                            </span>
-                          </h3>
-                        </div>
-                      </div>
-                    ))}
-                  </CardGrid>
-                )}
-              />
-            )}
-          </div>
-        ) : (
-          <div className="px-4 md:px-0 py-6">
-            {loading ? (
-              <CardGrid>
-                {[...Array(12)].map((_, i) => (
-                  <Skeleton key={i} className="h-64 rounded-lg" />
-                ))}
-              </CardGrid>
-            ) : filteredWatchlist.length === 0 ? (
-              <p className="text-center py-16 text-muted-foreground">
-                {searching ? `Nothing ${searchAllShelves ? 'in your library' : `on ${selectedCategory}`} matches “${searchQuery.trim()}”` : `Nothing on ${selectedCategory} yet`}
-              </p>
-            ) : searching && searchAllShelves ? (
-              <div className="space-y-8">
-                {SHELVES.filter((shelf) => shelf !== 'Favourites').map((shelf) => {
-                  // The held shelf, as on a single shelf: a title marked watched
-                  // from its detail stays in its section until the detail closes.
-                  const onShelf = visibleWatchlist.filter((item) => gridShelfOf(item) === shelf);
-                  if (onShelf.length === 0) return null;
-                  return (
-                    <section key={shelf} aria-label={`${shelf}: ${onShelf.length}`} className="space-y-3">
-                      <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">{getCategoryIcon(shelf)}{shelf} · {onShelf.length}</h2>
-                      <CardGrid>{onShelf.map(renderCard)}</CardGrid>
-                    </section>
-                  );
-                })}
-              </div>
-            ) : selectedCategory === 'Finished' ? (
-              <LanguageGroupedSections
-                groups={finishedGroups}
-                forceExpand={searching || activeFilterCount > 0}
-                renderGrid={(items) => <CardGrid>{items.map(renderCard)}</CardGrid>}
-              />
-            ) : (
-              <CardGrid>{visibleWatchlist.map(renderCard)}</CardGrid>
-            )}
-            {selectedCategory !== 'Finished' && visibleCount < filteredWatchlist.length && (
-              <div ref={observerTarget} className="h-20 w-full" />
-            )}
-          </div>
-        )}
+        <div className="px-4 md:px-0 py-6">
+          {loading ? (
+            <CardGrid>
+              {[...Array(12)].map((_, i) => (
+                <Skeleton key={i} className="h-64 rounded-lg" />
+              ))}
+            </CardGrid>
+          ) : filteredWatchlist.length === 0 ? (
+            <p className="text-center py-16 text-muted-foreground">
+              {searching ? `Nothing ${searchAllShelves ? 'in your library' : `on ${selectedCategory}`} matches “${searchQuery.trim()}”` : `Nothing on ${selectedCategory} yet`}
+            </p>
+          ) : searching && searchAllShelves ? (
+            <div className="space-y-8">
+              {SHELVES.map((shelf) => {
+                // The held shelf, as on a single shelf: a title marked watched
+                // from its detail stays in its section until the detail closes.
+                const onShelf = visibleWatchlist.filter((item) => gridShelfOf(item) === shelf);
+                if (onShelf.length === 0) return null;
+                return (
+                  <section key={shelf} aria-label={`${shelf}: ${onShelf.length}`} className="space-y-3">
+                    <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">{getCategoryIcon(shelf)}{shelf} · {onShelf.length}</h2>
+                    <CardGrid>{onShelf.map(renderCard)}</CardGrid>
+                  </section>
+                );
+              })}
+            </div>
+          ) : selectedCategory === 'Finished' ? (
+            <LanguageGroupedSections
+              groups={finishedGroups}
+              forceExpand={searching || activeFilterCount > 0}
+              renderGrid={(items) => <CardGrid>{items.map(renderCard)}</CardGrid>}
+            />
+          ) : (
+            <CardGrid>{visibleWatchlist.map(renderCard)}</CardGrid>
+          )}
+          {selectedCategory !== 'Finished' && visibleCount < filteredWatchlist.length && (
+            <div ref={observerTarget} className="h-20 w-full" />
+          )}
+        </div>
 
       </div>
-
-      {deleteDialog}
 
       <SyncDetailDialog
         entry={selectedSyncEntry}
