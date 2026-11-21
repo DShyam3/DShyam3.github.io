@@ -5,7 +5,6 @@ Updated 2026-11-21. Branch `main`, head `747dd7e5` (`tv-spinoffs` v2 cache & cus
 ## Uncommitted in the tree (other sessions)
 
 - `/dev` status board and History rework (`src/pages/Dev.tsx`, `src/features/dev/api-status.ts`, `src/features/dev/api-status.test.ts`; held in `git stash@{0}`): not committed, not deployed. Browser-verified locally (`npm run dev:test`, port 8085). Not verified: live data, light theme, phone width; `reviewer` not yet run.
-- Other uncommitted edits: `DotMatrixGlobe.tsx` (Travel).
 
 ## Pushed, awaiting live browser check
 
@@ -21,6 +20,7 @@ Updated 2026-11-21. Branch `main`, head `747dd7e5` (`tv-spinoffs` v2 cache & cus
 - `watchlist-cron-sync` open items (`REHAUL_PLAN.md` item 10 b–d): watched episodes and ratings deleted; rated-then-unwatched seasons deleted; Season 0 specials deleted unchecked.
 - Design questions (`REHAUL_PLAN.md` item 9): hiding/Stopped-watching stamping `last_activity_at`; history import stamping all imported titles with one `now()`.
 - Travel hexes not verified on phone (pinch to 32x, GPU memory, high-refresh frame rate).
+- Travel hovered-hex outline and two-minute globe lock: pushed with this commit; not yet checked on the live site.
 - Local DB drifted: `supabase migration up --local` fails at `20261117193741`; `supabase db reset` restores it.
 - Verify OMDb weekly refresh (~2026-11-25).
 
