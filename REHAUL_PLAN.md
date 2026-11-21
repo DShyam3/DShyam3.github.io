@@ -382,17 +382,22 @@ under 2026-11-18.
 7. **Favourites as a flag** and the other open items under "Watchlist News and
    Library" above still stand.
 10. **Cron sync, what is still open.** The episode upsert and season-delete fixes
-    (`261065c4`, `f99bbc8a`) are live in `watchlist-cron-sync` v27 (2026-11-21); no
-    automated test covers the function. Items (b) to (d) are not fixed. (b) Episode-level delete (`index.ts` ~1090-1094) removes episodes TMDB no
-    longer lists, or whose air date TMDB blanked (`hasAirDate`), with no watched guard.
-    A watched episode is lost, and its rating (`watchlist_ratings.episode_id` ON DELETE
-    CASCADE) with it. One-statement fix: `.delete().in('id', toDeleteIds).or('watched.is.null,watched.eq.false')`.
-    Behaviour change: kept watched episodes would stay as orphans in progress counts.
-    Owner to decide. (c) Season deletion checks only `watched`. A season rated and then
-    unwatched is deleted with its ratings (`watchlist_ratings.season_id` and `episode_id`
-    cascade). Owner to decide. (d) Season 0 cleanup (~939-945) still deletes specials
-    with no watched check. Owner to decide.
+    (`261065c4`, `f99bbc8a`) are live in `watchlist-cron-sync` v27 (2026-11-21).
+    The watched-or-rated guard on every season and episode delete is committed
+    locally as `1f63bea1`: not pushed, not deployed. The owner approved the fix and
+    its trade-off (a kept episode still counts in progress totals; a watched
+    duplicate Season 0 stays). Open: (a) deploy `watchlist-cron-sync` from
+    `1f63bea1` and push it; both need the owner's OK. (b) The season delete is not
+    atomic: an episode watched or rated in the round trip between the read and the
+    delete can still cascade away, and so can a rating added between
+    `ratedEpisodes` and an episode delete. Closing it needs a SQL function, so a
+    migration (`migration` agent); optional. (c) Only the helpers in
+    `supabase/functions/_shared/owner-data.ts` are unit-tested
+    (`owner-data.test.ts`, run by `npm run test:functions`); the function is not.
 11. **Browser check of Discover order** on the signed-in owner's data: not run.
+    A visitor attempt on 2026-11-21 stalled at 18 of 218 collections with no cards
+    (all 66 `tmdb-proxy` calls 200, no 429s, no progress for over a minute). The
+    walk needs looking at before the order can be checked. Not diagnosed.
 
 ### Deferred by choice
 

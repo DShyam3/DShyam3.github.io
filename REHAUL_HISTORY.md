@@ -3205,3 +3205,13 @@ Status: the migration is applied to hosted (`yvtiybyuifkiwyrnjebe`, 2026-11-21) 
 The 2026-11-20 entry above left two questions open. Both are now closed, and the code stands as built. Hiding a title or marking it Stopped watching stamps `last_activity_at` and raises its collection in Discover, like any other Library visibility change. It is an owner action on that franchise, and the rule stays one rule ("any owner action") rather than a list of exceptions. A history import (`import_watch_history`) gives every imported title the same timestamp, the transaction's `now()`, so imported collections rise together and tie, broken by name. The import is one owner action at one moment. Each title's historical watch date stays in `watched_at`; `last_activity_at` records when the owner acted, not when they watched.
 
 No code change. This closes the "Known and open" paragraph of the 2026-11-20 entry above.
+
+### The sync keeps anything watched or rated — 2026-11-21
+
+`watchlist-cron-sync` deletes a season or episode only when nothing of the owner's is on it. Every season delete (TMDB dropped it, emptied it, or it is a stale Season 0 special) and every episode delete (TMDB dropped it, or blanked its air date) is checked against `watched` and `watchlist_ratings` at delete time, and an episode delete also filters out watched rows in the same statement. A kept episode stays and still counts in progress totals, since the owner's watch state and rating are on it. A watched duplicate Season 0 stays.
+
+The reason is the cascade. Deleting a season or episode removes its watch state and its ratings (`watchlist_ratings` cascades on both), and the sync cannot put those back, while it can always restore the TMDB rows. So the sync keeps owner data over TMDB's list, and accepts the cost: progress totals can include an episode TMDB no longer lists, and a duplicate special can stay. A short read keeps everything; a failed read fails the title.
+
+Known and open: the season delete is not atomic. Something watched or rated between the read and the delete can still cascade away; closing that needs a SQL function, and is not done.
+
+Closure: `supabase/functions/_shared/owner-data.ts`, `supabase/functions/watchlist-cron-sync/index.ts`. Committed as `1f63bea1` on the feature branch, not pushed or deployed.

@@ -358,7 +358,7 @@ Watchlist sync runs server-side every night in three parts, ten minutes apart
 from 06:00 UTC, each covering a third of the library, and checks every active
 film collection on TMDB for newly dated upcoming sequels so Discover's Coming
 soon catches them across the whole library; the sync-history panel
-labels each part and flags a part that logged nothing as missed. Manual
+labels each part and flags a part that logged nothing as missed. The sync never removes a season or episode you have watched or rated, even when TMDB no longer lists it. Manual
 full-library syncs are limited to one per 10 minutes; syncing a single title is
 limited to 20 per minute. Bank transaction syncs are limited to one per 15
 minutes. Sync buttons on the Watchlist,
