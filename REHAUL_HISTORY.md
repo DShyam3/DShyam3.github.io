@@ -3199,3 +3199,9 @@ Collections with any touched title rank first, latest first, films and series to
 Known and open: hiding a title or marking it Stopped watching also stamps it, and a history import stamps every imported title with one `now()`, so imported collections rise together. Both are open in `REHAUL_PLAN.md`.
 
 Status: the migration is applied to hosted (`yvtiybyuifkiwyrnjebe`, 2026-11-21) and the code is on main as `36324d8d`, deployed by Pages run `44899327331`. Read-only check: both columns, the three triggers, and 0 of 1,227 films and 0 of 423 series stamped, as designed. Not verified: the owner's own order on live. The visitor check saw the copy and the library read, but no cards rendered.
+
+### Discover's activity stamp: hides count, and an import is one moment — 2026-11-21
+
+The 2026-11-20 entry above left two questions open. Both are now closed, and the code stands as built. Hiding a title or marking it Stopped watching stamps `last_activity_at` and raises its collection in Discover, like any other Library visibility change. It is an owner action on that franchise, and the rule stays one rule ("any owner action") rather than a list of exceptions. A history import (`import_watch_history`) gives every imported title the same timestamp, the transaction's `now()`, so imported collections rise together and tie, broken by name. The import is one owner action at one moment. Each title's historical watch date stays in `watched_at`; `last_activity_at` records when the owner acted, not when they watched.
+
+No code change. This closes the "Known and open" paragraph of the 2026-11-20 entry above.

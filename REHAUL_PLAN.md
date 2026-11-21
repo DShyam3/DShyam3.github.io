@@ -381,12 +381,6 @@ under 2026-11-18.
    watched more than once.
 7. **Favourites as a flag** and the other open items under "Watchlist News and
    Library" above still stand.
-9. **Discover stamp, open design questions.** (a) Hiding a title or marking it
-   Stopped watching stamps it, which raises its collection in Discover; decide
-   whether only active and paused titles stamp. (b) A history import
-   (`import_watch_history`) gives every imported title one identical `now()`, so
-   imported collections rise together, tied and sorted by name; decide whether to
-   stamp each title with its own time.
 10. **Cron sync, what is still open.** The episode upsert and season-delete fixes
     (`261065c4`, `f99bbc8a`) are live in `watchlist-cron-sync` v27 (2026-11-21); no
     automated test covers the function. Items (b) to (d) are not fixed. (b) Episode-level delete (`index.ts` ~1090-1094) removes episodes TMDB no

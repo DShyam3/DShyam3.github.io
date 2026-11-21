@@ -1,6 +1,6 @@
 # State
 
-Updated 2026-11-21. Branch `claude/beautiful-hawking-f6254a`, code head `989989d9` (local, not pushed). origin/main is `73fb6c14`, which includes the Discover ordering work (`36324d8d`).
+Updated 2026-11-21. Branch `claude/beautiful-hawking-f6254a`, code head `b0e93952`, which is origin/main per the local ref (not refetched this session). The Discover ordering work is on main as `36324d8d`.
 
 ## Uncommitted in the tree (other sessions)
 
@@ -8,7 +8,7 @@ Updated 2026-11-21. Branch `claude/beautiful-hawking-f6254a`, code head `989989d
 
 ## Local, not pushed
 
-- `989989d9`: Discover loading line now reads "most recent first" (`src/features/watchlist/components/DiscoverySection.tsx`). Committed, not pushed to origin.
+- The docs commit `docs(plan): close the Discover activity-stamp questions [skip ci]` on this branch: closes `REHAUL_PLAN.md` item 9, appends a `REHAUL_HISTORY.md` entry. Local only, not pushed.
 
 ## Live since 2026-11-21
 
@@ -24,18 +24,17 @@ Updated 2026-11-21. Branch `claude/beautiful-hawking-f6254a`, code head `989989d
 - Watchlist (`354995c2`): Favourites tab & search, Franchises search clear pills and padding, franchise undated-filtering, Coming soon priority & `watchlist_collection_upcoming` cache (`20261121130500_watchlist_collection_upcoming.sql` applied); not yet browser-verified on live.
 - Watchlist: Franchises dims titles marked Not interested (`9452aeb3`). Signed-in owner path not browser-verified; open: a dismissed title can still be named "Next up" on a collapsed card, and the poster strip does not dim it.
 - MCU card (`30e0a877`), Travel hex size control (`3220ab6b`), `/dev` dashboard & telemetry (`5296949c`, `a9e161c1`, `ec1fd147`).
+- Discover loading line reads "most recent first" (`989989d9`, on origin/main). Travel hovered-hex outline and two-minute globe lock (`1046d14b`) and GeoNames town names with "near" towns (`b0e93952`) are also on origin/main.
 
 ## Still open
 
 - Discover order on the signed-in owner's data (`REHAUL_PLAN.md` item 11): not run. The visitor scan above did not reach the cards.
 - Cron sync, `REHAUL_PLAN.md` item 10 (b)–(d): episode-level delete drops watched episodes and their ratings; rated-then-unwatched seasons deleted with ratings; Season 0 specials deleted unchecked. Owner to decide.
-- Design questions (`REHAUL_PLAN.md` item 9): hiding/Stopped-watching stamping `last_activity_at`; history import stamping all imported titles with one `now()`.
-- `989989d9` to push to origin/main: not pushed.
 - Travel hexes not verified on phone (pinch to 32x, GPU memory, high-refresh frame rate). Travel hovered-hex outline, two-minute globe lock, GeoNames town names and "near" fallback not yet checked on the live site. Regenerating hex data needs GeoNames' cities1000.zip unzipped into `.cache/geonames/`.
 - Local DB drifted: `supabase migration up --local` fails at `20261117193741`; `supabase db reset` restores it.
 - Verify OMDb weekly refresh (~2026-11-25).
 
-## Checks (2026-11-21, on `989989d9`)
+## Checks (2026-11-21, on `989989d9`; not re-run on `b0e93952`)
 
 | Check | Result |
 |---|---|
@@ -49,8 +48,7 @@ Updated 2026-11-21. Branch `claude/beautiful-hawking-f6254a`, code head `989989d
 ## Next
 
 1. Browser-verify live after Pages deploys: custom `franchise` override & year-dedupe, `tv-spinoffs` v2 cache & tag merge, Discover poster order and order on the owner's data, Franchises universes / merged TV cards / `Largest` sort, Favourites tab/search, clear-search pill, padding & undated filtering, Coming soon priority.
-2. Push `989989d9` once the owner agrees.
-3. Pop `git stash@{0}` for `/dev` (3 files), run `reviewer`, then commit by path.
+2. Pop `git stash@{0}` for `/dev` (3 files), run `reviewer`, then commit by path.
 
 ## Blockers
 
