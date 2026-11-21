@@ -446,7 +446,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {discovery.franchisesLoading && (
           <p role="status" className="text-sm text-muted-foreground">
             {discovery.collectionsTotal > 0
-              ? `Checking your film collections, newest added first: ${discovery.collectionsChecked} of ${discovery.collectionsTotal}…`
+              ? `Checking your film collections, most recent first: ${discovery.collectionsChecked} of ${discovery.collectionsTotal}…`
               : 'Checking series, trilogies and spin-offs…'}
           </p>
         )}
