@@ -20,10 +20,13 @@ import {
   buildOrderView,
   collectionPartsToEntries,
   collectionsFromLibrary,
+  collectionsInsideUniverses,
   customFranchisesFromLibrary,
+  filmUniversesFromMembers,
   libraryLookup,
   tvFranchisesFromLinks,
   type OrderEntryView,
+  type UniverseLibraryFilm,
 } from '@/features/watchlist/franchise';
 import type { TMDBCollection } from '@/features/watchlist/tmdb-types';
 import { useTMDB } from '@/features/watchlist/useTMDB';
@@ -53,12 +56,13 @@ type FranchiseCategory = 'all' | 'film-series' | 'tv-spinoffs' | 'orders' | 'lib
 const collectionSearchText = (c: { name: string; films: { title: string }[] }) =>
   [c.name, ...c.films.map((f) => f.title)].join(' ').toLowerCase();
 type FranchiseProgress = 'all' | 'in-progress' | 'completed';
+type FranchiseSort = 'largest' | 'alphabetical';
 
 /** Franchises: viewing orders for film series and cinematic universes. */
 export default function WatchlistFranchises() {
   const { watchlist, loading: libraryLoading, getAutoStatus, isEpisodeWatched, isSeasonWatched, toggleEpisodeWatched } = useWatchlist();
   const { isAdmin } = useAuth();
-  const { getCollection, getTvSpinoffs } = useTMDB();
+  const { getCollection, getTvSpinoffs, getFilmUniverses } = useTMDB();
   const { addToLibrary, isAdding } = useAddToLibrary();
   // Discover's "Not interested" marks: dimmed here rather than dropped.
   const { dismissed } = useDismissedSuggestions();
@@ -71,24 +75,30 @@ export default function WatchlistFranchises() {
   const [collectionLimit, setCollectionLimit] = useState(COLLECTIONS_PER_BATCH);
   const [categoryFilter, setCategoryFilter] = useState<FranchiseCategory>('all');
   const [progressFilter, setProgressFilter] = useState<FranchiseProgress>('all');
+  const [sortBy, setSortBy] = useState<FranchiseSort>('largest');
   const [searchQuery, setSearchQuery] = useState('');
 
   const visibleWatchlist = useMemo(
-    () => (isAdmin ? watchlist : watchlist.filter((item) => item.library_state !== 'hidden')),
+    () => (isAdmin ? watchlist : watchlist.filter((item) => item.library_state !== 'hidden' && item.library_state !== 'stopped')),
     [watchlist, isAdmin],
   );
   const lookup = useMemo(() => libraryLookup(visibleWatchlist, new Date()), [visibleWatchlist]);
 
   const savedOrders = useMemo(() => orders.data ?? [], [orders.data]);
   const savedCollectionIds = new Set(savedOrders.flatMap((o) => (o.tmdbCollectionId == null ? [] : [o.tmdbCollectionId])));
-  const savedOrderNames = new Set(savedOrders.map((o) => o.name.trim().toLowerCase()));
+  const savedMovieOrderNames = useMemo(
+    () => new Set(savedOrders.filter((o) => o.entries.some((e) => e.mediaType === 'movie')).map((o) => o.name.trim().toLowerCase())),
+    [savedOrders],
+  );
+  const savedTvOrderNames = useMemo(
+    () => new Set(savedOrders.filter((o) => o.entries.some((e) => e.mediaType === 'tv')).map((o) => o.name.trim().toLowerCase())),
+    [savedOrders],
+  );
   const collections = useMemo(() => {
-    // Hidden films are the owner's own shelf: visitors do not see them here.
+    // Hidden and Stopped watching films are the owner's own shelves: visitors do not see them here.
     return collectionsFromLibrary(
-      watchlist.flatMap((item) =>
-        item.category === 'Movies' &&
-        item.collection_id != null &&
-        (isAdmin || item.library_state !== 'hidden')
+      visibleWatchlist.flatMap((item) =>
+        item.category === 'Movies' && item.collection_id != null
           ? [{
               id: item.id,
               tmdbId: item.tmdb_id ?? null,
@@ -102,7 +112,7 @@ export default function WatchlistFranchises() {
           : [],
       ),
     );
-  }, [watchlist, isAdmin]);
+  }, [visibleWatchlist]);
   const openCollections = useMemo(
     () => collections.filter((c) => !savedCollectionIds.has(c.collectionId)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- savedCollectionIds is derived from savedOrders.
@@ -111,13 +121,13 @@ export default function WatchlistFranchises() {
   // The search reaches every collection in the library, not just the ones
   // loaded so far: names and film titles are known before TMDB is asked.
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const searchedCollections = useMemo(
-    () =>
-      normalizedQuery
-        ? openCollections.filter((c) => collectionSearchText(c).includes(normalizedQuery))
-        : openCollections,
-    [openCollections, normalizedQuery],
-  );
+  const searchedCollections = useMemo(() => {
+    const filtered = normalizedQuery
+      ? openCollections.filter((c) => collectionSearchText(c).includes(normalizedQuery))
+      : openCollections;
+    if (sortBy !== 'largest') return filtered;
+    return [...filtered].sort((a, b) => b.films.length - a.films.length || a.name.localeCompare(b.name));
+  }, [openCollections, normalizedQuery, sortBy]);
   const activeCollections = useMemo(
     () => searchedCollections.slice(0, collectionLimit),
     [searchedCollections, collectionLimit],
@@ -146,31 +156,69 @@ export default function WatchlistFranchises() {
   const collectionsChecking = activeCollections.length > 0 && collectionQueries.some((q) => q.isPending);
   const hasMoreCollections = collectionLimit < searchedCollections.length;
 
+  const universeLibrary = useMemo(() => {
+    const map = new Map<number, UniverseLibraryFilm>();
+    for (const item of visibleWatchlist) {
+      if (item.category !== 'Movies' || item.tmdb_id == null) continue;
+      map.set(item.tmdb_id, {
+        id: item.id,
+        title: item.title,
+        releaseDate: item.release_date?.slice(0, 10) || null,
+        poster: item.image_url ?? null,
+        lastActivityAt: item.last_activity_at ?? null,
+      });
+    }
+    return map;
+  }, [visibleWatchlist]);
+  const filmUniversesQuery = useQuery({
+    queryKey: ['watchlist', 'film-universes'],
+    queryFn: () => getFilmUniverses({ throwOnError: true }),
+    enabled: !libraryLoading && universeLibrary.size > 0,
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: false,
+  });
+  const filmUniverses = useMemo(
+    () => filmUniversesFromMembers(filmUniversesQuery.data ?? [], universeLibrary, POSTER_BASE),
+    [filmUniversesQuery.data, universeLibrary],
+  );
+  const openFilmUniverses = useMemo(
+    () => filmUniverses.filter((u) => !savedMovieOrderNames.has(u.name.trim().toLowerCase())),
+    [filmUniverses, savedMovieOrderNames],
+  );
+
   // Show a film series whenever TMDB confirms 2+ parts (even if only 1 is in
   // the library or unwatched), or while pending if 2+ films are already in the library.
+  // Collections completely covered by a shared film universe (e.g. MCU sub-collections)
+  // fold into that universe card (or its saved viewing order) rather than duplicating.
   const multiPartCollections = useMemo(() => {
-    return activeCollections.flatMap((collection) => {
+    const candidates = activeCollections.flatMap((collection) => {
       const prefetched = expandedCollections.get(collection.collectionId);
       if (prefetched) {
         const entries = collectionPartsToEntries(prefetched.parts ?? [], POSTER_BASE, lookup.movies);
         if (entries.length < 2) return [];
         const view = buildOrderView(entries, lookup);
-        return [{ collection, prefetched, watched: view.watched, total: view.total }];
+        return [{ collection, prefetched, entries, watched: view.watched, total: view.total }];
       }
       if (collection.films.length >= 2) {
-        return [{ collection, prefetched: undefined, watched: collection.watched, total: collection.films.length }];
+        const entries = collection.films.map((f) => ({ key: `movie:${f.tmdbId}` }));
+        return [{ collection, prefetched: undefined, entries, watched: collection.watched, total: collection.films.length }];
       }
       return [];
     });
-  }, [activeCollections, expandedCollections, lookup]);
+    const covered = collectionsInsideUniverses(
+      candidates.map((c) => ({ collectionId: c.collection.collectionId, entries: c.entries })),
+      filmUniverses,
+    );
+    return candidates.filter((c) => !covered.has(c.collection.collectionId));
+  }, [activeCollections, expandedCollections, lookup, filmUniverses]);
 
   const tvSeedIds = useMemo(
     () =>
-      watchlist
-        .filter((item) => item.category === 'TV Shows' && item.tmdb_id && (isAdmin || item.library_state !== 'hidden'))
+      visibleWatchlist
+        .filter((item) => item.category === 'TV Shows' && item.tmdb_id)
         .map((item) => item.tmdb_id!)
         .sort((a, b) => a - b),
-    [watchlist, isAdmin],
+    [visibleWatchlist],
   );
   const tvSpinoffsQuery = useQuery({
     queryKey: ['watchlist', 'tv-spinoffs', tvSeedIds],
@@ -183,7 +231,10 @@ export default function WatchlistFranchises() {
     () => tvFranchisesFromLinks(tvSpinoffsQuery.data ?? [], visibleWatchlist, POSTER_BASE),
     [tvSpinoffsQuery.data, visibleWatchlist],
   );
-  const openTvFranchises = tvFranchises.filter((f) => !savedOrderNames.has(f.name.trim().toLowerCase()));
+  const openTvFranchises = useMemo(
+    () => tvFranchises.filter((f) => !savedTvOrderNames.has(f.name.trim().toLowerCase())),
+    [tvFranchises, savedTvOrderNames],
+  );
 
   /** Runs a change, then refreshes the orders. Resolves to an error message, or null on success. */
   const run = async (action: () => Promise<unknown>, failure: string): Promise<string | null> => {
@@ -235,15 +286,19 @@ export default function WatchlistFranchises() {
     if (entry.libraryId) setSelected({ id: entry.libraryId, category: entry.mediaType === 'movie' ? 'Movies' : 'TV Shows' });
     else setPreviewEntry(entry);
   };
-  const selectedItem = selected && watchlist.find((i) => i.category === selected.category && i.id === selected.id);
+  const selectedItem = selected && visibleWatchlist.find((i) => i.category === selected.category && i.id === selected.id);
 
   const loading = libraryLoading || orders.isPending;
-  const customFranchises = useMemo(() => customFranchisesFromLibrary(watchlist, lookup), [watchlist, lookup]);
+  const customFranchises = useMemo(() => customFranchisesFromLibrary(visibleWatchlist, lookup), [visibleWatchlist, lookup]);
   const [openCustomFranchises, setOpenCustomFranchises] = useState<Set<string>>(() => new Set());
 
   const orderItems = useMemo(
     () => savedOrders.map((order) => ({ order, view: buildOrderView(order.entries, lookup) })),
     [savedOrders, lookup],
+  );
+  const filmUniverseItems = useMemo(
+    () => openFilmUniverses.map((universe) => ({ universe, view: buildOrderView(universe.entries, lookup) })),
+    [openFilmUniverses, lookup],
   );
   const tvFranchiseItems = useMemo(
     () => openTvFranchises.map((franchise) => ({ franchise, view: buildOrderView(franchise.entries, lookup) })),
@@ -257,31 +312,68 @@ export default function WatchlistFranchises() {
     return true;
   };
 
+  const bySort = <T,>(items: T[], totalOf: (item: T) => number, nameOf: (item: T) => string) =>
+    sortBy === 'largest'
+      ? [...items].sort((a, b) => totalOf(b) - totalOf(a) || nameOf(a).localeCompare(nameOf(b)))
+      : [...items].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+
   const filteredCustomFranchises = useMemo(
-    () => customFranchises.filter((g) => matchesFilters(g.name, g.view.watched, g.view.total)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilters reads normalizedQuery & progressFilter.
-    [customFranchises, normalizedQuery, progressFilter],
+    () => bySort(
+      customFranchises.filter((g) => matchesFilters(g.name, g.view.watched, g.view.total)),
+      (g) => g.view.total,
+      (g) => g.name,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilters & bySort read normalizedQuery, progressFilter & sortBy.
+    [customFranchises, normalizedQuery, progressFilter, sortBy],
   );
   const filteredOrders = useMemo(
-    () => orderItems.filter((item) => matchesFilters(item.order.name, item.view.watched, item.view.total)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilters reads normalizedQuery & progressFilter.
-    [orderItems, normalizedQuery, progressFilter],
+    () => bySort(
+      orderItems.filter((item) => matchesFilters(item.order.name, item.view.watched, item.view.total)),
+      (item) => item.view.total,
+      (item) => item.order.name,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilters & bySort read normalizedQuery, progressFilter & sortBy.
+    [orderItems, normalizedQuery, progressFilter, sortBy],
   );
   const filteredTvFranchises = useMemo(
-    () => tvFranchiseItems.filter((item) => matchesFilters(item.franchise.name, item.view.watched, item.view.total)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilters reads normalizedQuery & progressFilter.
-    [tvFranchiseItems, normalizedQuery, progressFilter],
+    () => bySort(
+      tvFranchiseItems.filter((item) => matchesFilters(item.franchise.name, item.view.watched, item.view.total)),
+      (item) => item.view.total,
+      (item) => item.franchise.name,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilters & bySort read normalizedQuery, progressFilter & sortBy.
+    [tvFranchiseItems, normalizedQuery, progressFilter, sortBy],
+  );
+  const filteredFilmUniverses = useMemo(
+    () => bySort(
+      filmUniverseItems.filter((item) =>
+        matchesFilters(
+          `${item.universe.name} ${item.universe.entries.map((e) => e.title).join(' ')}`,
+          item.view.watched,
+          item.view.total,
+        ),
+      ),
+      (item) => item.view.total,
+      (item) => item.universe.name,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilters & bySort read normalizedQuery, progressFilter & sortBy.
+    [filmUniverseItems, normalizedQuery, progressFilter, sortBy],
   );
   const filteredCollections = useMemo(
-    () => multiPartCollections.filter((item) => matchesFilters(collectionSearchText(item.collection), item.watched, item.total)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilters reads normalizedQuery & progressFilter.
-    [multiPartCollections, normalizedQuery, progressFilter],
+    () => bySort(
+      multiPartCollections.filter((item) => matchesFilters(collectionSearchText(item.collection), item.watched, item.total)),
+      (item) => item.total,
+      (item) => item.collection.name,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilters & bySort read normalizedQuery, progressFilter & sortBy.
+    [multiPartCollections, normalizedQuery, progressFilter, sortBy],
   );
 
   const showCategory = (cat: Exclude<FranchiseCategory, 'all'>) => categoryFilter === 'all' || categoryFilter === cat;
-  // Every film collection in the library counts, loaded or not.
+  // Every film collection and shared universe in the library counts, loaded or not.
+  const filmSeriesCount = openFilmUniverses.length + openCollections.length;
   const totalCount =
-    customFranchises.length + savedOrders.length + openTvFranchises.length + openCollections.length;
+    customFranchises.length + savedOrders.length + openTvFranchises.length + filmSeriesCount;
 
   return (
     <AppShell title="Watchlist" subtitle="Franchises" toolbar={<WatchlistNav current="franchises" />}>
@@ -293,7 +385,7 @@ export default function WatchlistFranchises() {
             {(
               [
                 { id: 'all', label: 'All', count: totalCount },
-                { id: 'film-series', label: 'Film Series', count: openCollections.length },
+                { id: 'film-series', label: 'Film Series', count: filmSeriesCount },
                 { id: 'tv-spinoffs', label: 'TV & Spin-offs', count: openTvFranchises.length },
                 { id: 'orders', label: 'Viewing Orders', count: savedOrders.length },
                 ...(customFranchises.length > 0
@@ -315,7 +407,26 @@ export default function WatchlistFranchises() {
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Completion status">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Sort franchises">
+              {(
+                [
+                  { id: 'largest', label: 'Largest' },
+                  { id: 'alphabetical', label: 'A–Z' },
+                ] as const
+              ).map((option) => (
+                <Button
+                  key={option.id}
+                  type="button"
+                  size="sm"
+                  variant={sortBy === option.id ? 'secondary' : 'ghost'}
+                  onClick={() => setSortBy(option.id)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Completion status">
             {(
               [
                 { id: 'all', label: 'All status' },
@@ -333,6 +444,7 @@ export default function WatchlistFranchises() {
                 {status.label}
               </Button>
             ))}
+            </div>
           </div>
         </div>
 
@@ -461,20 +573,41 @@ export default function WatchlistFranchises() {
         <section aria-labelledby="series-heading" className="min-w-0 space-y-3">
           <h2 id="series-heading"><DotMatrixText text="FILM SERIES IN YOUR LIBRARY" size="xs" /></h2>
           <p className="text-sm text-muted-foreground">
-            Collections come from TMDB and list films only, in release order (2 or more films). Save one as a viewing order to reorder it or add series.
+            Shared film universes (such as the Marvel Cinematic Universe) and TMDB collections in release order (2 or more films). Save one as a viewing order to reorder it or add series.
           </p>
-          {collectionsChecking && multiPartCollections.length === 0 && (
+          {(collectionsChecking || filmUniversesQuery.isPending) && multiPartCollections.length === 0 && openFilmUniverses.length === 0 && (
             <p role="status" className="text-sm text-muted-foreground">Checking TMDB for film series…</p>
           )}
-          {!libraryLoading && !collectionsChecking && filteredCollections.length === 0 && (
+          {!libraryLoading && !collectionsChecking && !filmUniversesQuery.isPending && filteredFilmUniverses.length === 0 && filteredCollections.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              {multiPartCollections.length === 0
+              {multiPartCollections.length === 0 && openFilmUniverses.length === 0
                 ? 'Film series appear here as the nightly sync fills them in.'
                 : 'No film series match the current filter.'}
             </p>
           )}
-          {filteredCollections.length > 0 && (
+          {(filteredFilmUniverses.length > 0 || filteredCollections.length > 0) && (
             <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+              {filteredFilmUniverses.map(({ universe }) => (
+                <TvFranchiseCard
+                  key={`universe:${universe.id}`}
+                  franchise={{ key: `universe:${universe.id}`, name: universe.name, entries: universe.entries }}
+                  lookup={lookup}
+                  onOpen={openEntry}
+                  onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
+                  onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+                  isAdding={isAdding}
+                  onSave={
+                    isAdmin
+                      ? async (f, view) => {
+                          await runWithToast(
+                            () => createOrder({ name: f.name.slice(0, 120), entries: view.entries }),
+                            'Could not save the viewing order',
+                          );
+                        }
+                      : undefined
+                  }
+                />
+              ))}
               {filteredCollections.map(({ collection, prefetched }) => (
                 <CollectionCard
                   key={collection.collectionId}

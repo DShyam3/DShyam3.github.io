@@ -1,15 +1,16 @@
 # State
 
-Updated 2026-11-21. Branch `main`, rebased on `origin/main` (`36324d8d`).
+Updated 2026-11-21. Branch `main`, head `354995c2` (Discover poster-order + Franchises + `tmdb-proxy` commit ready to push); `origin/main` is `354995c2`.
 
 ## Uncommitted in the tree (other sessions)
 
-- `/dev` status board and History rework (`src/pages/Dev.tsx`, `src/features/dev/api-status.ts`, `src/features/dev/api-status.test.ts`): uncommitted, not deployed. Browser-verified locally (`npm run dev:test`, port 8085). Not verified: live data, light theme, phone width; `reviewer` not yet run.
+- `/dev` status board and History rework (`src/pages/Dev.tsx`, `src/features/dev/api-status.ts`, `src/features/dev/api-status.test.ts`; held in `git stash@{0}`): not committed, not deployed. Browser-verified locally (`npm run dev:test`, port 8085). Not verified: live data, light theme, phone width; `reviewer` not yet run.
 - Other uncommitted edits: `DotMatrixGlobe.tsx` (Travel), `useTMDB.ts` (Watchlist).
 
 ## Pushed, awaiting live browser check
 
-- Watchlist (this push): Favourites tab & search (`WatchlistFavourites.tsx`, `WatchlistNav.tsx`, `FactCards.tsx`, `library-state.ts`), `WatchlistFranchises.tsx` `pb-8` & 44×44px/`h-7` search clear pills, franchise undated-filtering, Coming soon priority & `watchlist_collection_upcoming` cache; `reviewer` (`pro`) findings fixed, `20261121130500_watchlist_collection_upcoming.sql` applied & `watchlist-cron-sync` (including `8be68f3f` and `ba8dc6b6`) deployed remotely (`yvtiybyuifkiwyrnjebe`), not yet browser-verified on live.
+- Watchlist (this push): Discover poster-order fix (`useDiscovery.ts`, `DiscoverySection.tsx`), Franchises shared film universes / merged TV franchise cards / `Largest` | `A–Z` sort (`franchise.ts`, `franchise.test.ts`, `WatchlistFranchises.tsx`), and `tmdb-proxy` Pass 2 sibling TV franchise expansion (`supabase/functions/tmdb-proxy/index.ts`, deployed `--no-verify-jwt` to `yvtiybyuifkiwyrnjebe`). `reviewer` (`pro`) ran and all 4 findings are fixed (movie vs TV saved-order matching, `stopped` exclusion for visitors on Franchises, bounded 10-worker TMDB enrichment + non-deprecated `P179`, per-`LibraryType` `recommendationsOrder`); not yet browser-verified on live.
+- Watchlist (`354995c2`): Favourites tab & search (`WatchlistFavourites.tsx`, `WatchlistNav.tsx`, `FactCards.tsx`, `library-state.ts`), `WatchlistFranchises.tsx` `pb-8` & 44×44px/`h-7` search clear pills, franchise undated-filtering, Coming soon priority & `watchlist_collection_upcoming` cache; `20261121130500_watchlist_collection_upcoming.sql` applied & `watchlist-cron-sync` (including `8be68f3f` and `ba8dc6b6`) deployed remotely (`yvtiybyuifkiwyrnjebe`), not yet browser-verified on live.
 - Watchlist: Franchises dims titles marked Not interested (`9452aeb3` on `main`). Signed-in owner path not browser-verified; open: a dismissed title can still be named "Next up" on a collapsed card, and the poster strip does not dim it.
 - Discover ordering by last activity (`31819643`), MCU card (`30e0a877`), Travel hex size control (`3220ab6b`), `/dev` dashboard & telemetry (`5296949c`, `a9e161c1`, `ec1fd147`).
 
@@ -22,24 +23,24 @@ Updated 2026-11-21. Branch `main`, rebased on `origin/main` (`36324d8d`).
 - Local DB drifted: `supabase migration up --local` fails at `20261117193741`; `supabase db reset` restores it.
 - Verify OMDb weekly refresh (~2026-11-25).
 
-## Checks (2026-11-21, on rebased tree)
+## Checks (2026-11-21, on this tree)
 
 | Check | Result |
 |---|---|
 | `npm run lint` | pass, 0 errors, 0 warnings |
 | `npm run typecheck` | pass |
 | `npm run typecheck:functions` | pass |
-| `npx vitest run` (watchlist + `rls-admin-check.test.ts`) | pass, 37 files / 512 tests |
+| `npx vitest run src/features/watchlist/` | pass, 36 files (full suite not re-run) |
 | `npm run build` | pass |
 | `graphify update .` | pass |
 | `npm run ship-check` | not run; last 93/100 (`1a38256c`) |
 
 ## Next
 
-1. Browser-verify live after Pages deploys: Favourites tab & search, clear-search pill, Franchises bottom padding & undated filtering, Coming soon `In your franchise` priority.
+1. Browser-verify live after Pages deploys: Discover poster order, Franchises universes / merged TV cards / `Largest` sort, Favourites tab/search, clear-search pill, padding & undated filtering, Coming soon priority.
 2. Owner's OK to apply `20261120230000_watchlist_last_activity.sql` to `yvtiybyuifkiwyrnjebe`, then browser-check Discover order.
-3. Run `reviewer` on the `/dev` diff (3 files), then commit by path.
+3. Pop `git stash@{0}` for `/dev` (3 files), run `reviewer`, then commit by path.
 
 ## Blockers
 
-- Uncommitted `/dev`, `DotMatrixGlobe.tsx`, and `useTMDB.ts` files from other sessions must stay separate. Revolut bank access renewal.
+- Uncommitted `/dev` (`git stash@{0}`), `DotMatrixGlobe.tsx`, and `useTMDB.ts` files from other sessions must stay separate. Revolut bank access renewal.

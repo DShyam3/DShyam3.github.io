@@ -16,7 +16,7 @@ import { useTMDB } from '../useTMDB';
 import type { TMDBResult } from '../useTMDB';
 import { newItemFromDetails } from '../new-item';
 import { findExistingTitle } from '../existing-title';
-import { discoveryDate, discoveryKey, interleaveUpcoming, type DiscoveryItem, type DiscoveryMedia } from '../discovery';
+import { discoveryDate, discoveryKey, type DiscoveryItem, type DiscoveryMedia } from '../discovery';
 import { useDiscovery, type DiscoveryFranchiseGroup } from '../useDiscovery';
 import { discoveryAddPayload } from '../discovery-add';
 import type { OrderEntryView } from '../franchise';
@@ -404,7 +404,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
   const { addToLibrary, isAdding } = useAddToLibrary();
   const [selected, setSelected] = useState<{ id: string; category: 'Movies' | 'TV Shows' } | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OrderEntryView | null>(null);
-  const comingSoon = interleaveUpcoming(discovery.upcoming).slice(0, 12);
+  const comingSoon = discovery.upcoming.slice(0, 12);
 
   const openEntry = (entry: OrderEntryView) => {
     if (entry.libraryId) {

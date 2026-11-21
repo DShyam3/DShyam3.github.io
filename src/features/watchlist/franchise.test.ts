@@ -279,6 +279,41 @@ describe('tvFranchisesFromLinks', () => {
     );
     expect(groups).toEqual([]);
   });
+
+  it('merges separate spin-off chains that share the same Wikidata franchiseId into one group', () => {
+    const watchlist = [
+      { id: '1', category: 'TV Shows', tmdb_id: 85271, title: 'WandaVision', release_date: '2021-01-15' },
+      { id: '2', category: 'TV Shows', tmdb_id: 61889, title: 'Daredevil', release_date: '2015-04-10' },
+    ] as unknown as WatchlistItem[];
+    const groups = tvFranchisesFromLinks(
+      [
+        {
+          seedTmdbId: 85271,
+          seedTitle: 'WandaVision',
+          franchiseId: 'Q642878',
+          franchiseName: 'Marvel Cinematic Universe',
+          relatedMediaType: 'tv',
+          relatedTmdbId: 138501,
+          relatedTitle: 'Agatha All Along',
+          releaseDate: '2024-09-18',
+        },
+        {
+          seedTmdbId: 61889,
+          seedTitle: 'Daredevil',
+          franchiseId: 'Q642878',
+          franchiseName: 'Marvel Cinematic Universe',
+          relatedMediaType: 'tv',
+          relatedTmdbId: 202555,
+          relatedTitle: 'Daredevil: Born Again',
+          releaseDate: '2025-03-04',
+        },
+      ],
+      watchlist,
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].name).toBe('Marvel Cinematic Universe');
+    expect(groups[0].entries.map((e) => e.tmdbId)).toEqual([61889, 85271, 138501, 202555]);
+  });
 });
 
 describe('hasWatchGap', () => {

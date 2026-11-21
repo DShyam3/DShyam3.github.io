@@ -201,8 +201,94 @@ async function fetchTvSpinoffs(seedIds: number[]): Promise<TvSpinoffLink[]> {
         })
     }
 
-    // Enrich unique related targets with TMDB poster_path and release_date in parallel
-    // so not-in-library spin-offs render posters without extra browser requests.
+    // Best-effort second pass: for franchises discovered via P2512 spin-offs,
+    // pull sibling TV series sharing the same Wikidata franchise (P8345 / P179)
+    // so shared TV universes like the MCU include non-spinoff sibling shows too.
+    const franchiseSeeds = new Map<string, { seedTmdbId: number; seedTitle: string; franchiseName: string | null }>()
+    for (const l of links) {
+        if (l.franchiseId && /^Q\d+$/.test(l.franchiseId) && !franchiseSeeds.has(l.franchiseId)) {
+            franchiseSeeds.set(l.franchiseId, {
+                seedTmdbId: l.seedTmdbId,
+                seedTitle: l.seedTitle,
+                franchiseName: l.franchiseName,
+            })
+        }
+    }
+    if (franchiseSeeds.size > 0) {
+        const franchiseValues = [...franchiseSeeds.keys()].slice(0, 15).map((id) => `wd:${id}`).join(' ')
+        const siblingSparql = `SELECT DISTINCT ?franchise ?relatedLabel ?relatedTvTmdb ?relDate WHERE {
+  VALUES ?franchise { ${franchiseValues} }
+  { ?related wdt:P8345 ?franchise . }
+  UNION {
+    ?related p:P179 ?stmt .
+    ?stmt ps:P179 ?franchise .
+    FILTER NOT EXISTS { ?stmt wikibase:rank wikibase:DeprecatedRank }
+  }
+  ?related wdt:P4983 ?relatedTvTmdb .
+  OPTIONAL { ?related wdt:P580 ?startTime . }
+  OPTIONAL { ?related wdt:P577 ?pubDate . }
+  BIND(COALESCE(?startTime, ?pubDate) AS ?relDate)
+  ?related rdfs:label ?relatedLabel . FILTER(LANG(?relatedLabel) = "en")
+}`
+        try {
+            const sibUrl = new URL('https://query.wikidata.org/sparql')
+            sibUrl.searchParams.set('query', siblingSparql)
+            const sibRes = await fetch(sibUrl.toString(), {
+                headers: {
+                    'Accept': 'application/sparql-results+json',
+                    'User-Agent': 'DShyamWatchlist/1.0 (https://dshyam3.github.io)',
+                },
+                signal: AbortSignal.timeout(8000),
+            })
+            if (sibRes.ok) {
+                const sibPayload = (await sibRes.json()) as {
+                    results?: {
+                        bindings?: {
+                            franchise?: { value?: string }
+                            relatedLabel?: { value?: string }
+                            relatedTvTmdb?: { value?: string }
+                            relDate?: { value?: string }
+                        }[]
+                    }
+                }
+                for (const row of sibPayload.results?.bindings ?? []) {
+                    const fId = row.franchise?.value?.split('/').pop()?.trim() || ''
+                    const anchor = franchiseSeeds.get(fId)
+                    const relatedTmdbId = row.relatedTvTmdb?.value ? Number(row.relatedTvTmdb.value) : null
+                    const relatedTitle = row.relatedLabel?.value?.trim()
+                    if (
+                        !anchor ||
+                        !relatedTitle ||
+                        !relatedTmdbId ||
+                        !Number.isInteger(relatedTmdbId) ||
+                        relatedTmdbId <= 0 ||
+                        relatedTmdbId === anchor.seedTmdbId
+                    ) continue
+                    const key = `${anchor.seedTmdbId}->tv:${relatedTmdbId}`
+                    if (seen.has(key)) continue
+                    seen.add(key)
+                    const rawDate = row.relDate?.value?.slice(0, 10) ?? null
+                    links.push({
+                        seedTmdbId: anchor.seedTmdbId,
+                        seedTitle: anchor.seedTitle,
+                        franchiseId: fId,
+                        franchiseName: anchor.franchiseName,
+                        relatedMediaType: 'tv',
+                        relatedTmdbId,
+                        relatedTitle,
+                        releaseDate: rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null,
+                        posterPath: null,
+                    })
+                }
+            }
+        } catch (err) {
+            console.warn('Wikidata sibling TV franchise lookup failed (non-fatal):', err)
+        }
+    }
+
+    // Enrich unique related targets with TMDB poster_path and release_date using
+    // a bounded worker pool (concurrency 10) so not-in-library spin-offs render
+    // posters without bursting TMDB or requiring extra browser requests.
     if (TMDB_API_KEY && links.length > 0) {
         const targets = new Map<string, { media: 'tv' | 'movie'; id: number }>()
         for (const l of links) {
@@ -210,20 +296,31 @@ async function fetchTvSpinoffs(seedIds: number[]): Promise<TvSpinoffLink[]> {
             if (!targets.has(k)) targets.set(k, { media: l.relatedMediaType, id: l.relatedTmdbId })
         }
         const meta = new Map<string, { posterPath: string | null; releaseDate: string | null }>()
-        await Promise.allSettled(
-            [...targets.entries()].slice(0, 40).map(async ([k, t]) => {
-                const res = await fetch(`${TMDB_BASE_URL}/${t.media}/${t.id}?api_key=${TMDB_API_KEY}&language=en-GB`)
-                if (!res.ok) return
-                const detail = (await res.json()) as {
-                    poster_path?: string | null
-                    release_date?: string | null
-                    first_air_date?: string | null
+        const queue = [...targets.entries()].slice(0, 60)
+        let cursor = 0
+        await Promise.all(
+            Array.from({ length: Math.min(10, queue.length) }, async () => {
+                while (cursor < queue.length) {
+                    const [k, t] = queue[cursor++]
+                    try {
+                        const res = await fetch(`${TMDB_BASE_URL}/${t.media}/${t.id}?api_key=${TMDB_API_KEY}&language=en-GB`, {
+                            signal: AbortSignal.timeout(10000),
+                        })
+                        if (!res.ok) continue
+                        const detail = (await res.json()) as {
+                            poster_path?: string | null
+                            release_date?: string | null
+                            first_air_date?: string | null
+                        }
+                        const d = (detail.release_date || detail.first_air_date || '').slice(0, 10)
+                        meta.set(k, {
+                            posterPath: detail.poster_path ?? null,
+                            releaseDate: d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null,
+                        })
+                    } catch {
+                        // Ignore per-target timeout/network errors so the batch succeeds.
+                    }
                 }
-                const d = (detail.release_date || detail.first_air_date || '').slice(0, 10)
-                meta.set(k, {
-                    posterPath: detail.poster_path ?? null,
-                    releaseDate: d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null,
-                })
             }),
         )
         for (const l of links) {

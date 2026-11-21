@@ -261,10 +261,11 @@ export function useDiscovery(type: LibraryType) {
     return interleaved;
   }, [type, movieRecommendations.data, tvRecommendations.data, knownKeys]);
 
-  const upcomingItems = useMemo(
-    () => (upcoming.data?.pages.flatMap((page) => page.items) ?? []).filter((item) => type === 'all' || item.media === type),
-    [upcoming.data?.pages, type],
-  );
+  const upcomingItems = useMemo(() => {
+    const pages = upcoming.data?.pages ?? [];
+    const items = pages.flatMap((page) => (type === 'all' ? interleaveUpcoming(page.items) : page.items));
+    return items.filter((item) => type === 'all' || item.media === type);
+  }, [upcoming.data?.pages, type]);
 
   // Rotating pool of widely-watched released titles so "Have you already
   // watched?" always has familiar films and series to log or dismiss.
@@ -629,9 +630,19 @@ export function useDiscovery(type: LibraryType) {
     );
   }, [type, libraryCollections, cachedCollectionUpcoming.data, expandedCollectionsData, tvFranchiseSummaries, start]);
 
+  const recommendationsOrderByType = useRef<Record<LibraryType, Map<string, number>>>({
+    all: new Map(),
+    movie: new Map(),
+    tv: new Map(),
+  });
   const recommendations = useMemo(
-    () => curateDiscovery(recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys),
-    [recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys],
+    () =>
+      keepFirstSeenOrder(
+        curateDiscovery(recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys),
+        (item) => discoveryKey(item.media, item.id),
+        recommendationsOrderByType.current[type],
+      ),
+    [recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys, type],
   );
   const upcomingCurated = useMemo(
     () => curateDiscovery([...upcomingFranchiseItems, ...upcomingItems], watchlist, favourites, dismissed),

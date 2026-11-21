@@ -242,6 +242,7 @@ export function tvFranchisesFromLinks(
   const nodes = new Map<string, OrderEntryInput>();
   const adjacency = new Map<string, Set<string>>();
   const franchiseNames = new Map<string, string>();
+  const franchiseGroups = new Map<string, Set<string>>();
 
   const ensureNode = (
     mediaType: 'movie' | 'tv',
@@ -285,9 +286,27 @@ export function tvFranchisesFromLinks(
 
     adjacency.get(seedKey)!.add(relatedKey);
     adjacency.get(relatedKey)!.add(seedKey);
-    if (link.franchiseName) {
-      franchiseNames.set(seedKey, link.franchiseName);
-      franchiseNames.set(relatedKey, link.franchiseName);
+    const trimmedFranchiseName = link.franchiseName?.trim() || null;
+    if (trimmedFranchiseName) {
+      franchiseNames.set(seedKey, trimmedFranchiseName);
+      franchiseNames.set(relatedKey, trimmedFranchiseName);
+    }
+    const groupKey = link.franchiseId?.trim() || trimmedFranchiseName?.toLowerCase() || null;
+    if (groupKey) {
+      const members = franchiseGroups.get(groupKey) ?? new Set<string>();
+      members.add(seedKey);
+      members.add(relatedKey);
+      franchiseGroups.set(groupKey, members);
+    }
+  }
+
+  // Merge separate spin-off chains that belong to the same Wikidata franchise
+  // (e.g. WandaVision/Agatha and Daredevil/Born Again under Marvel Cinematic Universe).
+  for (const members of franchiseGroups.values()) {
+    const keys = [...members];
+    for (let i = 1; i < keys.length; i += 1) {
+      adjacency.get(keys[0])!.add(keys[i]);
+      adjacency.get(keys[i])!.add(keys[0]);
     }
   }
 
