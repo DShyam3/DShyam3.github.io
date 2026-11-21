@@ -24,6 +24,21 @@ import type { LevelPrepare, LevelReady, PatchBuilt, PatchFailed, PatchForget, Pa
 
 export type ShownRes = 3 | 4 | 5;
 
+/** A hex size held whatever the zoom, or null to follow the zoom. */
+export type HexSizeLock = ShownRes | null;
+
+/** About how far apart each level's cell centres are, for the size control. */
+export const HEX_KM: Record<ShownRes, number> = { 3: 120, 4: 45, 5: 17 };
+
+/**
+ * Held at 17 km, level 5 still waits until its cells are this many pixels
+ * across: over the whole world it is ~570,000 cells, each under a pixel, and
+ * the 45 km level stands in until then. It goes again under `LOCKED_LEVEL5_HIDE_PX`,
+ * so a zoom resting on the line does not flicker.
+ */
+export const LOCKED_LEVEL5_MIN_PX = 5;
+const LOCKED_LEVEL5_HIDE_PX = 4;
+
 /** A finer level comes in once its cells are this many pixels across... */
 const SHOW_PX = 8;
 /** ...and goes once they are under this. */
@@ -33,7 +48,7 @@ const PREFETCH_PX = 4;
 /** The share of a fade done per 60 Hz frame. */
 const FADE_PER_FRAME = 0.16;
 /** At most this many built patches of a level are kept, GPU and all; the longest off screen go first. */
-const CAP: Record<DetailRes, number> = { 4: 200, 5: 60 };
+const CAP: Record<DetailRes, number> = { 4: 480, 5: 90 };
 /** How often the set of patches on screen is worked out again while the view moves. */
 const VISIBLE_EVERY_MS = 120;
 
@@ -91,6 +106,7 @@ export class HexLevels {
     private visibleView = '';
     private wantSent = '';
     private current: ShownRes = 3;
+    private lock: HexSizeLock = null;
 
     setOnChange(onChange: () => void) {
         this.onChange = onChange;
@@ -125,6 +141,16 @@ export class HexLevels {
         // A new worker has to be asked to prepare its levels again.
         this.prepared.clear();
         this.patchKeys = {};
+    }
+
+    /** Holds one hex size whatever the zoom (see `LOCKED_LEVEL5_MIN_PX`), or follows the zoom again with null. */
+    setLock(lock: HexSizeLock) {
+        this.lock = lock;
+    }
+
+    /** The level the last frame asked for. */
+    get shownRes(): ShownRes {
+        return this.current;
     }
 
     level(res: DetailRes): HexDetailLookup | undefined {
@@ -206,10 +232,17 @@ export class HexLevels {
     private chooseRes(pxPerRad: number): ShownRes {
         const px = (res: ShownRes) => hexSpacingRad(res) * pxPerRad;
         let res: ShownRes = 3;
-        if (px(4) >= (this.current >= 4 ? HIDE_PX : SHOW_PX)) res = 4;
-        if (px(5) >= (this.current >= 5 ? HIDE_PX : SHOW_PX)) res = 5;
-        if (px(4) >= PREFETCH_PX) this.ensureLevel(4);
-        if (px(5) >= PREFETCH_PX) this.ensureLevel(5);
+        if (this.lock !== null) {
+            const showFive = px(5) >= (this.current >= 5 ? LOCKED_LEVEL5_HIDE_PX : LOCKED_LEVEL5_MIN_PX);
+            res = this.lock === 5 && !showFive ? 4 : this.lock;
+        } else {
+            if (px(4) >= (this.current >= 4 ? HIDE_PX : SHOW_PX)) res = 4;
+            if (px(5) >= (this.current >= 5 ? HIDE_PX : SHOW_PX)) res = 5;
+        }
+        // Never fetched past a held size: holding 45 km never loads level 5.
+        const ceiling = this.lock ?? 5;
+        if (ceiling >= 4 && (res >= 4 || px(4) >= PREFETCH_PX)) this.ensureLevel(4);
+        if (ceiling >= 5 && (res >= 5 || px(5) >= PREFETCH_PX)) this.ensureLevel(5);
         // Without a worker, or with a level that would not load, stay coarser.
         while (res > 3 && (this.failed.has(res as DetailRes) || this.ensureWorker() === null)) res = (res - 1) as ShownRes;
         this.current = res;
@@ -233,12 +266,16 @@ export class HexLevels {
         points.push([0, 0, Infinity], [view.width, 0, Infinity], [0, view.height, Infinity], [view.width, view.height, Infinity]);
         points.sort((a, b) => a[2] - b[2]);
         const keys = new Set<string>();
+        const homes = new Set<string>();
         let any = false;
         for (const [x, y] of points) {
             const place = mapPointAt(view, x, y, projection);
             if (!place) continue;
             any = true;
             const home = latLngToCell((place.lat * 180) / Math.PI, (place.lon * 180) / Math.PI, PATCH_RES);
+            // Most points land in a patch another point already found.
+            if (homes.has(home)) continue;
+            homes.add(home);
             for (const key of gridDisk(home, 1)) {
                 if (!keys.has(key) && this.hasLand(key)) keys.add(key);
             }

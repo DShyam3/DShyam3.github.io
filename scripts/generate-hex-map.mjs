@@ -9,6 +9,11 @@
  * children where they all belong to that country). The site expands them
  * with the same h3-js it draws with, so the cells match exactly.
  *
+ * Also writes public/data/hex-regions-v1-r{3,4,5}.json: for each land cell, the
+ * state or province of its own country that covers most of it, and the
+ * largest town inside it, from Natural Earth's 1:10m admin-1 areas and
+ * populated places. The Travel map's city view names these on hover.
+ *
  * A cell belongs to the country that covers most of it, judged by the
  * resolution-6 cells inside it (343 to a level-3 cell, 49 to a level-4 one,
  * 7 to a level-5 one), and only if at least half of it is land. Testing the
@@ -29,6 +34,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE_URL =
     'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
 const CACHE = resolve(ROOT, '.cache/ne_50m_admin_0_countries.geojson');
+const NE_RAW = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson';
 
 const LEVELS = [3, 4, 5];
 /** The resolution coverage is measured at. */
@@ -170,6 +176,118 @@ function sampleCells(rings, code) {
     return [...cells];
 }
 
+/** A Natural Earth layer, fetched once into .cache/. */
+async function naturalEarth(name) {
+    const path = resolve(ROOT, `.cache/${name}.geojson`);
+    if (!existsSync(path)) {
+        console.log(`Fetching ${name}...`);
+        const response = await fetch(`${NE_RAW}/${name}.geojson`);
+        if (!response.ok) throw new Error(`${name} fetch failed: ${response.status}`);
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, await response.text());
+    }
+    return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+/**
+ * Each land cell's state or province and largest town. The region is the one
+ * of the cell's own country that covers most of it, so a cell on a border
+ * never names a region across it.
+ */
+async function writeRegions(assignedByRes) {
+    const t0 = Date.now();
+    const admin1 = await naturalEarth('ne_10m_admin_1_states_provinces');
+    const places = await naturalEarth('ne_10m_populated_places_simple');
+    const regions = [];
+    const tallies = new Map(LEVELS.map((res) => [res, new Map()]));
+    // The sample cell each town's point falls in, so its own state can be read
+    // off the same sampling: Natural Earth's `adm1name` spells states
+    // differently from the admin-1 layer, and some of its names are garbled.
+    const townAt = new Map();
+    for (const feature of places.features) {
+        const p = feature.properties ?? {};
+        townAt.set(h3.latLngToCell(p.latitude, p.longitude, SAMPLE_RES), null);
+    }
+    for (const feature of admin1.features) {
+        const p = feature.properties ?? {};
+        const iso = String(p.iso_a2 ?? '');
+        const name = String(p.name_en ?? p.name ?? '').trim();
+        if (!/^[A-Z]{2}$/.test(iso) || !name) continue;
+        const index = regions.push([name, iso]) - 1;
+        for (const rings of polygonsOf(feature.geometry)) {
+            if (!rings[0] || rings[0].length < 4) continue;
+            let samples;
+            try {
+                samples = sampleCells(rings, `${iso} ${name}`);
+            } catch (error) {
+                console.warn(`  skipped part of ${name}, ${iso}: ${error.message}`);
+                continue;
+            }
+            for (const sample of samples) {
+                for (const res of LEVELS) increment(tallies.get(res), h3.cellToParent(sample, res), index);
+                if (townAt.has(sample)) townAt.set(sample, index);
+            }
+        }
+    }
+    console.log(`Sampled ${regions.length} regions in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+
+    for (const res of LEVELS) {
+        const assigned = assignedByRes.get(res);
+        const byRegion = new Map();
+        for (const [cell, code] of assigned) {
+            const counts = tallies.get(res).get(cell);
+            if (!counts) continue;
+            let best = -1;
+            let bestCount = 0;
+            for (const [index, count] of counts) {
+                if (regions[index][1] === code && count > bestCount) {
+                    best = index;
+                    bestCount = count;
+                }
+            }
+            if (best < 0) continue;
+            if (!byRegion.has(best)) byRegion.set(best, []);
+            byRegion.get(best).push(cell);
+        }
+
+        // The largest town in each land cell, named with its own state -- the
+        // hex's may be the one next door -- and only a town of the hex's own
+        // country: a border hex never names a town across the border.
+        const towns = {};
+        const population = new Map();
+        for (const feature of places.features) {
+            const p = feature.properties ?? {};
+            const cell = h3.latLngToCell(p.latitude, p.longitude, res);
+            const country = assigned.get(cell);
+            if (!country) continue;
+            const region = townAt.get(h3.latLngToCell(p.latitude, p.longitude, SAMPLE_RES));
+            const [state, iso] = region == null ? ['', String(p.iso_a2 ?? '')] : regions[region];
+            if (iso !== country) continue;
+            const pop = Number(p.pop_max) || 0;
+            if (pop > (population.get(cell) ?? -1)) {
+                population.set(cell, pop);
+                towns[cell] = [String(p.name), state];
+            }
+        }
+
+        // Ordinal, so a rerun on another machine writes the same file.
+        const used = [...byRegion.keys()].sort((a, b) => (regions[a][0] < regions[b][0] ? -1 : regions[a][0] > regions[b][0] ? 1 : a - b));
+        const out = {
+            res,
+            regions: used.map((i) => regions[i]),
+            cells: used.map((i) => h3.compactCells(byRegion.get(i)).sort()),
+            towns,
+        };
+        const path = resolve(ROOT, `public/data/hex-regions-v1-r${res}.json`);
+        writeFileSync(path, JSON.stringify(out));
+        const named = [...byRegion.values()].reduce((n, cells) => n + cells.length, 0);
+        console.log(
+            `regions res ${res}: ${used.length} regions over ${named.toLocaleString()} of ${assigned.size.toLocaleString()} cells, ` +
+                `${Object.keys(towns).length.toLocaleString()} towns, ${Math.round(statSync(path).size / 1024)} KB`,
+        );
+    }
+}
+
 function increment(map, key, iso) {
     let counts = map.get(key);
     if (!counts) {
@@ -208,8 +326,10 @@ async function main() {
     }
     console.log(`Sampled ${polygons.length} polygons in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
+    const assignedByRes = new Map();
     for (const res of LEVELS) {
         const assigned = new Map();
+        assignedByRes.set(res, assigned);
         for (const [cell, counts] of tallies.get(res)) {
             let land = 0;
             let best = null;
@@ -297,6 +417,7 @@ async function main() {
                 `${Math.round(statSync(path).size / 1024)} KB`,
         );
     }
+    await writeRegions(assignedByRes);
     console.log(`Done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 

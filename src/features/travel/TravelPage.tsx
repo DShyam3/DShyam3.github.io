@@ -314,6 +314,9 @@ const TravelContent = () => {
         if (viewMode === 'cities' && hoveredCities.length > 0) {
             return hoveredCities.map(c => c.city_name).join(', ').toUpperCase();
         }
+        // The city view names the hex's town or state, which being in a
+        // visited country does not make visited; the tint shows the country.
+        if (viewMode === 'cities') return hovered.name.toUpperCase();
         return visitedCodes.includes(hovered.code)
             ? `${hovered.name.toUpperCase()} - VISITED`
             : hovered.name.toUpperCase();

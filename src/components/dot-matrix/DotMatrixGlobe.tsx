@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { ChevronDown, Globe, Map as MapIcon } from 'lucide-react';
+import { ChevronDown, Globe, Map as MapIcon, Minus, Plus } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { cellToLatLng, latLngToCell } from 'h3-js';
 import {
@@ -41,7 +41,8 @@ import {
     type DetailRes,
     type HexDetailLookup,
 } from './hexDetail';
-import { HexLevels } from './hexLevels';
+import { hexPlaceLabel, loadRegionLevel } from './hexRegions';
+import { HEX_KM, HexLevels, LOCKED_LEVEL5_MIN_PX, type HexSizeLock, type ShownRes } from './hexLevels';
 
 import './DotMatrixGlobe.css';
 
@@ -486,6 +487,31 @@ function readStoredProjection(): MapProjectionId {
     }
 }
 
+/** Where the chosen hex size is remembered, per browser. */
+const HEX_SIZE_STORAGE_KEY = 'travel-map-hex-size';
+
+type HexSizeChoice = 'auto' | ShownRes;
+
+const HEX_SIZE_CHOICES: readonly { value: HexSizeChoice; label: string; note: string }[] = [
+    { value: 'auto', label: 'Auto', note: 'Finer hexes as you zoom in.' },
+    { value: 3, label: `${HEX_KM[3]} km`, note: 'The whole-world size, at any zoom.' },
+    { value: 4, label: `${HEX_KM[4]} km`, note: 'At any zoom; the whole world is about 82,000 hexes.' },
+    { value: 5, label: `${HEX_KM[5]} km`, note: 'Towns a few miles apart get their own. Zooms in to where these show.' },
+];
+
+function readStoredHexSize(): HexSizeChoice {
+    try {
+        const stored = window.localStorage.getItem(HEX_SIZE_STORAGE_KEY);
+        if (stored === '3' || stored === '4' || stored === '5') return Number(stored) as ShownRes;
+    } catch {
+        // Storage refused: the default.
+    }
+    return 'auto';
+}
+
+/** Each press of the zoom buttons. */
+const ZOOM_BUTTON_STEP = 1.6;
+
 /** Prefetches base H3 hex map + country names in the background so Travel paints on frame 1. */
 export function warmGlobeData(): void {
     void Promise.all([loadHexTier(3), loadCountryNames()]).catch(() => {});
@@ -619,6 +645,12 @@ export function DotMatrixGlobe({
     const styleVersionRef = useRef(0);
     // The finer hex levels and their patches (see hexLevels.ts).
     const [levels] = useState(() => new HexLevels());
+    const [hexSize, setHexSize] = useState<HexSizeChoice>(readStoredHexSize);
+    // The size on screen, for the control's readout; set from the frame when it changes.
+    const [shownRes, setShownRes] = useState<ShownRes>(3);
+    const shownResRef = useRef<ShownRes>(3);
+    // Whether the WebGL renderer is up: the finer sizes, and so the size menu, need it.
+    const [glReady, setGlReady] = useState(false);
     // The last frame's view, so a pointer can be worked back to a place.
     const viewRef = useRef<GlobeView | null>(null);
     // Off screen, the loop sleeps rather than drawing what nobody can see.
@@ -738,6 +770,7 @@ export function DotMatrixGlobe({
         try {
             renderer = createHexGlRenderer(canvas, CELL_STYLES.length, () => {
                 glRef.current = null;
+                setGlReady(false);
                 requestDraw();
             });
         } catch {
@@ -746,6 +779,7 @@ export function DotMatrixGlobe({
         }
         levels.reset(renderer, baseTier, projection);
         glRef.current = renderer;
+        setGlReady(renderer !== null);
         stylesDirtyRef.current = true;
         requestDraw();
         return () => {
@@ -759,6 +793,61 @@ export function DotMatrixGlobe({
         levels.setOnChange(requestDraw);
         return () => levels.dispose();
     }, [levels, requestDraw]);
+
+    useEffect(() => {
+        levels.setLock(hexSize === 'auto' ? null : (hexSize as HexSizeLock));
+        requestDraw();
+    }, [levels, hexSize, requestDraw]);
+
+    /** Zooms in or out by a step, about the middle of the view. */
+    const zoomBy = useCallback((factor: number) => {
+        const drag = dragRef.current;
+        const minZ = mode === '2d' ? 1.0 : 0.98;
+        drag.targetZoom = Math.max(minZ, Math.min(MAX_ZOOM, drag.targetZoom * factor));
+        drag.zoomCursorX = 0;
+        drag.zoomCursorY = 0;
+        drag.lastInteractionTime = performance.now();
+        requestDraw();
+    }, [mode, requestDraw]);
+
+    /**
+     * 17 km hexes only show zoomed in: zooms in to where they do, in the
+     * mode showing, whose scale at a given zoom differs (the globe is larger
+     * than the flat map at the same zoom).
+     */
+    const zoomToLevel5 = useCallback(() => {
+        const view = viewRef.current;
+        if (!view) return;
+        const base = mode === '3d' ? Math.min(view.width, view.height) * 0.45 : fitFlatMap(view.width, view.height, projection.aspect).mapW / (2 * Math.PI);
+        if (base <= 0) return;
+        const drag = dragRef.current;
+        const needed = (LOCKED_LEVEL5_MIN_PX * 1.5) / (hexSpacingRad(5) * base);
+        if (drag.targetZoom >= needed) return;
+        drag.targetZoom = Math.min(MAX_ZOOM, needed);
+        drag.zoomCursorX = 0;
+        drag.zoomCursorY = 0;
+        drag.lastInteractionTime = performance.now();
+        requestDraw();
+    }, [mode, projection, requestDraw]);
+
+    /** Holds a hex size, or lets the zoom choose again. */
+    const chooseHexSize = useCallback((value: string) => {
+        const next: HexSizeChoice = value === 'auto' ? 'auto' : (Number(value) as ShownRes);
+        setHexSize(next);
+        try {
+            window.localStorage.setItem(HEX_SIZE_STORAGE_KEY, String(next));
+        } catch {
+            // Storage refused (a private window): the choice lasts the visit.
+        }
+        if (next === 5) zoomToLevel5();
+        requestDraw();
+    }, [requestDraw, zoomToLevel5]);
+
+    // Holding 17 km and switching between globe and flat map: the flat map is
+    // smaller at the same zoom, so it zooms in again to keep them showing.
+    useEffect(() => {
+        if (hexSize === 5) zoomToLevel5();
+    }, [hexSize, zoomToLevel5]);
 
     const visitedCityHexes = useMemo(
         () => buildCityHexSet(visitedCities, activeTier),
@@ -1238,6 +1327,10 @@ export function DotMatrixGlobe({
                 },
             }, reduced);
             levelsFading = frame.fading;
+            if (levels.shownRes !== shownResRef.current) {
+                shownResRef.current = levels.shownRes;
+                setShownRes(levels.shownRes);
+            }
             gl.render(view, isDark ? STYLE_GL.dark : STYLE_GL.light, {
                 shade: isDark ? 1 : 0,
                 alpha: borderAlpha,
@@ -1518,12 +1611,34 @@ export function DotMatrixGlobe({
      */
     const emitHover = useCallback((code: string | null, dotKey: string | null) => {
         const name = code ? (countryNames[code] ?? code) : null;
-        const label = code && name ? getRegionHoverLabel(code, dotKey, name) : null;
+        // The city view names the hex itself: its largest town and its state,
+        // once that level's regions have loaded.
+        const place = viewMode === 'cities' && code && name && dotKey ? hexPlaceLabel(dotKey, name) : null;
+        const label = code && name ? (place ?? getRegionHoverLabel(code, dotKey, name)) : null;
         const key = `${code ?? ''}|${label ?? ''}|${viewMode === 'cities' ? (dotKey ?? '') : ''}`;
         if (key === lastHoverRef.current) return;
         lastHoverRef.current = key;
         onCountryHover?.(code, label, code ? `https://flagcdn.com/w80/${code.toLowerCase()}.png` : null, dotKey);
     }, [countryNames, viewMode, onCountryHover]);
+
+    // The city view's region names for the level on screen, fetched when it is
+    // first needed; a hover waiting on them is named again once they land.
+    useEffect(() => {
+        if (viewMode !== 'cities') return;
+        let active = true;
+        loadRegionLevel(shownRes)
+            .then(() => {
+                if (!active) return;
+                lastHoverRef.current = '';
+                emitHover(hoveredCountryRef.current, dragRef.current.hoveredDotKey);
+            })
+            .catch(() => {
+                // Without them the hover names the country, as it always did.
+            });
+        return () => {
+            active = false;
+        };
+    }, [viewMode, shownRes, emitHover]);
 
     const setHover = useCallback((code: string | null, dotKey: string | null) => {
         const drag = dragRef.current;
@@ -1787,6 +1902,13 @@ export function DotMatrixGlobe({
 
     // The legend's swatches are the draw loop's own colours, so the two cannot drift.
     const legendPalette = resolvedTheme === 'dark' ? DOT_PALETTE.dark : DOT_PALETTE.light;
+    // What the size control says: the size showing, and whether it is held.
+    // Held at 17 km with 45 km standing in, it says so rather than "45 km held".
+    const sizeReadout = hexSize === 'auto'
+        ? `${HEX_KM[shownRes]} km`
+        : hexSize === 5 && shownRes !== 5
+            ? `${HEX_KM[5]} km · zoom in`
+            : `${HEX_KM[hexSize]} km · held`;
 
     if (mapError) return <div role="status" className="flex min-h-64 items-center justify-center rounded-xl border border-border p-6 text-center text-sm text-muted-foreground">The map is unavailable. You can still explore countries and city journals from the list.</div>;
 
@@ -1867,9 +1989,49 @@ export function DotMatrixGlobe({
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>
                     </DropdownMenu>
+                    {/* Zoom, and the hex size: what is showing, and a size to hold.
+                        Left out on a phone, where a pinch zooms and the bar has no room. */}
+                    <div className="ml-auto hidden sm:flex min-h-9 items-center rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground pointer-events-auto">
+                        <button
+                            type="button"
+                            onClick={() => zoomBy(1 / ZOOM_BUTTON_STEP)}
+                            className="flex h-9 w-9 items-center justify-center rounded-l-full hover:bg-muted"
+                            aria-label="Zoom out"
+                        >
+                            <Minus aria-hidden="true" className="w-3.5 h-3.5" />
+                        </button>
+                        {glReady && <DropdownMenu modal={false}>
+                            <DropdownMenuTrigger
+                                className="flex h-9 items-center gap-1 px-2 hover:bg-muted whitespace-nowrap"
+                                title={hexSize === 'auto' ? 'Hex size follows the zoom' : 'Hex size held'}
+                                aria-label={`${sizeReadout}. Choose a size`}
+                            >
+                                {sizeReadout}
+                                <ChevronDown aria-hidden="true" className="w-3.5 h-3.5" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" side="top" className="w-72">
+                                <DropdownMenuRadioGroup value={String(hexSize)} onValueChange={chooseHexSize}>
+                                    {HEX_SIZE_CHOICES.map((option) => (
+                                        <DropdownMenuRadioItem key={option.value} value={String(option.value)} className="flex-col items-start gap-0.5">
+                                            <span className="font-semibold">{option.label}</span>
+                                            <span className="text-xs text-muted-foreground">{option.note}</span>
+                                        </DropdownMenuRadioItem>
+                                    ))}
+                                </DropdownMenuRadioGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>}
+                        <button
+                            type="button"
+                            onClick={() => zoomBy(ZOOM_BUTTON_STEP)}
+                            className="flex h-9 w-9 items-center justify-center rounded-r-full hover:bg-muted"
+                            aria-label="Zoom in"
+                        >
+                            <Plus aria-hidden="true" className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
                     <button
                         onClick={() => setMode(m => m === '2d' ? '3d' : '2d')}
-                        className="ml-auto flex min-h-9 items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
+                        className="sm:ml-0 ml-auto flex min-h-9 items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
                         aria-label="Toggle 3D View"
                         aria-pressed={mode === '3d'}
                     >

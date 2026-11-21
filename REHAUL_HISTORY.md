@@ -3163,3 +3163,25 @@ TMDB groups films by collection only, so the Marvel Cinematic Universe showed as
 The universe is a server-side registry in `tmdb-proxy` (MCU = `Q642878`), and the endpoint takes no id from the caller. A caller-named id would make the proxy an open Wikidata query, and a row per universe keeps the endpoint shape fixed; adding a universe is one row. Keyword discovery on TMDB was the alternative and was not used. The lookup fans out to about 45 TMDB calls, so it has its own limit of six calls per ten minutes per caller, and it throws rather than caching an empty or failed answer.
 
 Closure: `supabase/functions/tmdb-proxy/index.ts` (`wikidata/film-universes`), `src/features/watchlist/franchise.ts` (`filmUniversesFromMembers`, `collectionsInsideUniverses`), `src/features/watchlist/useDiscovery.ts`. Committed as `30e0a877` on `claude/sleepy-solomon-a6e0fc`, not pushed; `tmdb-proxy` not deployed. The SPARQL was checked live with curl on 2026-11-20 (45 TMDB ids, 42 dated); the endpoint has not run end to end.
+
+### /dev status is the latest burst of calls, not a clock window — 2026-11-20
+
+Rows are batched: the browser flushes its calls every 15 seconds, and each Edge
+Function run writes one row per endpoint and outcome. Some APIs are called weekly
+(OMDb) or quarterly (bank holidays), so a 24-hour window would report them as idle
+when they are working. Status is therefore read from each API's newest 50 rows,
+using only the rows within 60 seconds of the newest one. When most of that burst
+fails, the API reads as Failing, or as Timing out when a failed call had no status
+and had used at least 90% of the code's timeout. A single failure among many reads
+as Some errors. The 24-hour counts and charts moved behind History, where the
+window is chosen.
+
+Closure: `src/features/dev/api-status.ts`, shown in `src/pages/Dev.tsx`. Uncommitted, not deployed.
+
+### City-view hex names are baked per hex at generation time, not looked up at runtime — 2026-11-21
+
+Hovering a hex in the city view names its largest town and that town's state, or else the state and country. The names are computed once by `scripts/generate-hex-map.mjs` from Natural Earth 1:10m admin-1 areas and populated places, and written per hex level to `public/data/hex-regions-v1-r{3,4,5}.json`. The browser only reads them.
+
+The reasons are in the code. A hex takes the state of its own country that covers most of it, so a cell on a border never names a region across it. Each town takes the state under its point, sampled on the same grid as the admin-1 layer, because Natural Earth's own state-name field spells some states differently and garbles others. Only a town of the hex's own country is used, so a border hex never names a town across the border. Names are a fixed table rather than model output or a runtime geocoder, so the same rows always give the same label, and no outside service is asked at hover time. The files are fetched only in the city view, at the size showing, because level 5 is about 3.3 MB.
+
+Closure: `src/components/dot-matrix/hexRegions.ts`, `src/components/dot-matrix/hexRegions.test.ts`, `scripts/generate-hex-map.mjs`, `src/components/dot-matrix/DotMatrixGlobe.tsx`. Uncommitted, not deployed.
