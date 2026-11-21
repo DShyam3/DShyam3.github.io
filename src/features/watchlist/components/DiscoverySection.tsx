@@ -444,23 +444,23 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           </p>
         </div>
         {discovery.franchisesLoading && (
-          <p role="status" className="text-sm text-muted-foreground">
-            {discovery.collectionsTotal > 0
-              ? `Checking your film collections, most recent first: ${discovery.collectionsChecked} of ${discovery.collectionsTotal}…`
-              : 'Checking series, trilogies and spin-offs…'}
+          <p className="text-sm text-muted-foreground">
+            {/* Announced once; the count beside it changes every batch and stays quiet. */}
+            <span role="status">Checking your series and collections…</span>
+            {discovery.collectionsTotal > 0 && (
+              <span className="tabular-nums"> {discovery.collectionsChecked} of {discovery.collectionsTotal} collections</span>
+            )}
           </p>
         )}
         {discovery.franchisesFailed && (
           <div role="status" className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            <p>Some collections couldn’t load (TMDB rate limit or network error). Wait a moment and retry.</p>
+            <p>Some series and collections couldn’t load (TMDB rate limit or network error). Wait a moment and retry.</p>
             <Button variant="outline" size="sm" onClick={discovery.retryFranchises}>Retry</Button>
           </div>
         )}
         {!discovery.franchisesLoading && !discovery.franchisesFailed && discovery.franchises.length === 0 && discovery.likelySeen.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            {discovery.hasMoreFranchises
-              ? 'No incomplete series in the most recent collections checked so far. Click Show more to check older ones.'
-              : 'No incomplete series, spin-offs or likely seen titles found in this view.'}
+            No incomplete series, spin-offs or likely seen titles found in this view.
           </p>
         )}
         {discovery.franchises.length > 0 && (

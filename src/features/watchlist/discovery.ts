@@ -141,6 +141,16 @@ export function interleaveBySeed(
 }
 
 /**
+ * Drops known titles (in the library, favourited, dismissed), then caps and
+ * interleaves by seed as `interleaveBySeed` does. Capping first would let a
+ * seed's four be four known titles, and with a large library whole pages came
+ * to nothing.
+ */
+export function interleaveFreshBySeed(items: DiscoveryItem[], known: ReadonlySet<string>): DiscoveryItem[] {
+  return interleaveBySeed(items.filter((item) => !known.has(discoveryKey(item.media, item.id))));
+}
+
+/**
  * What to do with this browser's dismissals once the owner's table is
  * reachable. A key leaves the browser copy only when a read of the table
  * has it (`confirmed`), never on a successful write alone: a read already in

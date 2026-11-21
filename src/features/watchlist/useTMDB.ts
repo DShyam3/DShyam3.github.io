@@ -37,6 +37,10 @@ export const detailRetry = (failures: number, error: unknown) =>
 export const detailRetryDelay = (failures: number) =>
     DETAIL_RETRY_DELAYS_MS[Math.min(failures, DETAIL_RETRY_DELAYS_MS.length - 1)];
 
+/** TMDB has no such title or collection: removed or merged, not a failure. */
+export const isNotFound = (error: unknown) =>
+    error instanceof FunctionsHttpError && (error.context as Response | undefined)?.status === 404;
+
 /** A search row, tagged with which endpoint it came back from. */
 export interface TMDBResult extends TMDBSearchItem {
     media_type: 'movie' | 'tv';
@@ -153,7 +157,14 @@ export function useTMDB() {
     }, [fetchTMDB, getPosterUrl, getBackdropUrl, queryClient]);
 
     /** A film series and its parts; null when TMDB or the proxy fails. */
-    const getCollection = useCallback(async (id: number) => {
+    /**
+     * A film collection and its parts, or null on failure unless
+     * `throwOnError`, for a caller that must tell a missing collection (404)
+     * from a failed lookup. `beforeFetch` runs before each real network
+     * attempt (retries included, a fresh cached answer never), for a caller
+     * that paces its calls.
+     */
+    const getCollection = useCallback(async (id: number, options?: { throwOnError?: boolean; beforeFetch?: () => Promise<void> }) => {
         try {
             return await queryClient.fetchQuery({
                 queryKey: ['watchlist', 'tmdb-collection', id],
@@ -162,9 +173,13 @@ export function useTMDB() {
                 // the proxy's minute instead of losing the collection.
                 retry: detailRetry,
                 retryDelay: detailRetryDelay,
-                queryFn: () => fetchTMDB<TMDBCollection>(`collection/${id}`, {}),
+                queryFn: async () => {
+                    await options?.beforeFetch?.();
+                    return fetchTMDB<TMDBCollection>(`collection/${id}`, {});
+                },
             });
         } catch (error) {
+            if (options?.throwOnError) throw error;
             console.error('TMDB Collection Error:', error);
             return null;
         }
@@ -182,7 +197,9 @@ export function useTMDB() {
             return await queryClient.fetchQuery({
                 queryKey: ['watchlist', 'tmdb-spinoffs', 'v2', clean],
                 staleTime: 24 * 60 * 60 * 1000,
-                retry: false,
+                // Asked while Discover is busy; a 429 waits out the minute.
+                retry: detailRetry,
+                retryDelay: detailRetryDelay,
                 queryFn: async () => {
                     const data = await fetchTMDB<{ results?: WikidataTvSpinoffLink[] }>('wikidata/tv-spinoffs', {
                         ids: clean.join(','),
@@ -208,6 +225,8 @@ export function useTMDB() {
             return await queryClient.fetchQuery({
                 queryKey: ['watchlist', 'tmdb-film-universes'],
                 staleTime: 24 * 60 * 60 * 1000,
+                // Not retried: the proxy limits this lookup on its own, for
+                // ten minutes at a time, so waiting out a minute cannot help.
                 retry: false,
                 queryFn: async () => {
                     const data = await fetchTMDB<{ results?: FilmUniverseMember[] }>('wikidata/film-universes', {});

@@ -10,7 +10,7 @@ import {
   discoverySeeds,
   filmGroupsNeeded,
   franchiseUpcomingItems,
-  interleaveBySeed,
+  interleaveFreshBySeed,
   interleaveUpcoming,
   keepFirstSeenOrder,
   knownDiscoveryKeys,
@@ -38,22 +38,35 @@ import {
   type UniverseLibraryFilm,
 } from './franchise';
 import { POSTER_BASE } from './components/franchise/EntryList';
-import { detailRetry, detailRetryDelay, useTMDB } from './useTMDB';
+import { createCallPacer } from './call-pacer';
+import { detailRetry, detailRetryDelay, isNotFound, useTMDB } from './useTMDB';
 import { useDismissedSuggestions } from './useDismissedSuggestions';
 import type { LibraryType } from './library-state';
-import type { TMDBSearchResponse } from './tmdb-types';
+import type { TMDBCollection, TMDBSearchResponse } from './tmdb-types';
 
 /** TMDB stops paging at 500; the filler never needs to go that far. */
 const MAX_PAGES = 200;
 
 /**
- * One tmdb-proxy call. A 429 waits and tries again (5s, 20s, 40s: together
- * longer than the proxy's one-minute window), so a busy minute slows a page
- * down instead of emptying it.
+ * Discover's own share of tmdb-proxy's 60 calls a minute. Everything Discover
+ * fetches by itself waits its turn here; the rest of the minute stays free for
+ * the owner's adds, "Seen it" and searches, which do not.
+ */
+const DISCOVER_CALLS_PER_MINUTE = 40;
+/** The collection walk's ceiling, so the sections' own pages always get in. */
+const WALK_CALLS_PER_MINUTE = 24;
+const discoverSlot = createCallPacer(DISCOVER_CALLS_PER_MINUTE, 60_000);
+const walkSlot = () => discoverSlot(WALK_CALLS_PER_MINUTE);
+
+/**
+ * One tmdb-proxy call, paced by `discoverSlot`. A 429 (from calls outside
+ * the pacer) waits and tries again: 5s, 20s, 40s, together longer than the
+ * proxy's one-minute window.
  */
 async function request(endpoint: string, params: Record<string, string>): Promise<TMDBSearchResponse> {
   const query = new URLSearchParams({ endpoint, language: 'en-GB', page: '1', ...params });
   for (let failures = 0; ; failures += 1) {
+    await discoverSlot();
     const { data, error } = await supabase.functions.invoke(`tmdb-proxy?${query}`, { method: 'GET' });
     if (!error) return data as TMDBSearchResponse;
     if (!detailRetry(failures, error)) throw error;
@@ -91,6 +104,25 @@ async function load(sources: Source[]): Promise<Loaded> {
     items: results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])),
     failed: results.some((result) => result.status === 'rejected'),
   };
+}
+
+interface PagedSource {
+  isFetching: boolean;
+  isError: boolean;
+  hasNextPage: boolean;
+  data?: { pages: unknown[] };
+  refetch: () => Promise<unknown>;
+  fetchNextPage: () => Promise<unknown>;
+}
+
+/**
+ * The next page of one source. One that failed with pages already loaded asks
+ * for the next page again; a refetch would re-read every loaded page.
+ */
+function loadNext(q: PagedSource) {
+  if (q.isFetching) return;
+  if (q.isError && !q.data?.pages.length) void q.refetch();
+  else if (q.hasNextPage) void q.fetchNextPage();
 }
 
 /**
@@ -135,15 +167,18 @@ export interface DiscoveryFranchiseGroup {
   touched: LastTouched;
 }
 
-// tmdb-proxy allows 60 calls a minute per visitor. Opening Discover costs 26
-// (8 suggestion seeds, 2 coming soon, 2 likely seen, 12 collections, 1
-// spin-off lookup, 1 film-universe lookup); the automatic top-ups below add
-// at most 26 more (12 collections, 8 suggestions, 4 coming soon, 2 likely
-// seen), once per visit to Discover. That leaves 8 for the owner's clicks: an add or "Seen it" on a
-// film is one call, on a series one plus one per season, which a long series
-// can outrun; the details call waits out the limit (useTMDB `detailRetry`),
-// the season calls do not. Franchises lead the page, so they get the largest
-// share. Show more buttons are the owner's own call and are not budgeted.
+// How much each section fetches by itself. All of it goes through
+// `discoverSlot`, so however much there is, it arrives at no more than
+// DISCOVER_CALLS_PER_MINUTE:
+// - HAVE YOU ALREADY WATCHED? walks the library's film collections in a fixed
+//   order, most recently touched first, a batch at a time, until it has
+//   enough with something unanswered; Show more asks for six more. It takes
+//   at most WALK_CALLS_PER_MINUTE, so the other sections' pages are never
+//   queued behind it. A collection is kept for a day, so the walk is paid for
+//   once a day (about 200 calls at most); a fresh cached one skips the queue.
+// - COMING SOON pages until its grid is full, at most 10 pages (20 calls).
+// - YOU MIGHT LIKE and Likely seen page until full, at most 6 and 5 pages
+//   automatically per visit; Show more is the owner's own call.
 const COLLECTIONS_PER_BATCH = 12;
 const FRANCHISES_PER_STEP = 6;
 const MAX_UPCOMING_PAGES = 10;
@@ -152,6 +187,7 @@ const LIKELY_SEEN_ROTATION_WEEKS = 15;
 const TARGET_RECOMMENDATIONS = 12;
 const TARGET_LIKELY_SEEN = 12;
 const AUTO_PAGE_CAP = 6;
+const AUTO_EMPTY_ROUNDS = 2;
 const AUTO_LIKELY_SEEN_PAGES = 5;
 
 export function useDiscovery(type: LibraryType) {
@@ -240,13 +276,12 @@ export function useDiscovery(type: LibraryType) {
     ),
   });
 
-  // Known titles (in the library, favourited, dismissed) leave before each
-  // seed is capped at four, not after: with a large library, a seed's first
-  // four were usually all known and whole pages came to nothing. A dismissed
-  // tile is replaced in place by that seed's next title.
+  // Known titles leave before each seed is capped at four (see
+  // `interleaveFreshBySeed`). Dismissing a tile lets that seed's next title
+  // in at the end of its turns.
   const knownKeys = useMemo(() => knownDiscoveryKeys(watchlist, favourites, dismissed), [watchlist, favourites, dismissed]);
   const recommendationItems = useMemo(() => {
-    const fresh = (items: DiscoveryItem[]) => interleaveBySeed(items.filter((item) => !knownKeys.has(discoveryKey(item.media, item.id))));
+    const fresh = (items: DiscoveryItem[]) => interleaveFreshBySeed(items, knownKeys);
     const moviePages = movieRecommendations.data?.pages ?? [];
     const tvPages = tvRecommendations.data?.pages ?? [];
     if (type === 'movie') return moviePages.flatMap((page) => fresh(page.items));
@@ -356,12 +391,20 @@ export function useDiscovery(type: LibraryType) {
       enabled: !loading && type !== 'tv',
       staleTime: 24 * 60 * 60 * 1000,
       retry: false,
-      // getCollection answers null on failure; thrown, so a rate-limited
-      // lookup is retried on the next visit instead of cached as empty.
-      queryFn: async () => {
-        const collection = await getCollection(collectionId);
-        if (!collection) throw new Error('Collection unavailable');
-        return collection;
+      // A failure is thrown, so it is retried on the next visit instead of
+      // cached as empty. A collection TMDB no longer has (removed or merged)
+      // is not a failure: it has no parts, so it makes no card.
+      queryFn: async (): Promise<TMDBCollection> => {
+        try {
+          // Paced per network attempt, so a collection cached and still
+          // fresh costs nothing and a stale one waits its turn.
+          const collection = await getCollection(collectionId, { throwOnError: true, beforeFetch: walkSlot });
+          if (!collection) throw new Error('Collection unavailable');
+          return collection;
+        } catch (error) {
+          if (isNotFound(error)) return { id: collectionId, parts: [] };
+          throw error;
+        }
       },
     })),
   });
@@ -518,23 +561,27 @@ export function useDiscovery(type: LibraryType) {
   // Shown in the order titles first turned up, so a title already on screen
   // never moves when a later page finds a stronger match; new ones join the
   // end.
+  // Matches lead and the pool follows. The order is only remembered once the
+  // first suggestions are in: the pool usually lands first and would
+  // otherwise keep every early place after the matches arrive.
+  const recommendationsSettled =
+    (type === 'tv' || !movieRecommendations.isPending) && (type === 'movie' || !tvRecommendations.isPending);
   const likelySeenOrder = useRef(new Map<string, number>());
-  const likelySeen = useMemo(
-    () =>
-      keepFirstSeenOrder(
-        curateDiscovery(
-          [...likelySeenConsensus(recommendationItems, today), ...likelySeenPoolItems],
-          watchlist,
-          favourites,
-          dismissed,
-          franchiseEntryKeys,
-        ),
-        (item) => discoveryKey(item.media, item.id),
-        likelySeenOrder.current,
-      ).slice(0, TARGET_LIKELY_SEEN),
+  const likelySeen = useMemo(() => {
+    const curated = curateDiscovery(
+      [...likelySeenConsensus(recommendationItems, today), ...likelySeenPoolItems],
+      watchlist,
+      favourites,
+      dismissed,
+      franchiseEntryKeys,
+    );
+    // Sorted by the remembered order always; new titles are only remembered
+    // once settled, so a type switch never reshuffles tiles already shown.
+    const order = recommendationsSettled ? likelySeenOrder.current : new Map(likelySeenOrder.current);
+    const ordered = keepFirstSeenOrder(curated, (item) => discoveryKey(item.media, item.id), order);
+    return ordered.slice(0, TARGET_LIKELY_SEEN);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
-    [recommendationItems, likelySeenPoolItems, watchlist, favourites, dismissed, franchiseEntryKeys, week],
-  );
+  }, [recommendationsSettled, recommendationItems, likelySeenPoolItems, watchlist, favourites, dismissed, franchiseEntryKeys, week]);
 
   const alreadyWatchedKeys = useMemo(
     () => new Set([...franchiseEntryKeys, ...likelySeen.map((item) => discoveryKey(item.media, item.id))]),
@@ -650,16 +697,26 @@ export function useDiscovery(type: LibraryType) {
     [upcomingFranchiseItems, upcomingItems, watchlist, favourites, dismissed],
   );
 
-  const collectionsAllFailed = activeCollectionIds.length > 0 && !collectionsPending && collectionQueries.every((q) => q.isError);
+  // The walk stops when the latest batch failed whole, even after waiting out
+  // 429s: earlier successes must not let it run on through the library.
+  const latestBatch = collectionQueries.slice(-COLLECTIONS_PER_BATCH);
+  const latestBatchFailed = latestBatch.length > 0 && !collectionsPending && latestBatch.every((q) => q.isError);
   const hasMoreCollections = type !== 'tv' && collectionLimit < libraryCollections.length;
   const collectionsChecked = collectionQueries.filter((q) => !q.isPending).length;
-  const filmGroupCount = franchiseGroups.filter((group) => group.kind === 'collection').length;
+  const filmGroupCount = franchiseGroups.filter((group) => group.kind !== 'tv-spinoff').length;
   const filmGroupsWanted = filmGroupsNeeded(type, franchiseTarget, franchiseGroups.length - filmGroupCount);
 
   // Automatic pages of suggestions, counted once per visit to Discover and
   // never re-armed (not by a target being met, a type switch or a click).
   const autoLikelySeenRef = useRef(0);
   const autoRecPagesRef = useRef(0);
+  // Rounds in a row that added nothing: with almost everything known, more
+  // pages are calls the walk could have had.
+  const autoRecEmptyRef = useRef<Record<LibraryType, { rounds: number; seen: number }>>({
+    all: { rounds: 0, seen: -1 },
+    movie: { rounds: 0, seen: -1 },
+    tv: { rounds: 0, seen: -1 },
+  });
 
   // If the current page of widely-watched titles is mostly logged/dismissed,
   // rotate forward so HAVE YOU ALREADY WATCHED? stays populated.
@@ -671,12 +728,12 @@ export function useDiscovery(type: LibraryType) {
     fetchNextPage: fetchNextLikelySeen,
   } = likelySeenPool;
   useEffect(() => {
-    if (likelySeen.length >= TARGET_LIKELY_SEEN) return;
+    if (!recommendationsSettled || likelySeen.length >= TARGET_LIKELY_SEEN) return;
     if (loading || likelySeenPending || likelySeenFetchingNext || likelySeenError || !likelySeenHasNext) return;
     if (autoLikelySeenRef.current >= AUTO_LIKELY_SEEN_PAGES) return;
     autoLikelySeenRef.current += 1;
     void fetchNextLikelySeen();
-  }, [likelySeen.length, loading, likelySeenPending, likelySeenFetchingNext, likelySeenError, likelySeenHasNext, fetchNextLikelySeen]);
+  }, [recommendationsSettled, likelySeen.length, loading, likelySeenPending, likelySeenFetchingNext, likelySeenError, likelySeenHasNext, fetchNextLikelySeen]);
 
   // Page on until the grid is full: with a large library and many dismissals,
   // whole pages of popular releases can curate down to nothing.
@@ -699,11 +756,13 @@ export function useDiscovery(type: LibraryType) {
   // the scan. Waits for the spin-off and universe lookups, whose groups count
   // too.
   const spinoffsPending = type !== 'movie' && tvSeedIds.length > 0 && tvSpinoffs.isPending;
-  const walking = type !== 'tv' && hasMoreCollections && !collectionsAllFailed && filmGroupCount < filmGroupsWanted;
+  const walking = type !== 'tv' && hasMoreCollections && !latestBatchFailed && filmGroupCount < filmGroupsWanted;
+  // `collectionLimit` is a dependency: a batch already cached settles in the
+  // same render it is asked for, so nothing else changes to run this again.
   useEffect(() => {
     if (!walking || loading || collectionsPending || spinoffsPending || universesPending) return;
     setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH);
-  }, [walking, loading, collectionsPending, spinoffsPending, universesPending]);
+  }, [walking, loading, collectionsPending, spinoffsPending, universesPending, collectionLimit]);
 
   // With a large library, a whole page of seed recommendations can curate down
   // to only a couple of titles; keep paging until a full grid is ready.
@@ -711,12 +770,16 @@ export function useDiscovery(type: LibraryType) {
     if (recommendations.length >= TARGET_RECOMMENDATIONS) return;
     if (loading || ratingsStatus === 'loading' || isPending || loadingMore || isError || !hasMore) return;
     if (autoRecPagesRef.current >= AUTO_PAGE_CAP) return;
+    // Counted in titles ever shown, not tiles now on screen: the walk and
+    // Likely seen take tiles away without any page having landed.
+    const empty = autoRecEmptyRef.current[type];
+    const seen = recommendationsOrderByType.current[type].size;
+    if (empty.seen >= 0) empty.rounds = seen > empty.seen ? 0 : empty.rounds + 1;
+    empty.seen = seen;
+    if (empty.rounds >= AUTO_EMPTY_ROUNDS) return;
     autoRecPagesRef.current += 1;
-    for (const q of activeQueries) {
-      if (q.isError && !q.isFetching) void q.refetch();
-      else if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
-    }
-  }, [recommendations.length, loading, ratingsStatus, isPending, loadingMore, isError, hasMore, activeQueries]);
+    for (const q of activeQueries) loadNext(q);
+  }, [recommendations.length, loading, ratingsStatus, isPending, loadingMore, isError, hasMore, activeQueries, type]);
 
   const franchisesLoading =
     loading ||
@@ -724,11 +787,16 @@ export function useDiscovery(type: LibraryType) {
     spinoffsPending ||
     universesPending;
   const shownFranchises = useMemo(() => franchiseGroups.slice(0, franchiseTarget), [franchiseGroups, franchiseTarget]);
+  const retryFranchises = () => {
+    for (const q of collectionQueries) {
+      if (q.isError && !q.isFetching) void q.refetch();
+    }
+    if (tvSpinoffs.isError && !tvSpinoffs.isFetching) void tvSpinoffs.refetch();
+    if (filmUniverses.isError && !filmUniverses.isFetching) void filmUniverses.refetch();
+  };
   const franchisesFailed =
-    type !== 'tv' && (
-      (!collectionsPending && collectionQueries.some((q) => q.isError)) ||
-      filmUniverses.isError
-    );
+    (type !== 'tv' && ((!collectionsPending && collectionQueries.some((q) => q.isError)) || filmUniverses.isError)) ||
+    (type !== 'movie' && tvSpinoffs.isError);
 
   return {
     recommendations,
@@ -740,14 +808,12 @@ export function useDiscovery(type: LibraryType) {
     hasMoreFranchises: franchiseGroups.length > franchiseTarget || hasMoreCollections,
     collectionsChecked: type === 'tv' ? 0 : collectionsChecked,
     collectionsTotal: type === 'tv' ? 0 : libraryCollections.length,
-    loadMoreFranchises: () => setFranchiseTarget((prev) => prev + FRANCHISES_PER_STEP),
-    retryFranchises: () => {
-      for (const q of collectionQueries) {
-        if (q.isError && !q.isFetching) void q.refetch();
-      }
-      if (tvSpinoffs.isError && !tvSpinoffs.isFetching) void tvSpinoffs.refetch();
-      if (filmUniverses.isError && !filmUniverses.isFetching) void filmUniverses.refetch();
+    // After a batch failed, Show more asks for it again, so the walk can go on.
+    loadMoreFranchises: () => {
+      setFranchiseTarget((prev) => prev + FRANCHISES_PER_STEP);
+      if (latestBatchFailed) retryFranchises();
     },
+    retryFranchises,
     loading: loading || ratingsStatus === 'loading' || isPending,
     upcomingLoading: loading || upcoming.isPending,
     upcomingLoadingMore: upcoming.isFetchingNextPage,
@@ -757,10 +823,7 @@ export function useDiscovery(type: LibraryType) {
     hasMore,
     loadingMore,
     loadMore: () => {
-      for (const q of activeQueries) {
-        if (q.isError && !q.isFetching) void q.refetch();
-        else if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
-      }
+      for (const q of activeQueries) loadNext(q);
     },
     // Only after a total failure, which is one page: refetching every loaded
     // page at once would run into tmdb-proxy's per-minute limit.

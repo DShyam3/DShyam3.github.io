@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
@@ -77,6 +77,13 @@ export default function WatchlistFranchises() {
   const [progressFilter, setProgressFilter] = useState<FranchiseProgress>('all');
   const [sortBy, setSortBy] = useState<FranchiseSort>('largest');
   const [searchQuery, setSearchQuery] = useState('');
+  // Searching asks TMDB for every matching collection, so it waits for a
+  // pause in typing rather than asking on each key.
+  const [settledQuery, setSettledQuery] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSettledQuery(searchQuery), 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const visibleWatchlist = useMemo(
     () => (isAdmin ? watchlist : watchlist.filter((item) => item.library_state !== 'hidden' && item.library_state !== 'stopped')),
@@ -120,7 +127,7 @@ export default function WatchlistFranchises() {
   );
   // The search reaches every collection in the library, not just the ones
   // loaded so far: names and film titles are known before TMDB is asked.
-  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const normalizedQuery = settledQuery.trim().toLowerCase();
   const searchedCollections = useMemo(() => {
     const filtered = normalizedQuery
       ? openCollections.filter((c) => collectionSearchText(c).includes(normalizedQuery))
@@ -581,7 +588,7 @@ export default function WatchlistFranchises() {
           )}
           {!libraryLoading && !collectionsChecking && !filmUniversesQuery.isPending && filteredFilmUniverses.length === 0 && filteredCollections.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              {multiPartCollections.length === 0 && openFilmUniverses.length === 0
+              {!normalizedQuery && progressFilter === 'all'
                 ? 'Film series appear here as the nightly sync fills them in.'
                 : 'No film series match the current filter.'}
             </p>

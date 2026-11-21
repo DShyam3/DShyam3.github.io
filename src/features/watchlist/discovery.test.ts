@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { curateDiscovery, discoverySeeds, dismissalHandover, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveUpcoming, keepFirstSeenOrder, likelySeenConsensus, type DiscoveryItem } from './discovery';
+import { curateDiscovery, discoverySeeds, dismissalHandover, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, likelySeenConsensus, type DiscoveryItem } from './discovery';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -368,5 +368,22 @@ describe('filmGroupsNeeded', () => {
     expect(filmGroupsNeeded('all', 6, 2)).toBe(4);
     expect(filmGroupsNeeded('all', 6, 9)).toBe(3);
     expect(filmGroupsNeeded('all', 12, 9)).toBe(6);
+  });
+});
+
+describe('interleaveFreshBySeed', () => {
+  const rec = (id: number, seedKey: string): DiscoveryItem => ({ id, title: `T${id}`, poster_path: null, overview: '', media: 'movie', reason: '', kind: 'recommendation', seedKey });
+
+  it('removes known titles before each seed is capped at four', () => {
+    const items = [1, 2, 3, 4, 5, 6].map((id) => rec(id, 'movie:100'));
+    const known = new Set(['movie:1', 'movie:2', 'movie:3', 'movie:4']);
+    expect(interleaveFreshBySeed(items, known).map((item) => item.id)).toEqual([5, 6]);
+    // Capping first, as before, would have left nothing new.
+    expect(interleaveBySeed(items).filter((item) => !known.has(`movie:${item.id}`))).toEqual([]);
+  });
+
+  it('still takes turns between seeds', () => {
+    const items = [rec(1, 'movie:1'), rec(2, 'movie:1'), rec(3, 'movie:2'), rec(4, 'movie:2')];
+    expect(interleaveFreshBySeed(items, new Set(['movie:1'])).map((item) => item.id)).toEqual([2, 3, 4]);
   });
 });
