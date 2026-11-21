@@ -245,14 +245,19 @@ interface StyleInputs {
     visited: Set<string>;
     cityHexes: ReadonlySet<string>;
     cities: boolean;
+    /** The hovered country: lights all of it on the country view. */
     hovered: string | null;
+    /** The hovered cell: on the city view only it lights, the country stays unlit. */
+    hoveredKey: string | null;
     selected: string | null;
     focusedDot: string | null;
 }
 
 /** A cell's `CELL_STYLE`, at any level: `key` is its H3 index. */
 function cellStyle(key: string, code: string, s: StyleInputs): number {
-    const hovered = code === s.hovered;
+    // The city view is read hex by hex, so a hover lights the one hex; lighting
+    // the whole country washed out the cities in it.
+    const hovered = s.cities ? key === s.hoveredKey : code === s.hovered;
     if (key === s.selected) return CELL_STYLE.selected;
     if (s.cities && (s.cityHexes.has(key) || key === s.focusedDot)) {
         return hovered ? CELL_STYLE.cityHovered : CELL_STYLE.city;
@@ -1380,6 +1385,7 @@ export function DotMatrixGlobe({
                 cityHexes: visitedCityHexes,
                 cities: viewMode === 'cities',
                 hovered: hoveredCountryRef.current,
+                hoveredKey: drag.hoveredDotKey,
                 selected: selectedKey,
                 focusedDot: focusedDotKey,
             });
@@ -1422,6 +1428,7 @@ export function DotMatrixGlobe({
         let levelsFading = false;
         if (gl) {
             const hovered = hoveredCountryRef.current;
+            const hoveredKey = drag.hoveredDotKey;
             const inputsByRes = new Map<DetailRes, StyleInputs>();
             const frame = levels.frame(view, dt, progress >= 0.5 ? R : W_zoom / (2 * Math.PI), {
                 version: styleVersionRef.current,
@@ -1435,6 +1442,7 @@ export function DotMatrixGlobe({
                             cityHexes: info?.cities ?? NO_CELLS,
                             cities: viewMode === 'cities',
                             hovered,
+                            hoveredKey,
                             selected: info?.selected ?? null,
                             focusedDot: null,
                         };
@@ -1799,16 +1807,16 @@ export function DotMatrixGlobe({
             stylesDirtyRef.current = true;
             requestDraw();
         } else if (dotKey !== drag.hoveredDotKey) {
-            // Same country, another hex: no restyle, but the outline has to
-            // move with the pointer. Without this frame it stayed on the hex
-            // the pointer first entered the country by.
+            // Same country, another hex: the outline moves with the pointer,
+            // and on the city view, where the hex itself lights, so do the styles.
+            if (viewMode === 'cities') stylesDirtyRef.current = true;
             requestDraw();
         }
         drag.hoveredDotKey = dotKey;
         const canvas = canvasRef.current;
         if (canvas) canvas.style.cursor = drag.isDragging ? 'grabbing' : (code ? 'crosshair' : 'grab');
         emitHover(code, dotKey);
-    }, [emitHover, requestDraw]);
+    }, [emitHover, requestDraw, viewMode]);
 
     /** Select whatever is under a point: shared by a mouse click and a tap. */
     const selectAtPoint = useCallback((clientX: number, clientY: number) => {
