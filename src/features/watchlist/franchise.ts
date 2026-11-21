@@ -228,7 +228,7 @@ export function tvFranchisesFromLinks(
 ): TvFranchiseSummary[] {
   if (links.length === 0) return [];
 
-  const libraryByKey = new Map<string, { title: string; releaseDate: string | null; poster: string | null }>();
+  const libraryByKey = new Map<string, { title: string; releaseDate: string | null; poster: string | null; franchise: string | null }>();
   for (const item of watchlist) {
     if (item.tmdb_id == null) continue;
     const mediaType = item.category === 'Movies' ? 'movie' : 'tv';
@@ -236,6 +236,7 @@ export function tvFranchisesFromLinks(
       title: stripTrailingYear(item.title),
       releaseDate: item.release_date?.slice(0, 10) || null,
       poster: item.image_url ?? null,
+      franchise: item.franchise?.trim().toLowerCase() || null,
     });
   }
 
@@ -329,12 +330,21 @@ export function tvFranchisesFromLinks(
       }
     }
     if (component.length < 2) continue;
-    const entries = sortByRelease(component.map((k) => nodes.get(k)!));
+    const rawEntries = sortByRelease(component.map((k) => nodes.get(k)!));
     const explicitName = component.map((k) => franchiseNames.get(k)).find((n): n is string => Boolean(n));
-    const baseName = explicitName || entries[0].title;
+    const baseName = explicitName || rawEntries[0].title;
     const name = /universe|franchise|collection|chronicles/i.test(baseName)
       ? baseName
       : `${baseName} Universe`;
+    const normalizedName = name.trim().toLowerCase();
+    // Respect explicit custom `franchise` overrides: if the owner assigned a
+    // show to a different franchise (e.g. moving Daredevil to "The Defenders
+    // Saga"), do not also list it in Wikidata's group.
+    const entries = rawEntries.filter((entry) => {
+      const override = libraryByKey.get(entry.key)?.franchise;
+      return !override || override === normalizedName;
+    });
+    if (entries.length < 2) continue;
     groups.push({
       key: entries[0].key,
       name,
@@ -520,7 +530,7 @@ export function customFranchisesFromLibrary(
           key: item.tmdb_id ? `${mediaType}:${item.tmdb_id}` : `lib:${item.category}:${item.id}`,
           tmdbId: item.tmdb_id ?? Number(item.id),
           mediaType,
-          title: item.title,
+          title: stripTrailingYear(item.title),
           releaseDate: item.release_date ?? null,
           poster: item.image_url ?? null,
           position,

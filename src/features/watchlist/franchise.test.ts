@@ -338,6 +338,42 @@ describe('tvFranchisesFromLinks', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].entries.map((e) => e.tmdbId)).toEqual([85271, 92783, 138501]);
   });
+
+  it('excludes shows explicitly reassigned to a different custom franchise from Wikidata groups', () => {
+    const watchlist = [
+      { id: '1', category: 'TV Shows', tmdb_id: 85271, title: 'WandaVision', release_date: '2021-01-15', franchise: 'Marvel Cinematic Universe' },
+      { id: '2', category: 'TV Shows', tmdb_id: 61889, title: "Marvel's Daredevil (2015)", release_date: '2015-04-10', franchise: 'The Defenders Saga' },
+      { id: '3', category: 'TV Shows', tmdb_id: 67178, title: "Marvel's The Punisher (2017)", release_date: '2017-11-17', franchise: 'The Defenders Saga' },
+    ] as unknown as WatchlistItem[];
+    const groups = tvFranchisesFromLinks(
+      [
+        {
+          seedTmdbId: 85271,
+          seedTitle: 'WandaVision',
+          franchiseId: 'Q642878',
+          franchiseName: 'Marvel Cinematic Universe',
+          relatedMediaType: 'tv',
+          relatedTmdbId: 138501,
+          relatedTitle: 'Agatha All Along',
+          releaseDate: '2024-09-18',
+        },
+        {
+          seedTmdbId: 61889,
+          seedTitle: 'Daredevil',
+          franchiseId: 'Q642878',
+          franchiseName: 'Marvel Cinematic Universe',
+          relatedMediaType: 'tv',
+          relatedTmdbId: 67178,
+          relatedTitle: 'The Punisher',
+          releaseDate: '2017-11-17',
+        },
+      ],
+      watchlist,
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].name).toBe('Marvel Cinematic Universe');
+    expect(groups[0].entries.map((e) => e.tmdbId)).toEqual([85271, 138501]);
+  });
 });
 
 describe('hasWatchGap', () => {
