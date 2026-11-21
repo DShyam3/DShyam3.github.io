@@ -27,6 +27,11 @@ export interface HexGlPalette {
     colors: Float32Array;
     /** How far each style's hex is drawn towards its corners, 0-1. */
     scales: Float32Array;
+    /**
+     * The ground every land cell sits on, straight RGBA: drawn first, edge to
+     * edge, so land is solid under the hexes and the sea shows only at sea.
+     */
+    land?: Float32Array;
 }
 
 export interface HexGlBorders {
@@ -96,6 +101,9 @@ in vec3 a_meta;
 uniform sampler2D u_style;
 uniform vec4 u_colors[${styleCount}];
 uniform float u_scales[${styleCount}];
+// The land pass: every cell full size, a little over, in one colour.
+uniform float u_base;
+uniform vec4 u_land;
 out vec4 v_color;
 
 void main() {
@@ -109,9 +117,10 @@ void main() {
     int style = int(texelFetch(u_style, ivec2(index % ${STYLE_TEX_WIDTH}, index / ${STYLE_TEX_WIDTH}), 0).r * 255.0 + 0.5);
     vec2 c = mix(flatMap(a_c2), centre.xy, u_progress);
     vec2 v = mix(flatMap(a_v2), globe(a_v3).xy, u_progress);
-    vec2 p = c + (v - c) * (u_scales[style] * a_meta.y);
+    float scale = u_base > 0.5 ? 1.04 : u_scales[style];
+    vec2 p = c + (v - c) * (scale * a_meta.y);
     float opacity = (1.0 - u_progress) + max(0.1, 0.45 + 0.55 * centre.z) * u_progress;
-    vec4 color = u_colors[style];
+    vec4 color = u_base > 0.5 ? u_land : u_colors[style];
     float alpha = color.a * opacity * u_alpha;
     v_color = vec4(color.rgb * alpha, alpha);
     gl_Position = toClip(p);
@@ -323,7 +332,7 @@ export function createHexGlRenderer(
     });
     if (!gl || gl.isContextLost()) return null;
 
-    const hexProgram = link(gl, hexVertex(styleCount), HEX_FRAGMENT, HEX_LAYOUT, ['u_style', 'u_colors', 'u_scales']);
+    const hexProgram = link(gl, hexVertex(styleCount), HEX_FRAGMENT, HEX_LAYOUT, ['u_style', 'u_colors', 'u_scales', 'u_base', 'u_land']);
     const borderProgram = link(gl, BORDER_VERTEX, BORDER_FRAGMENT, BORDER_LAYOUT, ['u_halfWidth', 'u_color']);
     const patches = new Map<string, GpuPatch>();
 
@@ -447,6 +456,23 @@ export function createHexGlRenderer(
             gl.activeTexture(gl.TEXTURE0);
             gl.uniform1i(hexProgram.uniforms.get('u_style') ?? null, 0);
             gl.blendEquation(gl.FUNC_ADD);
+
+            if (palette.land) {
+                // Under what is already drawn (the borders), not over it:
+                // "destination over", so a border keeps its strength on land.
+                gl.uniform1f(hexProgram.uniforms.get('u_base') ?? null, 1);
+                gl.uniform4fv(hexProgram.uniforms.get('u_land') ?? null, palette.land);
+                gl.blendFunc(gl.ONE_MINUS_DST_ALPHA, gl.ONE);
+                for (const draw of visible) {
+                    const patch = patches.get(draw.key)!;
+                    gl.uniform1f(hexProgram.uniforms.get('u_alpha') ?? null, draw.alpha);
+                    gl.bindTexture(gl.TEXTURE_2D, patch.texture);
+                    gl.bindVertexArray(patch.hex.vao);
+                    gl.drawElements(gl.TRIANGLES, patch.hex.count, gl.UNSIGNED_INT, 0);
+                }
+                gl.uniform1f(hexProgram.uniforms.get('u_base') ?? null, 0);
+            }
+
             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
             for (const draw of visible) {
                 const patch = patches.get(draw.key)!;

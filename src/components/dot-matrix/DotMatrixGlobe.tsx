@@ -7,6 +7,7 @@ import {
     MAP_PROJECTIONS,
     getMapProjection,
     isMapProjectionId,
+    type MapProjection,
     type MapProjectionId,
 } from '@/lib/mapProjections';
 import {
@@ -146,6 +147,14 @@ const DOT_PALETTE = {
         // so it never reads as one more antique brass dot.
         selected: 'rgba(46, 166, 178, 1)',
         selectedGlow: 'rgba(46, 166, 178, 0.5)',
+        // The sea: a cool tint apart from the page, so land reads against
+        // water and the globe against space. Lighter at the globe's middle,
+        // as if lit from the front.
+        ocean: 'rgba(60, 110, 150, 0.3)',
+        oceanEdge: 'rgba(60, 110, 150, 0.42)',
+        // The ground under every land hex, opaque, so land never takes the
+        // sea's colour through its hexes or the gaps between them.
+        land: 'rgba(44, 39, 48, 1)',
     },
     light: {
         unvisited: 'rgba(31, 25, 36, 0.18)',
@@ -156,8 +165,38 @@ const DOT_PALETTE = {
         city: 'rgba(179, 98, 18, 1)',
         selected: 'rgba(15, 100, 109, 1)',
         selectedGlow: 'rgba(15, 100, 109, 0.38)',
+        ocean: 'rgba(80, 125, 165, 0.34)',
+        oceanEdge: 'rgba(80, 125, 165, 0.46)',
+        land: 'rgba(240, 233, 218, 1)',
     },
 } as const;
+
+const outlines = new Map<string, Float32Array>();
+
+/**
+ * The flat map's edge in a projection, in the unit square: down the west
+ * edge, along the bottom, up the east edge, back along the top. The sea is
+ * this shape filled, so it follows Equal Earth's curves or Mercator's
+ * straight sides rather than a box around them.
+ */
+function projectionOutline(projection: MapProjection): Float32Array {
+    const cached = outlines.get(projection.id);
+    if (cached) return cached;
+    const steps = 64;
+    const points: number[] = [];
+    const push = (lon: number, lat: number) => {
+        const p = projection.project(lon, lat);
+        points.push(p.nx, p.ny);
+    };
+    const { minLat, maxLat } = projection;
+    for (let i = 0; i <= steps; i++) push(-Math.PI, maxLat + ((minLat - maxLat) * i) / steps);
+    for (let i = 0; i <= steps; i++) push(-Math.PI + (2 * Math.PI * i) / steps, minLat);
+    for (let i = 0; i <= steps; i++) push(Math.PI, minLat + ((maxLat - minLat) * i) / steps);
+    for (let i = 0; i <= steps; i++) push(Math.PI - (2 * Math.PI * i) / steps, maxLat);
+    const outline = new Float32Array(points);
+    outlines.set(projection.id, outline);
+    return outline;
+}
 
 type DotPalette = Record<keyof typeof DOT_PALETTE.dark, string>;
 
@@ -191,12 +230,16 @@ function parseRgba(css: string): number[] {
     return [r / 255, g / 255, b / 255, a ?? 1];
 }
 
-const glPalette = (colors: string[]): HexGlPalette => ({
+const glPalette = (colors: string[], land: string): HexGlPalette => ({
     colors: new Float32Array(colors.flatMap(parseRgba)),
     scales: new Float32Array(STYLE_SCALES),
+    land: new Float32Array(parseRgba(land)),
 });
 
-const STYLE_GL = { dark: glPalette(STYLE_CSS.dark), light: glPalette(STYLE_CSS.light) };
+const STYLE_GL = {
+    dark: glPalette(STYLE_CSS.dark, DOT_PALETTE.dark.land),
+    light: glPalette(STYLE_CSS.light, DOT_PALETTE.light.land),
+};
 
 interface StyleInputs {
     visited: Set<string>;
@@ -621,6 +664,8 @@ export function DotMatrixGlobe({
     const countryPointLon = focusedCountryPoint?.lon;
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const glCanvasRef = useRef<HTMLCanvasElement>(null);
+    // Under the hexes: the sea.
+    const oceanCanvasRef = useRef<HTMLCanvasElement>(null);
     const glRef = useRef<HexGlRenderer | null>(null);
     const [loadedTier, setLoadedTier] = useState<HexTierData | null>(null);
     const [projectionId, setProjectionId] = useState<MapProjectionId>(readStoredProjection);
@@ -1280,6 +1325,46 @@ export function DotMatrixGlobe({
             progress,
         };
         viewRef.current = view;
+
+        // The sea, under the hexes: the globe's disc, shaded as a sphere, and
+        // the flat map's outline, crossing over as the morph goes.
+        const ocean = oceanCanvasRef.current;
+        const oceanCtx = ocean?.getContext('2d');
+        if (ocean && oceanCtx) {
+            if (ocean.width !== pixelW) ocean.width = pixelW;
+            if (ocean.height !== pixelH) ocean.height = pixelH;
+            oceanCtx.setTransform(1, 0, 0, 1, 0, 0);
+            oceanCtx.clearRect(0, 0, ocean.width, ocean.height);
+            oceanCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            const sea = isDark ? DOT_PALETTE.dark : DOT_PALETTE.light;
+            // Only with WebGL, which lays the land under its hexes: canvas 2D
+            // does not, and its translucent hexes would take the sea's colour.
+            if (gl && progress > 0) {
+                const shade = oceanCtx.createRadialGradient(W / 2 - R * 0.25, H / 2 - R * 0.25, R * 0.05, W / 2, H / 2, R);
+                shade.addColorStop(0, sea.ocean);
+                shade.addColorStop(1, sea.oceanEdge);
+                oceanCtx.globalAlpha = progress;
+                oceanCtx.fillStyle = shade;
+                oceanCtx.beginPath();
+                oceanCtx.arc(W / 2, H / 2, R, 0, Math.PI * 2);
+                oceanCtx.fill();
+            }
+            if (gl && progress < 1) {
+                const outline = projectionOutline(projection);
+                oceanCtx.globalAlpha = 1 - progress;
+                oceanCtx.fillStyle = sea.ocean;
+                oceanCtx.beginPath();
+                for (let i = 0; i < outline.length; i += 2) {
+                    const x = view.flatX + outline[i] * view.flatW;
+                    const y = view.flatY + outline[i + 1] * view.flatH;
+                    if (i === 0) oceanCtx.moveTo(x, y);
+                    else oceanCtx.lineTo(x, y);
+                }
+                oceanCtx.closePath();
+                oceanCtx.fill();
+            }
+            oceanCtx.globalAlpha = 1;
+        }
 
         const palette = isDark ? DOT_PALETTE.dark : DOT_PALETTE.light;
 
@@ -2002,6 +2087,7 @@ export function DotMatrixGlobe({
             )}
             {/* Cells and borders, drawn by WebGL. The canvas over it carries
                 the stars, the selection's glow and every pointer event. */}
+            <canvas ref={oceanCanvasRef} className="dot-matrix-map-gl" aria-hidden="true" />
             <canvas ref={glCanvasRef} className="dot-matrix-map-gl" aria-hidden="true" />
             <canvas
                 ref={canvasRef}

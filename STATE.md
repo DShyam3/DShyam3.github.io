@@ -30,7 +30,7 @@ Updated 2026-11-21. Branch `claude/beautiful-hawking-f6254a`, code head `b0e9395
 
 - Discover order on the signed-in owner's data (`REHAUL_PLAN.md` item 11): not run. The visitor scan above did not reach the cards.
 - Cron sync, `REHAUL_PLAN.md` item 10 (b)–(d): episode-level delete drops watched episodes and their ratings; rated-then-unwatched seasons deleted with ratings; Season 0 specials deleted unchecked. Owner to decide.
-- Travel hexes not verified on phone (pinch to 32x, GPU memory, high-refresh frame rate). Travel hovered-hex outline, two-minute globe lock, GeoNames town names and "near" fallback not yet checked on the live site. Regenerating hex data needs GeoNames' cities1000.zip unzipped into `.cache/geonames/`.
+- Travel hexes not verified on phone (pinch to 32x, GPU memory, high-refresh frame rate). Travel hovered-hex outline, two-minute globe lock, GeoNames town names, "near" fallback, and the sea and land colours not yet checked on the live site. Regenerating hex data needs GeoNames' cities1000.zip unzipped into `.cache/geonames/`.
 - Local DB drifted: `supabase migration up --local` fails at `20261117193741`; `supabase db reset` restores it.
 - Verify OMDb weekly refresh (~2026-11-25).
 
