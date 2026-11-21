@@ -84,6 +84,9 @@ jobs:
       - name: Typecheck Edge Functions
         run: npm run typecheck:functions
 
+      - name: Test Edge Function modules
+        run: npm run test:functions
+
       - name: Test
         run: npm test
 

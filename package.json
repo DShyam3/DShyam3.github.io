@@ -16,7 +16,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck:functions": "deno check supabase/functions/**/*.ts"
+    "typecheck:functions": "deno check supabase/functions/**/*.ts",
+    "test:functions": "deno test supabase/functions/_shared/"
   },
   "dependencies": {
     "@fontsource/doto": "5.3.0",

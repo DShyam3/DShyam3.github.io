@@ -4,7 +4,8 @@ import { requireAdmin } from '../_shared/require-admin.ts'
 import { isServiceRoleRequest } from '../_shared/service-role.ts'
 import { claimCooldown, cooldownResponse, releaseCooldown } from '../_shared/cooldown.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
-import { PAGE_ROWS, selectAllPages } from '../_shared/select-all-pages.ts'
+import { selectAllPages } from '../_shared/select-all-pages.ts'
+import { ratedEpisodes, seasonsToKeep, UNWATCHED_ONLY } from '../_shared/owner-data.ts'
 import { createUsageBatcher } from '../_shared/api-usage.ts'
 
 let activeUsage = createUsageBatcher('cron')
@@ -743,8 +744,9 @@ serve(async (req) => {
 
     // showId-sSeason-eEpisode -> watched, from the start of the run. A
     // pre-filter only: a season already watched here is never queued for
-    // deletion, which spares the re-read before the delete for it. The guard
-    // that counts is that re-read, since the owner can watch mid-run.
+    // deletion, which spares it the read before the delete. The guard that
+    // counts is that read (seasonsToKeep), since the owner can watch or rate
+    // mid-run.
     const watchedEpisodes = new Set<string>()
     shows.forEach((show) => {
       show.seasons?.forEach((season) => {
@@ -936,10 +938,10 @@ serve(async (req) => {
                 } else check(tvUpdate)
               }
 
-              const removedSeasonIds: number[] = []
-              // Seasons TMDB no longer has, deleted only while nothing in them
-              // is watched; re-checked just before the delete below.
-              const removedIfUnwatched: number[] = []
+              // Seasons TMDB no longer lists or has emptied, and stale Season 0
+              // specials. Deleted only if they hold nothing of the owner's,
+              // checked against the tables just before the delete below.
+              const seasonDeleteCandidates: number[] = []
               // Season 0 cleanup (specials that TMDB removed or that duplicate a real season)
               const tmdbSeason0 = data.seasons?.find((s) => s.season_number === 0)
               const localSeason0 = item.seasons?.find((s) => s.season_number === 0)
@@ -949,7 +951,7 @@ serve(async (req) => {
                   const otherSeasons = item.seasons?.filter((s) => s.season_number !== 0) || []
                   shouldDelete = otherSeasons.some((s) => s.release_date && s.release_date === localSeason0.release_date)
                 }
-                if (shouldDelete) removedSeasonIds.push(localSeason0.id)
+                if (shouldDelete) seasonDeleteCandidates.push(localSeason0.id)
               }
 
               if (data.seasons) {
@@ -971,7 +973,7 @@ serve(async (req) => {
                     const localSeason = item.seasons?.find((ls) => ls.season_number === s.season_number)
                     if (s.episode_count === 0) {
                       if (localSeason && localSeason.episodes.length === 0) {
-                        removedSeasonIds.push(localSeason.id)
+                        seasonDeleteCandidates.push(localSeason.id)
                       }
                       return
                     }
@@ -1095,7 +1097,15 @@ serve(async (req) => {
                           .filter((e) => !validNumberSet.has(e.episode_number))
                           .map((e) => e.id)
                         if (toDeleteIds.length > 0) {
-                          check(await supabaseAdmin.from('tv_show_episodes').delete().in('id', toDeleteIds))
+                          // Episodes TMDB no longer lists, or whose air date it
+                          // has blanked. A rated one stays, and the filter on
+                          // the delete keeps a watched one: see owner-data.ts.
+                          const rated = await ratedEpisodes(supabaseAdmin, toDeleteIds)
+                          if (!rated) console.warn(`Kept ${toDeleteIds.length} episode(s) of "${item.title}" S${s.season_number} TMDB no longer lists: the ratings read was incomplete`)
+                          const doomed = rated ? toDeleteIds.filter((id) => !rated.has(id)) : []
+                          if (doomed.length > 0) {
+                            check(await supabaseAdmin.from('tv_show_episodes').delete().in('id', doomed).or(UNWATCHED_ONLY))
+                          }
                         }
 
                         const nextTrailerKey = pickTrailerKey(sDetails?.videos?.results) ?? null
@@ -1113,7 +1123,7 @@ serve(async (req) => {
                         }
                       } else if (localSeason) {
                         const hasWatched = localSeason.episodes.some((ep) => watchedEpisodes.has(`${item.id}-s${s.season_number}-e${ep.episode_number}`))
-                        if (!hasWatched) removedIfUnwatched.push(localSeason.id)
+                        if (!hasWatched) seasonDeleteCandidates.push(localSeason.id)
                       }
                     } catch (e) {
                       console.error(`Failed to sync season ${s.season_number} for "${item.title}":`, e)
@@ -1130,30 +1140,20 @@ serve(async (req) => {
                   const existsInTmdb = data.seasons.some((ts) => ts.season_number === localSeason.season_number)
                   if (!existsInTmdb) {
                     const hasWatchedEps = localSeason.episodes.some((ep) => watchedEpisodes.has(`${item.id}-s${localSeason.season_number}-e${ep.episode_number}`))
-                    if (!hasWatchedEps) removedIfUnwatched.push(localSeason.id)
+                    if (!hasWatchedEps) seasonDeleteCandidates.push(localSeason.id)
                   }
                 }
               }
 
-              if (removedIfUnwatched.length > 0) {
-                // `watchedEpisodes` was read at the start of the run, which can
-                // be minutes ago by now. Deleting a season cascades to its
-                // episodes, so one marked watched since must still keep it. A
-                // failed read fails the title rather than deleting blind.
-                const { data: stillWatched } = check(await supabaseAdmin
-                  .from('tv_show_episodes')
-                  .select('season_id')
-                  .in('season_id', removedIfUnwatched)
-                  .eq('watched', true))
-                // A full page may be one the server cut short at max_rows, and
-                // a season cut off would look unwatched: keep them all then.
-                if ((stillWatched?.length ?? 0) < PAGE_ROWS) {
-                  const keep = new Set((stillWatched ?? []).map((row: { season_id: number | null }) => row.season_id))
-                  removedSeasonIds.push(...removedIfUnwatched.filter((id) => !keep.has(id)))
+              if (seasonDeleteCandidates.length > 0) {
+                // `watchedEpisodes` is from the start of the run and knows
+                // nothing of ratings; see owner-data.ts.
+                const keep = await seasonsToKeep(supabaseAdmin, seasonDeleteCandidates)
+                if (!keep) console.warn(`Kept ${seasonDeleteCandidates.length} season(s) of "${item.title}" queued for deletion: the episode or ratings read was incomplete`)
+                const doomed = keep ? seasonDeleteCandidates.filter((id) => !keep.has(id)) : []
+                if (doomed.length > 0) {
+                  check(await supabaseAdmin.from('tv_show_seasons').delete().in('id', doomed))
                 }
-              }
-              if (removedSeasonIds.length > 0) {
-                check(await supabaseAdmin.from('tv_show_seasons').delete().in('id', removedSeasonIds))
               }
             }
             itemsSynced++
