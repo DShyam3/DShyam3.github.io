@@ -394,16 +394,21 @@ under 2026-11-18.
    (`import_watch_history`) gives every imported title one identical `now()`, so
    imported collections rise together, tied and sorted by name; decide whether to
    stamp each title with its own time.
-10. **Cron sync, what is still open after the episode-upsert fix (`261065c4`, on this
-    branch, not deployed, unverified against a real run).** (a) Deploy
-    `watchlist-cron-sync` with `supabase functions deploy watchlist-cron-sync`. Needs the
-    owner's explicit OK. Until it is deployed the revert of a mid-run watch remains live.
-    (b) Pre-existing risk found in review, not fixed: the season-deletion guard in the
-    same function. `watchedEpisodes` is built from the start-of-run snapshot
-    (`index.ts` ~745-749) and read at ~1105 and ~1122. An episode watched mid-run, in a
-    season TMDB dropped or emptied, does not protect that season, and the delete at
-    ~1129 cascades to the episode. Fix: re-read `watched` for those season ids just
-    before the `tv_show_seasons` delete.
+10. **Cron sync, what is still open (`261065c4` episode upsert and `f99bbc8a` season-delete
+    guard, both on this branch; both in code, NOT deployed, unverified against a real run).**
+    (a) Deploy `watchlist-cron-sync` with `supabase functions deploy watchlist-cron-sync`.
+    Needs the owner's explicit OK. Until it is deployed the mid-run revert and the
+    season-delete risk both stay live. The season guard was checked on the LOCAL stack
+    only, with the same query chain against fixture rows; no automated test covers the
+    function. (b) Episode-level delete (`index.ts` ~1090-1094) removes episodes TMDB no
+    longer lists, or whose air date TMDB blanked (`hasAirDate`), with no watched guard.
+    A watched episode is lost, and its rating (`watchlist_ratings.episode_id` ON DELETE
+    CASCADE) with it. One-statement fix: `.delete().in('id', toDeleteIds).or('watched.is.null,watched.eq.false')`.
+    Behaviour change: kept watched episodes would stay as orphans in progress counts.
+    Owner to decide. (c) Season deletion checks only `watched`. A season rated and then
+    unwatched is deleted with its ratings (`watchlist_ratings.season_id` and `episode_id`
+    cascade). Owner to decide. (d) Season 0 cleanup (~939-945) still deletes specials
+    with no watched check. Owner to decide.
 11. **Browser check of Discover order** on the signed-in owner's data: not run.
 
 ### Deferred by choice
