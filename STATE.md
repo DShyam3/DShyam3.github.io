@@ -1,6 +1,6 @@
 # State
 
-Updated 2026-11-22. Branch `claude/xenodochial-elgamal-c40ce2`, rebased on `709a56f4` and pushed to origin/main as `5299a8c7` (Discover's collection walk reads a nightly parts cache). Pages run `45059621340` was queued at push; its result is not checked.
+Updated 2026-11-22. Branch `claude/xenodochial-elgamal-c40ce2`, rebased on `709a56f4` and pushed to origin/main as `5299a8c7` (Discover's collection walk reads a nightly parts cache). Pages run `45059621340` succeeded; the live site serves it.
 
 ## Uncommitted in the tree (other sessions)
 
@@ -12,6 +12,7 @@ Updated 2026-11-22. Branch `claude/xenodochial-elgamal-c40ce2`, rebased on `709a
 - `watchlist-cron-sync` v29 deployed (CLI, verify_jwt true). It replaces v28 and keeps the watched-or-rated guard. Shards 0-2 run by hand ~16:58-17:00Z: all success, 0 failed titles, 0 changes. Shard 1 reported 615 of 616 items synced (not investigated).
 - Discover ordering by last activity (`31819643`, main `36324d8d`): migration `20261120230000_watchlist_last_activity.sql` applied; 0 of 1,227 films and 0 of 423 series stamped (no backfill, by design). Advisors: nothing new.
 - Local check against live (dev server :8082, signed out, IndexedDB deleted then navigated in the same tick): 0 collection calls through tmdb-proxy on every fresh load. Films view under 6s. All with a cold Wikidata spin-off lookup 19.8s, of which ~17.5s waited on `wikidata/tv-spinoffs` (collections took 0.25s). All with that lookup in the HTTP cache under 6.4s. End state unchanged.
+- Live check (dshyam3.github.io, signed out, fresh, ~19:27Z): 0 collection calls through tmdb-proxy, one parts read (193ms), walk done 5.1s after the HTML arrived. `wikidata/tv-spinoffs` returned 502 (Wikidata upstream, per function logs), so the section showed its "couldn't load" line; Retry got 200 in 9.5s and the end state matched (no cards). The 17.5s local wait at 19:01Z was a Wikidata sibling-lookup timeout (logs). Signed-in owner path not checked.
 - Dev ports on tmdb-proxy's origin allowlist: 8080, 8081, 8082, 5173 (8086 fails CORS).
 
 ## Pushed, awaiting live browser check
@@ -27,7 +28,7 @@ Updated 2026-11-22. Branch `claude/xenodochial-elgamal-c40ce2`, rebased on `709a
 
 ## Still open
 
-- Fresh visitor in All still waits for the Wikidata TV spin-off lookup (~17s in one sample). A follow-up to cache spin-off links server-side is proposed, not started.
+- Fresh visitor in All still waits for the Wikidata TV spin-off lookup: a 17.5s timeout in one sample, a 502 in another, 9.5s on retry. A follow-up to cache spin-off links server-side is proposed, not started.
 - YOU MIGHT LIKE stays empty for the owner: all 1,120 suggestions from the first 28 seeds are already in the library, favourited or among 1,655 dismissals. Needs a decision on digging deeper per seed.
 - Discover order on the signed-in owner's data (`REHAUL_PLAN.md` item 11): the stall was fixed in `48bdbdcf`; the order check has not been re-run.
 - Cron sync (`REHAUL_PLAN.md` item 10): (b) the season delete is not atomic, so a watch or rating made between the read and the delete can still cascade away; a SQL-function fix would be a migration (`migration` agent), optional. (c) Only the `_shared/owner-data.ts` helpers are unit-tested; the function is not.
@@ -48,11 +49,10 @@ Updated 2026-11-22. Branch `claude/xenodochial-elgamal-c40ce2`, rebased on `709a
 
 ## Next
 
-1. Confirm Pages run `45059621340` and do a fresh signed-out load on the live site: the zero-collection-call result is local-only until then.
-2. Watch the scheduled 06:00-06:20Z `watchlist-cron-sync` run: `watchlist_collection_parts` `synced_at` advances, and the v29 guard keeps a watched or rated episode (unverified until a run deletes something).
-3. Discover order check on the owner's data (item 11).
-4. Browser-verify live after Pages deploys: custom `franchise` override and year-dedupe, `tv-spinoffs` v2, Franchises universes and merged cards, Favourites, Coming soon priority.
-5. The `/dev` stash: re-find it, run `reviewer`, commit by path.
+1. Watch the scheduled 06:00-06:20Z `watchlist-cron-sync` run: `watchlist_collection_parts` `synced_at` advances, and the v29 guard keeps a watched or rated episode (unverified until a run deletes something).
+2. Discover order check on the owner's data (item 11).
+3. Browser-verify live after Pages deploys: custom `franchise` override and year-dedupe, `tv-spinoffs` v2, Franchises universes and merged cards, Favourites, Coming soon priority.
+4. The `/dev` stash: re-find it, run `reviewer`, commit by path.
 
 ## Blockers
 
