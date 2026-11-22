@@ -364,3 +364,37 @@ describe('interleaveFreshBySeed', () => {
     expect(interleaveFreshBySeed(items, new Set(['movie:1'])).map((item) => item.id)).toEqual([2, 3, 4]);
   });
 });
+
+describe('interleaveFreshBySeed with a score', () => {
+  const item = (seedKey: string, id: number, fit: number): DiscoveryItem => ({
+    id, title: `T${id}`, poster_path: null, overview: '', media: 'movie', reason: '', kind: 'recommendation', seedKey, vote_count: fit,
+  });
+
+  const fit = (entry: DiscoveryItem) => entry.vote_count ?? 0;
+
+  it('lets each seed offer its best fits, keeping seeds’ turns and TMDB’s order on ties', () => {
+    const items = [
+      item('a', 1, 1), item('a', 2, 5), item('a', 3, 3), item('a', 4, 1), item('a', 5, 9),
+      item('b', 6, 2), item('b', 7, 2),
+    ];
+    const picked = interleaveFreshBySeed(items, new Set(['movie:5']), fit);
+    expect(picked.map((entry) => entry.id)).toEqual([2, 6, 3, 7, 1, 4]);
+  });
+
+  it('ranks before the cap of four, so a late best fit gets in', () => {
+    // Six fresh titles; TMDB's sixth fits best and must displace one of its first four.
+    const items = [1, 2, 3, 4, 5].map((id) => item('a', id, 1)).concat(item('a', 6, 9));
+    expect(interleaveFreshBySeed(items, new Set(), fit).map((entry) => entry.id)).toEqual([6, 1, 2, 3]);
+  });
+
+  it('keeps seeds in their first-seen turns when their titles arrive mixed', () => {
+    const items = [item('a', 1, 1), item('b', 2, 9), item('a', 3, 5)];
+    expect(interleaveFreshBySeed(items, new Set(), fit).map((entry) => entry.id)).toEqual([3, 2, 1]);
+  });
+
+  it('reorders a filler seed too, without capping it', () => {
+    const items = [1, 2, 3, 4, 5, 6].map((id) => item('filler:top', id, id));
+    expect(interleaveFreshBySeed(items, new Set(), fit).map((entry) => entry.id)).toEqual([6, 5, 4, 3, 2, 1]);
+  });
+});
+

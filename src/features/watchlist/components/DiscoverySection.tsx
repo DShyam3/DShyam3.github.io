@@ -432,6 +432,13 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
   const [previewEntry, setPreviewEntry] = useState<OrderEntryView | null>(null);
   const [resetFailed, setResetFailed] = useState(false);
   const comingSoon = discovery.upcoming.slice(0, 12);
+  // "films lean to Comedy, Action, Adventure · 2010s · English", per tab.
+  const tasteLines = ([['movie', 'films'], ['tv', 'series']] as const)
+    .filter(([media]) => type === 'all' || type === media)
+    .flatMap(([media, label]) => {
+      const summary = discovery.taste[media];
+      return summary ? [`${label} lean to ${[summary.genres.join(', '), summary.decade, summary.languages.join(', ')].filter(Boolean).join(' · ')}`] : [];
+    });
   const resetAnswers = async () => {
     setResetFailed(false);
     try { await discovery.resetDismissed(); } catch { setResetFailed(true); }
@@ -542,6 +549,11 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         <div className="space-y-1">
           <h2 id="discover-might-like"><DotMatrixText text="YOU MIGHT LIKE" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">Discover new films and series outside the collections above, based on what you rate highly, favourite and watch.</p>
+          {tasteLines.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              For each “Like” title, its closest fits to your taste come first. In your library, {tasteLines.join('; ')}.
+            </p>
+          )}
         </div>
         {discovery.loading && <p role="status" className="text-sm text-muted-foreground">Finding films and shows for you…</p>}
         {!discovery.loading && discovery.loadingMore && discovery.recommendations.length === 0 && (

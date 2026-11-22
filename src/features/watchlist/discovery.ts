@@ -21,7 +21,7 @@ export const SEEDS_PER_PAGE = 4;
 /** The strong-signal seeds that rotate week to week; weaker ones follow. */
 const ROTATING_POOL = 24;
 
-const mediaOf = (item: WatchlistItem): DiscoveryMedia => (item.category === 'Movies' ? 'movie' : 'tv');
+export const mediaOf = (item: WatchlistItem): DiscoveryMedia => (item.category === 'Movies' ? 'movie' : 'tv');
 
 /** Whole weeks since the epoch, so the rotation turns over every week. */
 export const weekIndex = (today: Date) => Math.floor(today.getTime() / (7 * 24 * 60 * 60 * 1000));
@@ -144,10 +144,24 @@ export function interleaveBySeed(
  * Drops known titles (in the library, favourited, dismissed), then caps and
  * interleaves by seed as `interleaveBySeed` does. Capping first would let a
  * seed's four be four known titles, and with a large library whole pages came
- * to nothing.
+ * to nothing. With `score`, each seed's titles are ordered best first before
+ * the cap, so a seed offers its four best fits rather than TMDB's first four;
+ * seeds keep their turns, and ties keep TMDB's order.
  */
-export function interleaveFreshBySeed(items: DiscoveryItem[], known: ReadonlySet<string>): DiscoveryItem[] {
-  return interleaveBySeed(items.filter((item) => !known.has(discoveryKey(item.media, item.id))));
+export function interleaveFreshBySeed(
+  items: DiscoveryItem[],
+  known: ReadonlySet<string>,
+  score?: (item: DiscoveryItem) => number,
+): DiscoveryItem[] {
+  const fresh = items.filter((item) => !known.has(discoveryKey(item.media, item.id)));
+  if (!score) return interleaveBySeed(fresh);
+  const seedOrder = new Map<string, number>();
+  for (const item of fresh) if (!seedOrder.has(item.seedKey ?? '')) seedOrder.set(item.seedKey ?? '', seedOrder.size);
+  const ranked = fresh
+    .map((item, index) => ({ item, index, seed: seedOrder.get(item.seedKey ?? '')!, fit: score(item) }))
+    .sort((a, b) => a.seed - b.seed || b.fit - a.fit || a.index - b.index)
+    .map(({ item }) => item);
+  return interleaveBySeed(ranked);
 }
 
 /**

@@ -359,8 +359,9 @@ why and where: `reason`, `source`, `answered_at` on
 `watchlist_dismissed_suggestions`, migration `20261122192738` applied to
 hosted 2026-11-22) is shipped. So is step 2 (Likely seen from the whole
 history, and Not seen in `watchlist_not_seen`, migration `20261122201711`
-applied to hosted 2026-11-22). The rest is below, in this order, because
-each step reads the one before.
+applied to hosted 2026-11-22). Step 3 (the taste profile, ordering YOU MIGHT
+LIKE) is built. The rest is below, in this order, because each step reads
+the one before.
 
 Decided, with reasons:
 - **Skip is not a dislike.** "Skip these" (formerly "None of these") says no to
@@ -386,6 +387,20 @@ Decided, with reasons:
   you want it suggested are independent answers; one row per title would make
   a later answer to one question erase the other. Not seen hides a title only
   from Likely seen.
+- **The taste profile is two profiles**, films and series, by genre (series
+  genres mapped onto films'), decade and original language. On 2026-11-22
+  the owner's series leaned to Drama (283 of about 400) and their films to
+  Comedy, Action and Adventure; one blended profile ranked drama films first.
+- **Saved titles count a quarter of a watch.** At half, 1,021 saved films
+  outweighed 379 watched ones and named Drama and the 2020s, which the
+  watched films do not lean to: a backlog is mostly what is new.
+- **The profile picks within each source title.** Each source title offers
+  its four best fits, best first, instead of TMDB's first four; seeds keep
+  their turns and tiles already on screen never move. The profile is fixed
+  with the first page and travels with the pages, like the seeds, so a title
+  added mid-visit, or leaving Discover and coming back, re-picks nothing.
+- **Weights read the library status, not the shelf.** A series between
+  seasons or waiting on a return is part-watched, not backlog.
 - **History is people, not years.** Likely seen reads the directors and leads
   of the most-watched films (names are all the library stores, so each is
   looked up on TMDB by exact name, at most two calls a person, kept a day in
@@ -393,20 +408,23 @@ Decided, with reasons:
   was dropped: 70% of watched films are from 2005–2019, which the all-time
   most-voted pool already covers.
 
-1. **Taste profile.** Weights over genres, decades, original language and
-   people, from favourites, ratings, watched, watchlist, skips, Not seen and
-   Not interested, in that order of strength (skips weakest and negative). It
-   orders YOU MIGHT LIKE. Genre ids are already stored on `movies`,
-   `tv_shows` and `favourites`; people are names only.
+1. **Answers carry genres, so dislikes count.** Not interested and skips store
+   only a title's id, so the profile cannot yet learn which genres are turned
+   down. Store genre ids, original language and year with each answer from
+   now on (a `migration`), feed them to the profile as negatives (Not
+   interested -1, skip -0.25), and backfill the 1,679 existing answers from
+   TMDB in the nightly sync, a part at a time.
 2. **Wildcards.** A few places per page of YOU MIGHT LIKE for well-rated titles
-   outside the owner's usual genres, labelled as such; answers feed step 1.
+   outside the owner's usual genres, labelled as such; answers feed the
+   profile.
 3. **Seen it offers the rating.** Discover's Seen it logs the watch but asks
    nothing more, so a title logged there gets no rating unless opened in the
    library. Offer the rating where the tile was, then let it go.
-4. **Browser check, signed in as the owner**, of steps 1 and 2: Not interested
+4. **Browser check, signed in as the owner**, of steps 1 to 3: Not interested
    and Skip these written with their source, a skip upgraded to Not interested,
-   skipped titles reappearing in Likely seen, and Not seen written to
-   `watchlist_not_seen`. Only the signed-out view has been checked.
+   skipped titles reappearing in Likely seen, Not seen written to
+   `watchlist_not_seen`, and the taste line from the owner's whole library
+   (hidden titles included). Only the signed-out view has been checked.
 
 ### Watchlist Diary, Franchises, import and public ratings — what is left
 

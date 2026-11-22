@@ -6,6 +6,7 @@ import { useWatchlist } from './useWatchlist';
 import {
   SEEDS_PER_PAGE,
   curateDiscovery,
+  discoveryDate,
   discoveryKey,
   discoverySeeds,
   filmGroupsNeeded,
@@ -47,6 +48,14 @@ import { useDismissedSuggestions } from './useDismissedSuggestions';
 import { visibleLibraryFor, type LibraryType } from './library-state';
 import { tvSeedIdsOf } from './wikidata-cache-query';
 import { useNotSeen } from './useNotSeen';
+import {
+  buildTasteProfiles,
+  libraryTasteTitles,
+  tasteScore,
+  tasteSummary,
+  type TasteProfile,
+} from './taste-profile';
+import { languageDisplayName } from './language-groups';
 import {
   MIN_CREDIT_VOTES,
   historyPeople,
@@ -113,9 +122,13 @@ interface Source {
 
 interface Loaded { items: DiscoveryItem[]; failed: boolean }
 
-/** A page of suggestions, and the seed list every later page walks. */
-interface SuggestionPage extends Loaded { seeds: DiscoverySeed[] }
-interface PageParam { page: number; seeds: DiscoverySeed[] | null }
+/**
+ * A page of suggestions, and the seed list and taste profile every later
+ * page uses: fixed with the first page, they travel with the pages, so
+ * leaving Discover and coming back cannot re-pick tiles already shown.
+ */
+interface SuggestionPage extends Loaded { seeds: DiscoverySeed[]; taste: TasteProfile }
+interface PageParam { page: number; seeds: DiscoverySeed[] | null; taste: TasteProfile | null }
 
 async function load(sources: Source[]): Promise<Loaded> {
   const results = await Promise.allSettled(sources.map(async (source) => {
@@ -218,6 +231,13 @@ const TARGET_LIKELY_SEEN = 12;
 const AUTO_PAGE_CAP = 6;
 const AUTO_EMPTY_ROUNDS = 2;
 const AUTO_LIKELY_SEEN_PAGES = 5;
+/** How well a suggestion fits a taste profile (taste-profile.ts). */
+const fitFor = (profile: TasteProfile) => (item: DiscoveryItem) => tasteScore(profile, {
+  genre_ids: item.genre_ids,
+  year: Number(discoveryDate(item).slice(0, 4)) || null,
+  original_language: item.original_language,
+});
+
 /** How long Likely seen waits for people lookups once its other sources are in. */
 const PEOPLE_WAIT_MS = 8_000;
 
@@ -242,13 +262,23 @@ export function useDiscovery(type: LibraryType) {
   const movieSeeds = useMemo(() => discoverySeeds(watchlist, favourites, today, 'movie'), [watchlist, favourites, week]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
   const tvSeeds = useMemo(() => discoverySeeds(watchlist, favourites, today, 'tv'), [watchlist, favourites, week]);
+  // The taste profiles (taste-profile.ts), read when a first page loads and
+  // carried with the pages like the seeds. A visitor's comes from the titles
+  // they can see.
+  const liveTaste = useMemo(
+    () => buildTasteProfiles(libraryTasteTitles(watchlist, favourites, isAdmin, today)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
+    [watchlist, favourites, isAdmin, week],
+  );
   const movieSeedsRef = useRef(movieSeeds);
   const tvSeedsRef = useRef(tvSeeds);
+  const liveTasteRef = useRef(liveTaste);
   // Declared before the query, so the first fetch already sees these seeds.
   useEffect(() => {
     movieSeedsRef.current = movieSeeds;
     tvSeedsRef.current = tvSeeds;
-  }, [movieSeeds, tvSeeds]);
+    liveTasteRef.current = liveTaste;
+  }, [movieSeeds, tvSeeds, liveTaste]);
 
   // The seed list is fixed when the first page loads and travels with the
   // pages, so it survives the cache: adding or "Seen it"-ing a title
@@ -263,14 +293,15 @@ export function useDiscovery(type: LibraryType) {
     enabled: !loading && ratingsStatus !== 'loading' && type !== 'tv',
     staleTime: 60 * 60 * 1000,
     retry: false,
-    initialPageParam: { page: 0, seeds: null } as PageParam,
+    initialPageParam: { page: 0, seeds: null, taste: null } as PageParam,
     queryFn: async ({ pageParam }): Promise<SuggestionPage> => {
       const pageSeeds = pageParam.seeds ?? movieSeedsRef.current;
+      const pageTaste = pageParam.taste ?? liveTasteRef.current.movie;
       const loaded = await load(sourcesForMediaPage(pageSeeds, pageParam.page, 'movie'));
-      return { ...loaded, seeds: pageSeeds };
+      return { ...loaded, seeds: pageSeeds, taste: pageTaste };
     },
     getNextPageParam: (lastPage, _pages, lastParam): PageParam | undefined => (
-      lastParam.page + 1 < MAX_PAGES ? { page: lastParam.page + 1, seeds: lastPage.seeds } : undefined
+      lastParam.page + 1 < MAX_PAGES ? { page: lastParam.page + 1, seeds: lastPage.seeds, taste: lastPage.taste } : undefined
     ),
   });
 
@@ -279,14 +310,15 @@ export function useDiscovery(type: LibraryType) {
     enabled: !loading && ratingsStatus !== 'loading' && type !== 'movie',
     staleTime: 60 * 60 * 1000,
     retry: false,
-    initialPageParam: { page: 0, seeds: null } as PageParam,
+    initialPageParam: { page: 0, seeds: null, taste: null } as PageParam,
     queryFn: async ({ pageParam }): Promise<SuggestionPage> => {
       const pageSeeds = pageParam.seeds ?? tvSeedsRef.current;
+      const pageTaste = pageParam.taste ?? liveTasteRef.current.tv;
       const loaded = await load(sourcesForMediaPage(pageSeeds, pageParam.page, 'tv'));
-      return { ...loaded, seeds: pageSeeds };
+      return { ...loaded, seeds: pageSeeds, taste: pageTaste };
     },
     getNextPageParam: (lastPage, _pages, lastParam): PageParam | undefined => (
-      lastParam.page + 1 < MAX_PAGES ? { page: lastParam.page + 1, seeds: lastPage.seeds } : undefined
+      lastParam.page + 1 < MAX_PAGES ? { page: lastParam.page + 1, seeds: lastPage.seeds, taste: lastPage.taste } : undefined
     ),
   });
 
@@ -316,20 +348,31 @@ export function useDiscovery(type: LibraryType) {
     [watchlist, favourites, hiddenFromSuggestions],
   );
   const recommendationItems = useMemo(() => {
-    const fresh = (items: DiscoveryItem[]) => interleaveFreshBySeed(items, knownKeys);
+    // Each seed offers its best fits first, by the profile its page was
+    // picked with: films by the film profile, series by the series one.
+    // A page without a profile (never from a fetch, but cheap to survive)
+    // keeps TMDB's order.
+    const fresh = (page: SuggestionPage) => interleaveFreshBySeed(page.items, knownKeys, page.taste ? fitFor(page.taste) : undefined);
     const moviePages = movieRecommendations.data?.pages ?? [];
     const tvPages = tvRecommendations.data?.pages ?? [];
-    if (type === 'movie') return moviePages.flatMap((page) => fresh(page.items));
-    if (type === 'tv') return tvPages.flatMap((page) => fresh(page.items));
+    if (type === 'movie') return moviePages.flatMap(fresh);
+    if (type === 'tv') return tvPages.flatMap(fresh);
     const pageCount = Math.max(moviePages.length, tvPages.length);
     const interleaved: DiscoveryItem[] = [];
     for (let i = 0; i < pageCount; i += 1) {
-      const m = moviePages[i] ? fresh(moviePages[i].items) : [];
-      const t = tvPages[i] ? fresh(tvPages[i].items) : [];
+      const m = moviePages[i] ? fresh(moviePages[i]) : [];
+      const t = tvPages[i] ? fresh(tvPages[i]) : [];
       interleaved.push(...interleaveUpcoming([...m, ...t]));
     }
     return interleaved;
   }, [type, movieRecommendations.data, tvRecommendations.data, knownKeys]);
+  // The profiles the shown pages were picked with, in words.
+  const movieTaste = movieRecommendations.data?.pages[0]?.taste;
+  const tvTaste = tvRecommendations.data?.pages[0]?.taste;
+  const tasteWords = useMemo(() => ({
+    movie: movieTaste ? tasteSummary(movieTaste, languageDisplayName) : null,
+    tv: tvTaste ? tasteSummary(tvTaste, languageDisplayName) : null,
+  }), [movieTaste, tvTaste]);
   // The same pages for Likely seen, with skipped titles kept in: it asks
   // whether you have seen a title, which a skip in YOU MIGHT LIKE does not
   // answer. Capped per seed as above, so only the filter differs.
@@ -968,6 +1011,7 @@ export function useDiscovery(type: LibraryType) {
       }
     },
     likelySeenLoading: !likelySeenReady,
+    taste: tasteWords,
     dismiss,
     skipMany,
     markNotSeen,
