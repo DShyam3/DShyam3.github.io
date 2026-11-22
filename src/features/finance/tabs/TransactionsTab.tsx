@@ -65,12 +65,23 @@ import { TransferReviewSection } from '@/features/finance/components/TransferRev
 import { CategoryRulesDialog } from '@/features/finance/components/CategoryRulesDialog';
 import { useFinanceData } from '@/features/finance/FinanceDataContext';
 import { resolveMerchant, matchesCategoryRule, calculateRuleImpact, findPayslipReimbursementCandidates } from '@/lib/finance';
+import {
+  TRANSACTION_PAGE_SIZE,
+  buildTransactionsCsv,
+  getAccountInfo as findAccountInfo,
+  getCategoryColor,
+  getGoalInfo as findGoalInfo,
+  groupTransactionsByDate,
+} from './transactions-tab-helpers';
 
-/* Rows drawn at once. The whole ledger on screen was 18,000+ DOM nodes at
-   1,000 transactions, and opening anything over it -- the sync popover took
-   1.2s -- meant restyling all of them. Filters, search, select-all and the
-   review queue still run over every matching row; only drawing is paged. */
-const TRANSACTION_PAGE_SIZE = 100;
+export {
+  TRANSACTION_PAGE_SIZE,
+  buildTransactionsCsv,
+  getAccountInfo,
+  getCategoryColor,
+  getGoalInfo,
+  groupTransactionsByDate,
+} from './transactions-tab-helpers';
 
 interface TransactionsTabProps {
   transactions: MockTransaction[];
@@ -168,33 +179,6 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     return options;
   }, [budgetCategories]);
 
-  // Color mapper for categories matching dashboard presets
-  const getCategoryColor = (category: string) => {
-    const catLower = category.toLowerCase();
-    if (catLower.includes('restaurants') || catLower.includes('food') || catLower.includes('drink')) {
-      return 'bg-chart-4/15 text-chart-4 border-chart-4/30';
-    }
-    if (catLower.includes('shopping') || catLower.includes('wardrobe') || catLower.includes('clothes')) {
-      return 'bg-chart-5/15 text-chart-5 border-chart-5/30';
-    }
-    if (catLower.includes('gas') || catLower.includes('transport') || catLower.includes('car') || catLower.includes('travel')) {
-      return 'bg-chart-4/15 text-chart-4 border-chart-4/30';
-    }
-    if (catLower.includes('internet') || catLower.includes('utilities') || catLower.includes('bills')) {
-      return 'bg-chart-3/15 text-chart-3 border-chart-3/30';
-    }
-    if (catLower.includes('rent') || catLower.includes('housing') || catLower.includes('home')) {
-      return 'bg-chart-5/15 text-chart-5 border-chart-5/30';
-    }
-    if (catLower.includes('savings') || catLower.includes('investment') || catLower.includes('interest')) {
-      return 'bg-positive/15 text-positive border-positive/30';
-    }
-    if (catLower.includes('groceries')) {
-      return 'bg-chart-2/15 text-chart-2 border-chart-2/30';
-    }
-    return 'bg-muted/15 text-muted-foreground border-border/30';
-  };
-
   // Filtered & Sorted Transactions
   const filteredTransactions = useMemo(() => {
     let result = [...transactions];
@@ -269,56 +253,16 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   );
 
   // Grouped transactions by date (only dates that are present after filtering)
-  const groupedTransactions = useMemo(() => {
-    const groups: { [key: string]: MockTransaction[] } = {};
-    const todayStr = toISODate(new Date());
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = toISODate(yesterday);
-
-    visibleTransactions.forEach(tx => {
-      let groupKey = tx.date;
-      const txDateObj = new Date(tx.date);
-
-      if (tx.date === todayStr) {
-        groupKey = 'TODAY';
-      } else if (tx.date === yesterdayStr) {
-        groupKey = 'YESTERDAY';
-      } else {
-        // Format as: "THU, JULY 16" or "SAT, JULY 18, 2026"
-        const weekday = txDateObj.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
-        const month = txDateObj.toLocaleDateString('en-GB', { month: 'long' }).toUpperCase();
-        const day = txDateObj.getDate();
-        const year = txDateObj.getFullYear();
-        const currentYear = new Date().getFullYear();
-
-        if (year === currentYear) {
-          groupKey = `${weekday}, ${month} ${day}`;
-        } else {
-          groupKey = `${weekday}, ${month} ${day}, ${year}`;
-        }
-      }
-
-      if (!groups[groupKey]) {
-        groups[groupKey] = [];
-      }
-      groups[groupKey].push(tx);
-    });
-
-    return Object.entries(groups).map(([date, list]) => ({ date, list }));
-  }, [visibleTransactions]);
+  const groupedTransactions = useMemo(
+    () => groupTransactionsByDate(visibleTransactions),
+    [visibleTransactions],
+  );
 
   // Account details matching list
-  const getAccountInfo = (accountId?: string) => {
-    if (!accountId) return null;
-    return bankAccounts.find(acc => acc.id === accountId) || null;
-  };
+  const getAccountInfo = (accountId?: string) => findAccountInfo(bankAccounts, accountId);
 
   // Goal details matching list
-  const getGoalInfo = (goalId?: string) => {
-    if (!goalId) return null;
-    return goals.find(g => g.id === goalId) || null;
-  };
+  const getGoalInfo = (goalId?: string) => findGoalInfo(goals, goalId);
 
   // Statistics for similar transactions
   const similarTransactionsInfo = useMemo(() => {
@@ -597,21 +541,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
   // Export CSV
   const handleExportCSV = () => {
-    const headers = ['ID', 'Date', 'Name', 'Category', 'Amount', 'Reviewed', 'Account', 'Goal', 'Notes', 'Tags'];
-    const rows = filteredTransactions.map(tx => [
-      tx.id,
-      tx.date,
-      `"${tx.name.replace(/"/g, '""')}"`,
-      tx.category || '',
-      tx.amount.toFixed(2),
-      tx.isReviewed ? 'Yes' : 'No',
-      getAccountInfo(tx.bankAccountId)?.name || '',
-      getGoalInfo(tx.goalId)?.name || '',
-      `"${(tx.notes || '').replace(/"/g, '""')}"`,
-      (tx.tags || []).join(', ')
-    ]);
-
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csvContent = buildTransactionsCsv(filteredTransactions, bankAccounts, goals);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

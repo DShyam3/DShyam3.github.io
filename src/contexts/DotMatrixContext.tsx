@@ -3,7 +3,6 @@ import dotMatrixData from '@/data/dot-matrix.json';
 
 interface DotMatrixData {
   charPatterns: Record<string, number[][]>;
-  iconPatterns: Record<string, number[][]>;
 }
 
 interface DotMatrixContextType {

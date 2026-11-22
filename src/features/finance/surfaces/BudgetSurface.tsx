@@ -19,7 +19,22 @@ import { useFinanceData } from '../FinanceDataContext';
 import { initialPresetSelection, presetGroupFor, resolveItemName } from '../budget-preset-groups';
 import { BudgetPresetField } from '../components/BudgetPresetField';
 import { monthlySpend, spendYears, yearlySpend } from '@/lib/finance';
-import { DEFAULT_CATEGORY_PRESETS, DEFAULT_CATEGORY_TEMPLATES, MONTH_NAMES, asBudgetGroup, getBudgetItemSpent, isDueThisMonth } from '../finance-defaults';
+import { DEFAULT_CATEGORY_PRESETS, DEFAULT_CATEGORY_TEMPLATES, MONTH_NAMES, asBudgetGroup, getBudgetItemSpent } from '../finance-defaults';
+import {
+  CATEGORY_CHART_COLORS,
+  SAVINGS_CHART_COLORS,
+  isBillInCategory,
+  isTxInCategory,
+  recurringTotalForMonth as calcRecurringTotalForMonth,
+} from './budget-surface-helpers';
+
+export {
+  CATEGORY_CHART_COLORS,
+  SAVINGS_CHART_COLORS,
+  isBillInCategory,
+  isTxInCategory,
+  recurringTotalForMonth,
+} from './budget-surface-helpers';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -27,7 +42,7 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { BudgetCategory, BudgetItem, MockTransaction, RecurringBill } from '@/features/finance/finance-types';
+import { BudgetCategory, BudgetItem } from '@/features/finance/finance-types';
 import { formatGBP, getCategoryDefaultEmoji } from '@/features/finance/utils/calculations';
 import { cn } from '@/lib/utils';
 import { useSpendingLedger } from '../useSpendingLedger';
@@ -268,25 +283,6 @@ export default function BudgetSurface({ totalSpent }: { totalSpent: number }) {
   const content = (() => {
 const activeFilterCategory = budgetCategories.find(c => c.id === selectedBudgetCategoryFilter);
 
-const isTxInCategory = (tx: MockTransaction, cat?: BudgetCategory) => {
-  if (!cat) return true;
-  const catNameLower = cat.name.toLowerCase();
-  const txCatLower = (tx.category || '').toLowerCase();
-  if (txCatLower === catNameLower) return true;
-  return cat.items.some(item => {
-    const itemNameLower = item.name.toLowerCase();
-    return txCatLower === itemNameLower || txCatLower.includes(itemNameLower) || itemNameLower.includes(txCatLower);
-  });
-};
-
-const isBillInCategory = (bill: RecurringBill, cat?: BudgetCategory) => {
-  if (!cat) return true;
-  if (bill.linkedBudgetItemId && cat.items.some(i => i.id === bill.linkedBudgetItemId)) return true;
-  const catNameLower = cat.name.toLowerCase();
-  const billCatLower = (bill.category || '').toLowerCase();
-  return billCatLower === catNameLower;
-};
-
 const savingsCategories = budgetCategories.filter(cat => cat.group === 'savings');
 const savingsItems = savingsCategories.flatMap(cat =>
   cat.items.filter(item => isItemActive(item, cat)).map(item => ({
@@ -330,9 +326,7 @@ const currentMonthName = new Date().toLocaleDateString('en-GB', { month: 'short'
 const today = new Date();
 const categoryTransactions = ledger.filter(tx => isTxInCategory(tx, activeFilterCategory));
 const recurringTotalForMonth = (month: number) =>
-  recurrings
-    .filter(r => isBillInCategory(r, activeFilterCategory) && isDueThisMonth(r, month))
-    .reduce((sum, r) => sum + r.amount, 0);
+  calcRecurringTotalForMonth(recurrings, month, activeFilterCategory);
 
 const allYears = spendYears(categoryTransactions, today);
 const keyMetricsData = yearlySpend(allYears, categoryTransactions, recurringTotalForMonth, today);
@@ -355,16 +349,7 @@ const categoryData = budgetCategories
     return {
       name: cat.name,
       value: spent,
-      color: [
-        'hsl(var(--chart-3))', // blue
-        'hsl(var(--positive))', // emerald
-        'hsl(var(--chart-4))', // amber
-        'hsl(var(--destructive))', // red
-        'hsl(var(--chart-5))', // violet
-        'hsl(var(--chart-5))', // pink
-        'hsl(var(--chart-2))', // teal
-        'hsl(var(--chart-4))', // orange
-      ][idx % 8]
+      color: CATEGORY_CHART_COLORS[idx % CATEGORY_CHART_COLORS.length],
     };
   })
   .filter(d => d.value > 0);
@@ -499,18 +484,7 @@ return (
                             data={savingsItems.map((item, idx) => ({
                               name: item.name,
                               value: item.value,
-                              color: [
-                                'hsl(var(--positive))', // emerald
-                                'hsl(var(--chart-2))', // teal
-                                'hsl(var(--chart-2))', // cyan
-                                'hsl(var(--chart-3))', // blue
-                                'hsl(var(--chart-5))', // indigo
-                                'hsl(var(--chart-5))', // violet
-                                'hsl(var(--chart-5))', // pink
-                                'hsl(var(--chart-4))', // amber
-                                'hsl(var(--destructive))', // red
-                                'hsl(var(--chart-4))', // orange
-                              ][idx % 10]
+                              color: SAVINGS_CHART_COLORS[idx % SAVINGS_CHART_COLORS.length],
                             }))}
                             cx="50%"
                             cy="50%"
@@ -523,18 +497,7 @@ return (
                             {savingsItems.map((item, idx) => (
                               <Cell
                                 key={`cell-savings-${idx}`}
-                                fill={[
-                                  'hsl(var(--positive))', // emerald
-                                  'hsl(var(--chart-2))', // teal
-                                  'hsl(var(--chart-2))', // cyan
-                                  'hsl(var(--chart-3))', // blue
-                                  'hsl(var(--chart-5))', // indigo
-                                  'hsl(var(--chart-5))', // violet
-                                  'hsl(var(--chart-5))', // pink
-                                  'hsl(var(--chart-4))', // amber
-                                  'hsl(var(--destructive))', // red
-                                  'hsl(var(--chart-4))', // orange
-                                ][idx % 10]}
+                                fill={SAVINGS_CHART_COLORS[idx % SAVINGS_CHART_COLORS.length]}
                               />
                             ))}
                           </Pie>
@@ -546,18 +509,7 @@ return (
                       <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-mono">
                         {savingsItems.map((item, idx) => {
                           const pct = totalSavings > 0 ? (item.value / totalSavings) * 100 : 0;
-                          const color = [
-                            'hsl(var(--positive))', // emerald
-                            'hsl(var(--chart-2))', // teal
-                            'hsl(var(--chart-2))', // cyan
-                            'hsl(var(--chart-3))', // blue
-                            'hsl(var(--chart-5))', // indigo
-                            'hsl(var(--chart-5))', // violet
-                            'hsl(var(--chart-5))', // pink
-                            'hsl(var(--chart-4))', // amber
-                            'hsl(var(--destructive))', // red
-                            'hsl(var(--chart-4))', // orange
-                          ][idx % 10];
+                          const color = SAVINGS_CHART_COLORS[idx % SAVINGS_CHART_COLORS.length];
                           return (
                             <div key={idx} className="flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />

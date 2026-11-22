@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useToast } from '@/hooks/use-toast';
-import { useFinanceData, type BreakdownRateMode } from '../FinanceDataContext';
+import { useFinanceData } from '../FinanceDataContext';
 import { MONTH_NAMES, getPlanName } from '../finance-defaults';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Calendar as DayCalendar } from '@/components/ui/calendar';
@@ -63,83 +63,58 @@ import { PillSwitch } from '../components/PillSwitch';
 import { TakeHomeSlices } from '../components/TakeHomeSlices';
 import { benefitValueOf, getNormalizedHolidays } from '../finance-calcs';
 
+import {
+  BENEFIT_KINDS,
+  BENEFIT_PRESETS,
+  HALF_DAY_BUTTON,
+  HALF_DAY_LABEL,
+  MAX_INLINE_BRIDGES,
+  PENSION_TYPE_LABEL,
+  PERIODS,
+  RATE_MODES,
+  bankHolidaysForLeave as resolveLeaveBankHolidays,
+  buildHolidayEntriesForBridge as createHolidayEntriesForBridge,
+  countOf,
+  countRemainingBankHolidays,
+  formatGBPNoPence,
+  getBirthdayEntryInsideRange as findBirthdayEntryInsideRange,
+  isoToLocalDate,
+  shortUkDate,
+  workingDaysIn as countWorkingDaysIn,
+  type BreakdownRow,
+  type Period,
+} from './tax-income-helpers';
+
+export {
+  BENEFIT_KINDS,
+  BENEFIT_PRESETS,
+  HALF_DAY_BUTTON,
+  HALF_DAY_LABEL,
+  MAX_INLINE_BRIDGES,
+  PENSION_TYPE_LABEL,
+  PERIODS,
+  RATE_MODES,
+  countOf,
+  countRemainingBankHolidays,
+  formatGBPNoPence,
+  isoToLocalDate,
+  shortUkDate,
+  type BreakdownRow,
+  type Period,
+};
+export {
+  bankHolidaysForLeave,
+  buildHolidayEntriesForBridge,
+  getBirthdayEntryInsideRange,
+  workingDaysIn,
+} from './tax-income-helpers';
+
 interface TaxIncomeSurfaceProps {
   /** Both dialogs still live in the page: Settings is opened from Time Spent
    *  too, and its "Manage Perks" button opens the benefits one. */
   setIsSettingsOpen: (open: boolean) => void;
   isBenefitsDialogOpen: boolean;
   setIsBenefitsDialogOpen: (open: boolean) => void;
-}
-
-/** Past this many bridges the Maximiser lists only the recommended ones. */
-const MAX_INLINE_BRIDGES = 5;
-
-const HALF_DAY_LABEL: Record<HalfDay, string> = { am: 'morning', pm: 'afternoon' };
-const HALF_DAY_BUTTON: Record<HalfDay, string> = { am: 'Morning', pm: 'Afternoon' };
-
-/** A stored day as a local-midnight `Date`, for the booking calendar. */
-const isoToLocalDate = (iso: string): Date | undefined => {
-  const parts = calendarParts(iso);
-  return parts ? new Date(parts.year, parts.month - 1, parts.day) : undefined;
-};
-
-/** `25 Dec`: a day the reader already knows the year of. */
-const shortUkDate = (iso: string): string => {
-  const parts = calendarParts(iso);
-  return parts ? `${parts.day} ${MONTH_NAMES[parts.month - 1].slice(0, 3)}` : iso;
-};
-
-const countOf = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
-
-type Period = 'annual' | 'monthly' | 'weekly' | 'daily' | 'hourly';
-
-const PERIODS: { key: Period; label: string }[] = [
-  { key: 'annual', label: 'Annual' },
-  { key: 'monthly', label: 'Monthly' },
-  { key: 'weekly', label: 'Weekly' },
-  { key: 'daily', label: 'Daily' },
-  { key: 'hourly', label: 'Hourly' },
-];
-
-const RATE_MODES: { key: BreakdownRateMode; label: string }[] = [
-  { key: 'normal', label: 'Normal' },
-  { key: 'including_leave', label: 'Incl. Paid Leave' },
-  { key: 'excluding_leave', label: 'Excl. Paid Leave' },
-];
-
-const PENSION_TYPE_LABEL: Record<FinanceSettings['pensionType'], string> = {
-  net_pay: 'Net pay arrangement',
-  salary_sacrifice: 'Salary sacrifice',
-  relief_at_source: 'Relief at source',
-};
-
-const BENEFIT_PRESETS = [
-  { key: 'custom', label: '✨ Custom Benefit', name: '', amount: '', type: 'monetary' as const, emoji: '🎁', notes: '', kind: 'benefit-in-kind' as const },
-  { key: 'annual_bonus', label: '🎯 Annual Bonus (default 10%)', name: 'Annual Bonus', amount: '10', type: 'percentage' as const, emoji: '🎯', notes: 'Performance / annual target bonus', kind: 'cash' as const },
-  { key: 'private_medical', label: '🏥 Private Medical Insurance', name: 'Private Medical Insurance', amount: '1500', type: 'monetary' as const, emoji: '🏥', notes: 'Taxable Benefit in Kind (P11D)', kind: 'benefit-in-kind' as const },
-  { key: 'dental', label: '🦷 Dental Cover', name: 'Dental Cover', amount: '400', type: 'monetary' as const, emoji: '🦷', notes: 'Taxable Benefit in Kind (P11D)', kind: 'benefit-in-kind' as const },
-  { key: 'travel_insurance', label: '✈️ Travel Insurance', name: 'Travel Insurance', amount: '350', type: 'monetary' as const, emoji: '✈️', notes: 'Employer travel cover (P11D)', kind: 'benefit-in-kind' as const },
-  { key: 'equity_rsus', label: '📈 Equity / RSUs', name: 'Equity / RSUs', amount: '5000', type: 'monetary' as const, emoji: '📈', notes: 'Annual stock / RSU grant', kind: 'cash' as const },
-  { key: 'car_allowance', label: '🚗 Car Allowance', name: 'Car Allowance', amount: '3000', type: 'monetary' as const, emoji: '🚗', notes: 'Annual car allowance', kind: 'cash' as const },
-  { key: 'gym_wellness', label: '🏋️ Gym & Wellness', name: 'Gym & Wellness', amount: '600', type: 'monetary' as const, emoji: '🏋️', notes: 'Wellness / gym subsidy', kind: 'benefit-in-kind' as const },
-  { key: 'tech_wfh', label: '💻 Tech / WFH Allowance', name: 'Tech / WFH Allowance', amount: '1000', type: 'monetary' as const, emoji: '💻', notes: 'Equipment / home office stipend', kind: 'cash' as const },
-] as const;
-
-const BENEFIT_KINDS = [
-  { key: 'cash', label: 'Cash' },
-  { key: 'benefit-in-kind', label: 'Benefit in kind' },
-] as const satisfies readonly { key: PackageBenefitKind; label: string }[];
-
-/** One line of the breakdown table. A `total` is ruled off above; the
- *  `result` is the take-home figure the table ends on. */
-interface BreakdownRow {
-  key: string;
-  label: string;
-  note?: string;
-  rates: Record<Period, number>;
-  sign?: '+' | '-';
-  tone?: string;
-  kind?: 'total' | 'result';
 }
 
 export default function TaxIncomeSurface({
@@ -168,10 +143,6 @@ export default function TaxIncomeSurface({
 
   // Only read when the card is too narrow for all five period columns.
   const [period, setPeriod] = useState<Period>('monthly');
-
-  // £-formatted with no pence: NI thresholds are round pounds, so the ".00"
-  // formatGBP always adds is only noise here.
-  const formatGBPNoPence = (n: number) => formatGBP(n).replace(/\.00$/, '');
 
   // From the engine's own rates, which are what the figure uses.
   const nationalInsuranceNote =
@@ -378,13 +349,9 @@ export default function TaxIncomeSurface({
   // touches, not only the year on screen. One that is not leave (a half-typed
   // year, more than two years long) counts nothing, and saving it is refused.
   const bankHolidaysForLeave = (start: string, end: string): string[] | null =>
-    isCountableLeaveRange(start, end)
-      ? resolveBankHolidaysForRange(start, end, settings.ukRegion || 'england-and-wales', fetchedBankHolidays)
-      : null;
-  const workingDaysIn = (start: string, end: string) => {
-    const bankHolidays = bankHolidaysForLeave(start, end);
-    return bankHolidays ? calculateWorkingDaysInRange(start, end, bankHolidays) : 0;
-  };
+    resolveLeaveBankHolidays(start, end, settings.ukRegion, fetchedBankHolidays);
+  const workingDaysIn = (start: string, end: string) =>
+    countWorkingDaysIn(start, end, settings.ukRegion, fetchedBankHolidays);
   const todayIso = toISODate(new Date());
   const realCurrentYear = new Date().getFullYear();
   const realCurrentMonth = new Date().getMonth();
@@ -479,17 +446,7 @@ export default function TaxIncomeSurface({
   };
 
   // Calculate remaining bank holidays
-  const getBankHolidaysLeft = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return bankHolidaysList.filter(dateStr => {
-      const bhDate = new Date(dateStr);
-      bhDate.setHours(0, 0, 0, 0);
-      return bhDate.getTime() >= today.getTime();
-    }).length;
-  };
-
-  const bankHolidaysLeft = getBankHolidaysLeft();
+  const bankHolidaysLeft = countRemainingBankHolidays(bankHolidaysList);
 
   // Inline Birthday Benefit Configurator State
   const [isBirthdayConfigOpen, setIsBirthdayConfigOpen] = useState(false);
@@ -520,12 +477,8 @@ export default function TaxIncomeSurface({
     [settings, holidayDefaults],
   );
 
-  const getBirthdayEntryInsideRange = (startDate: string, endDate: string): UserHoliday | undefined => {
-    if (!startDate || !endDate) return undefined;
-    return normalizedHolidaysAll.find(
-      h => h.type === 'birthday' && h.startDate >= startDate && h.startDate <= endDate,
-    );
-  };
+  const getBirthdayEntryInsideRange = (startDate: string, endDate: string): UserHoliday | undefined =>
+    findBirthdayEntryInsideRange(normalizedHolidaysAll, startDate, endDate);
 
   const inlineOriginalHoliday = normalizedHolidaysAll.find(h => h.id === editingHolidayId);
   const inlineAttachedBirthday = inlineOriginalHoliday && (inlineOriginalHoliday.type || 'holiday') === 'holiday'
@@ -693,60 +646,7 @@ export default function TaxIncomeSurface({
   const buildHolidayEntriesForBridge = (
     bridge: OptimalHolidayBridge,
     seedOffset = 0,
-  ): UserHoliday[] => {
-    const entries: UserHoliday[] = [];
-    const bdayIso = bridge.usesBirthdayDay && bridge.birthdayDayDate ? bridge.birthdayDayDate : null;
-    if (bdayIso) {
-      entries.push({
-        id: `hol_bday_${Date.now()}_${seedOffset}`,
-        startDate: bdayIso,
-        endDate: bdayIso,
-        occasion: 'Birthday Day Off',
-        count: 1,
-        type: 'birthday',
-      });
-    }
-
-    const remainingWorkDays = bridge.datesToBook
-      .filter(d => d !== bdayIso)
-      .sort();
-
-    if (remainingWorkDays.length > 0) {
-      // Group into contiguous runs where no unbooked working day lies between two dates
-      const runs: Array<{ start: string; end: string; count: number }> = [];
-      let runStart = remainingWorkDays[0];
-      let prevIso = remainingWorkDays[0];
-      let runCount = 1;
-
-      for (let i = 1; i < remainingWorkDays.length; i++) {
-        const curIso = remainingWorkDays[i];
-        const workDaysBetween = workingDaysIn(prevIso, curIso);
-        if (workDaysBetween === 2) {
-          prevIso = curIso;
-          runCount++;
-          continue;
-        }
-        runs.push({ start: runStart, end: prevIso, count: runCount });
-        runStart = curIso;
-        prevIso = curIso;
-        runCount = 1;
-      }
-      runs.push({ start: runStart, end: prevIso, count: runCount });
-
-      runs.forEach((run, runIdx) => {
-        entries.push({
-          id: `hol_opt_${Date.now()}_${seedOffset}_${runIdx}`,
-          startDate: run.start,
-          endDate: run.end,
-          occasion: bridge.label,
-          count: run.count,
-          type: 'holiday',
-        });
-      });
-    }
-
-    return entries;
-  };
+  ): UserHoliday[] => createHolidayEntriesForBridge(bridge, workingDaysIn, seedOffset);
 
   const handleBookBridge = (bridge: OptimalHolidayBridge) => {
     const newEntries = buildHolidayEntriesForBridge(bridge, 0);

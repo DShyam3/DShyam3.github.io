@@ -1,46 +1,22 @@
-import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { CountLabel } from '@/components/shared/CountLabel';
-import React, {
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-  useRef,
-} from 'react';
-import {
-  useWatchlist,
-  WatchlistItem,
-} from '@/features/watchlist/useWatchlist';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useWatchlist, WatchlistItem } from '@/features/watchlist/useWatchlist';
 import { useSchedule } from '@/features/watchlist/useSchedule';
-import { useTMDB } from '@/features/watchlist/useTMDB';
-import type { TMDBResult } from '@/features/watchlist/useTMDB';
+import { useTMDB, type TMDBResult } from '@/features/watchlist/useTMDB';
 import { newItemFromDetails } from '@/features/watchlist/new-item';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
-import { LIBRARY_CATEGORIES, libraryCategories, type LibraryCategory } from '@/features/watchlist/library-categories';
+import { LIBRARY_CATEGORIES, type LibraryCategory } from '@/features/watchlist/library-categories';
 import { groupByLanguage } from '@/features/watchlist/language-groups';
 import { LanguageGroupedSections } from '@/features/watchlist/components/LanguageGroupedSections';
 import { useAuth } from '@/contexts/AuthContext';
 import { titleKey, type TitleRef } from './title-ref';
-import {
-  buildDisplaySyncLog,
-  formatSyncPart,
-  type DisplaySyncLogEntry,
-} from '@/features/watchlist/sync-logic';
+import { buildDisplaySyncLog, formatSyncPart, type DisplaySyncLogEntry } from '@/features/watchlist/sync-logic';
 import { SyncDetailDialog } from '@/features/watchlist/components/SyncDetailDialog';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -50,151 +26,85 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  AlertTriangle,
   Bell,
   Bookmark,
   CalendarClock,
-  EyeOff,
-  PauseCircle,
-  X,
-  Search,
-  RefreshCcw,
-  Tv,
-  Film,
-  Eye,
-  History,
   CheckCircle,
-  XCircle,
-  AlertTriangle,
-  Timer,
-  Loader2,
-  Newspaper,
+  Eye,
+  EyeOff,
+  Filter,
+  History,
   Library,
+  Loader2,
+  PauseCircle,
+  RefreshCcw,
+  Search,
+  Timer,
+  X,
+  XCircle,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/format-date';
 import { formatCooldownEnd } from '@/hooks/useCooldown';
-import { Filter } from 'lucide-react';
 import { SyncHistoryIcon } from '@/components/shared/SyncHistoryIcon';
 import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
 import { CardGrid } from '@/components/shared/CardGrid';
 import { useDockedDetailOpen } from '@/contexts/WorkspaceInspectorContext';
-import {
-  compareTimeToFinish,
-  timeToFinish,
-  timeToFinishLabel,
-  type TimeToFinish,
-} from '@/features/watchlist/time-to-finish';
-import { formatRuntime } from '@/features/watchlist/watchlist-utils';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { PlatformLogo, hasPlatformLogo, platformLabel } from '@/features/watchlist/components/PlatformLogo';
 import {
-  PlatformLogo,
-  hasPlatformLogo,
-  platformLabel,
-} from '@/features/watchlist/components/PlatformLogo';
-import {
-  LIBRARY_SHELVES,
   LIBRARY_TYPE_OPTIONS,
   MORE_SHELVES,
   libraryShelf,
-  matchesLibraryType,
-  nextAirDate,
   shelfFromParam,
-  type LibraryShelf,
   type LibraryType,
 } from '@/features/watchlist/library-state';
+import {
+  ALL_GENRES,
+  ALL_PLATFORMS,
+  MAIN_SHELVES,
+  SHELF_HINTS,
+  SHELF_SORTS,
+  SHELVES,
+  SORT_LABELS,
+  buildSortKeys,
+  computeAutoCategoryCounts,
+  computeFinishTimes,
+  computeGenreCounts,
+  computePlatformCounts,
+  computeShelfCounts,
+  computeStatusCounts,
+  favouritePayloadFor,
+  filterAndSortWatchlist,
+  findFavouriteFor,
+  formatItemTimeLeft,
+  formatNextAutoSync,
+  formatSyncTimestamp,
+  readStoredType,
+  selectCategoryItems,
+  syncEntryFailureBadge,
+  syncEntryTypeLabel,
+  writeStoredType,
+  type LibrarySort,
+  type Shelf,
+} from '@/features/watchlist/watchlist-shelves';
 
-/**
- * Library sort orders. `finish` ranks by time left to watch: a show's aired,
- * unwatched episodes, or a film's runtime. `watched` puts the latest watch
- * date first; titles without one follow in title order.
- */
-type LibrarySort = 'alphabetical' | 'recent' | 'finish' | 'watched' | 'rating';
-
-/** Status shelves first, then the two set-aside shelves. */
-type Shelf = LibraryShelf;
-const MAIN_SHELVES: Shelf[] = [...LIBRARY_SHELVES];
-const SHELVES: Shelf[] = [...MAIN_SHELVES, ...MORE_SHELVES];
-
-/** Each shelf's own orders, default first. Upcoming runs by date. */
-const SHELF_SORTS: Record<Shelf, LibrarySort[]> = {
-  Watching: ['alphabetical', 'recent', 'finish'],
-  'To watch': ['alphabetical', 'recent', 'finish'],
-  Upcoming: [],
-  'Up to date': ['alphabetical', 'recent'],
-  Finished: ['watched', 'rating', 'alphabetical'],
-  'Stopped watching': ['alphabetical', 'rating'],
-  Hidden: ['alphabetical'],
+export {
+  ALL_GENRES,
+  ALL_PLATFORMS,
+  MAIN_SHELVES,
+  SHELF_HINTS,
+  SHELF_SORTS,
+  SHELVES,
+  SORT_LABELS,
+  readStoredType,
+  type LibrarySort,
+  type Shelf,
 };
-
-/** What each shelf holds, said once under its count. */
-const SHELF_HINTS: Record<Shelf, string> = {
-  Watching: 'Series you are part-way through a season of, or keeping up with as it airs (next episode due within two weeks). Films go straight from To watch to Finished.',
-  'To watch': 'Out now and not started, or a series between seasons with the next one out. Its card says where you pick up.',
-  Upcoming: 'Nothing to watch until a dated release: new titles, and the return of a series you are up to date on. Soonest first.',
-  'Up to date': 'Running series with every aired episode watched and no next date known. A series moves to Upcoming once its return has a date, or to Watching when its next episode is due within two weeks.',
-  Finished: 'Films you have watched, and ended series watched to the last episode.',
-  'Stopped watching': 'Set aside, with your progress and ratings kept.',
-  Hidden: 'Kept off every other shelf, with your history kept.',
-};
-
-const SORT_LABELS: Record<LibrarySort, string> = {
-  alphabetical: 'Title: A–Z',
-  recent: 'Latest releases',
-  finish: 'Quickest to finish',
-  watched: 'Recently watched',
-  rating: 'Your rating',
-};
-
-const LIBRARY_TYPE_KEY = 'watchlist-library-type';
-const readStoredType = (): LibraryType => {
-  try {
-    const stored = localStorage.getItem(LIBRARY_TYPE_KEY);
-    return stored === 'movie' || stored === 'tv' ? stored : 'all';
-  } catch {
-    return 'all';
-  }
-};
-
-
-const ALL_PLATFORMS = [
-  'Netflix',
-  'Prime Video',
-  'Disney+',
-  'Apple TV+',
-  'BBC iPlayer',
-  'ITVX',
-  'NOW',
-  'Paramount+',
-  'Channel 4',
-  'Crunchyroll',
-  'Online',
-];
-
-const ALL_GENRES = [
-  'Action',
-  'Adventure',
-  'Animation',
-  'Biography',
-  'Comedy',
-  'Crime',
-  'Documentary',
-  'Drama',
-  'Family',
-  'Fantasy',
-  'History',
-  'Horror',
-  'Music',
-  'Mystery',
-  'Romance',
-  'Sci-Fi',
-  'Sport',
-  'Thriller',
-  'War',
-  'Western',
-];
 
 const Watchlist = () => {
   const { isAdmin, isAuthLoading } = useAuth();
@@ -252,11 +162,7 @@ const Watchlist = () => {
   const [libraryType, setLibraryTypeState] = useState<LibraryType>(() => (linked ? linked.type ?? 'all' : readStoredType()));
   const setLibraryType = (type: LibraryType) => {
     setLibraryTypeState(type);
-    try {
-      localStorage.setItem(LIBRARY_TYPE_KEY, type);
-    } catch {
-      // Unavailable storage only means the choice resets next visit.
-    }
+    writeStoredType(type);
   };
   const [searchQuery, setSearchQuery] = useState('');
   const [searchAllShelves, setSearchAllShelves] = useState(true);
@@ -348,10 +254,7 @@ const Watchlist = () => {
    * (resolveFavouriteCategory), so nothing is asked.
    */
   const favouriteFor = useCallback(
-    (item: WatchlistItem) => {
-      const mediaType = item.category === 'TV Shows' ? 'tv' : 'movie';
-      return favourites.find((candidate) => candidate.media_type === mediaType && (item.tmdb_id ? candidate.tmdb_id === item.tmdb_id : candidate.title === item.title));
-    },
+    (item: WatchlistItem) => findFavouriteFor(favourites, item),
     [favourites],
   );
   const toggleFavourite = useCallback(
@@ -361,23 +264,7 @@ const Watchlist = () => {
         void removeFavourite(existing.id);
         return;
       }
-      const hasFacts =
-        item.genre_ids !== undefined ||
-        item.original_language !== undefined ||
-        item.origin_country !== undefined;
-      void addFavourite({
-        title: item.title,
-        poster: item.image_url,
-        media_type: item.category === 'TV Shows' ? 'tv' : 'movie',
-        tmdb_id: item.tmdb_id,
-        facts: hasFacts
-          ? {
-              genre_ids: item.genre_ids ?? null,
-              original_language: item.original_language ?? null,
-              origin_country: item.origin_country ?? null,
-            }
-          : undefined,
-      }).catch(() => {
+      void addFavourite(favouritePayloadFor(item)).catch(() => {
         // addFavourite has already shown the failure.
       });
     },
@@ -427,71 +314,25 @@ const Watchlist = () => {
     [detailOpen, heldShelves, shelfByItem],
   );
 
-  const categoryItems = useMemo(() => {
-    const typed = watchlist.filter((item) => matchesLibraryType(item, libraryType));
-    // Hidden and Stopped watching are the owner's own shelves.
-    const isPrivate = (item: WatchlistItem) => (MORE_SHELVES as readonly string[]).includes(shelfByItem.get(titleKey(item)) ?? '');
-    if (searching && searchAllShelves) return isAdmin ? typed : typed.filter((item) => !isPrivate(item));
-    if (!isAdmin && (MORE_SHELVES as readonly string[]).includes(selectedCategory)) return [];
-    const onShelf = typed.filter((item) => gridShelfOf(item) === selectedCategory);
-    if (selectedCategory !== 'Upcoming') return onShelf;
-    // Soonest first; a title with no known date goes last.
-    const today = new Date();
-    return onShelf
-      .map((item) => ({ item, date: nextAirDate(item, today) }))
-      .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999') || a.item.title.localeCompare(b.item.title))
-      .map(({ item }) => item);
-  }, [watchlist, libraryType, searching, searchAllShelves, shelfByItem, gridShelfOf, selectedCategory, isAdmin]);
+  const categoryItems = useMemo(
+    () =>
+      selectCategoryItems({
+        watchlist,
+        libraryType,
+        searching,
+        searchAllShelves,
+        shelfByItem,
+        gridShelfOf,
+        selectedCategory,
+        isAdmin,
+      }),
+    [watchlist, libraryType, searching, searchAllShelves, shelfByItem, gridShelfOf, selectedCategory, isAdmin],
+  );
 
-  const platformCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    ALL_PLATFORMS.forEach((p) => (counts[p] = 0));
-    categoryItems.forEach((item) => {
-      if (
-        item.streaming_platform &&
-        counts[item.streaming_platform] !== undefined
-      ) {
-        counts[item.streaming_platform]++;
-      }
-    });
-    return counts;
-  }, [categoryItems]);
-
-  const genreCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    ALL_GENRES.forEach((g) => (counts[g] = 0));
-    categoryItems.forEach((item) => {
-      item.genres?.forEach((g) => {
-        if (counts[g] !== undefined) {
-          counts[g]++;
-        }
-      });
-    });
-    return counts;
-  }, [categoryItems]);
-
-  const autoCategoryCounts = useMemo(() => {
-    const counts = Object.fromEntries(LIBRARY_CATEGORIES.map((category) => [category, 0])) as Record<LibraryCategory, number>;
-    categoryItems.forEach((item) => libraryCategories(item).forEach((category) => { counts[category]++; }));
-    return counts;
-  }, [categoryItems]);
-
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    categoryItems.forEach((item) => {
-      if (item.category === 'TV Shows' && item.series_status) {
-        const rawStatus = item.series_status;
-        const normalizedStatus =
-          rawStatus === 'Canceled' ||
-          rawStatus === 'Cancelled' ||
-          rawStatus === 'Ended'
-            ? 'Ended / Cancelled'
-            : rawStatus;
-        counts[normalizedStatus] = (counts[normalizedStatus] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [categoryItems]);
+  const platformCounts = useMemo(() => computePlatformCounts(categoryItems), [categoryItems]);
+  const genreCounts = useMemo(() => computeGenreCounts(categoryItems), [categoryItems]);
+  const autoCategoryCounts = useMemo(() => computeAutoCategoryCounts(categoryItems), [categoryItems]);
+  const statusCounts = useMemo(() => computeStatusCounts(categoryItems), [categoryItems]);
 
 
   const getPlatformCount = (platform: string) => platformCounts[platform] || 0;
@@ -499,37 +340,17 @@ const Watchlist = () => {
   const getStatusCount = (status: string) => statusCounts[status] || 0;
 
   // Time left per show, built only while a time order is picked.
-  // isEpisodeWatched is a stable callback, so this does not rebuild on its
-  // account: it rebuilds because a watched toggle replaces the watchlist
-  // array, and categoryItems with it.
-  const finishTimes = useMemo(() => {
-    const times = new Map<string, TimeToFinish>();
-    if (!byTimeLeft) return times;
-    const today = new Date();
-    for (const item of categoryItems) {
-      if (item.category !== 'TV Shows') continue;
-      times.set(
-        titleKey(item),
-        timeToFinish(
-          item.seasons,
-          (seasonNumber, episodeNumber) =>
-            isEpisodeWatched(item.id, seasonNumber, episodeNumber),
-          today,
-        ),
-      );
-    }
-    return times;
-  }, [categoryItems, byTimeLeft, isEpisodeWatched]);
+  const finishTimes = useMemo(
+    () => computeFinishTimes(categoryItems, byTimeLeft, isEpisodeWatched),
+    [categoryItems, byTimeLeft, isEpisodeWatched],
+  );
 
   // Recently watched and Your rating sort on a title's own date and score;
   // keyed here so the hold below can freeze them too.
-  const sortKeys = useMemo(() => {
-    if (!sortable || (sortOrder !== 'watched' && sortOrder !== 'rating')) return null;
-    return new Map(categoryItems.map((item) => [
-      titleKey(item),
-      sortOrder === 'watched' ? item.watched_at ?? '' : item.personal_rating ?? 0,
-    ] as const));
-  }, [categoryItems, sortable, sortOrder]);
+  const sortKeys = useMemo(
+    () => buildSortKeys(categoryItems, sortable, sortOrder),
+    [categoryItems, sortable, sortOrder],
+  );
 
   // The order is held while a title's detail is open. Marking episodes
   // watched, undoing a watch or scoring a title there would otherwise
@@ -545,107 +366,52 @@ const Watchlist = () => {
   const rankTimes = ranking.times;
   const heldKeys = ranking.keys;
 
-  const filteredWatchlist = useMemo(() => {
-    let result = categoryItems;
-    if (selectedPlatform)
-      result = result.filter(
-        (item) => item.streaming_platform === selectedPlatform,
-      );
-    if (selectedGenre)
-      result = result.filter((item) => item.genres?.includes(selectedGenre));
-    if (selectedAutoCategory)
-      result = result.filter((item) => libraryCategories(item).includes(selectedAutoCategory));
-    if (selectedStatus) {
-      if (selectedStatus === 'Ended / Cancelled') {
-        result = result.filter(
-          (item) =>
-            item.series_status === 'Ended' ||
-            item.series_status === 'Cancelled' ||
-            item.series_status === 'Canceled',
-        );
-      } else {
-        result = result.filter((item) => item.series_status === selectedStatus);
-      }
-    }
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    if (normalizedQuery)
-      result = result.filter((item) =>
-        item.title.toLowerCase().includes(normalizedQuery),
-      );
-    if (searching || sortable) {
-      result = [...result].sort((a, b) => {
-        if (searching || sortOrder === 'alphabetical') return a.title.localeCompare(b.title);
-        if (sortOrder === 'watched') {
-          // ISO timestamps compare as strings; no date sorts last.
-          const date = (item: WatchlistItem) => String(heldKeys?.get(titleKey(item)) ?? item.watched_at ?? '');
-          const byDate = date(b).localeCompare(date(a));
-          return byDate || a.title.localeCompare(b.title);
-        }
-        if (sortOrder === 'rating') {
-          const score = (item: WatchlistItem) => Number(heldKeys?.get(titleKey(item)) ?? item.personal_rating ?? 0);
-          const byRating = score(b) - score(a);
-          return byRating || a.title.localeCompare(b.title);
-        }
-        if (byTimeLeft) {
-          const ta = rankTimes.get(titleKey(a)) ?? finishTimes.get(titleKey(a));
-          const tb = rankTimes.get(titleKey(b)) ?? finishTimes.get(titleKey(b));
-          if (ta && tb) {
-            return compareTimeToFinish(ta, tb) || a.title.localeCompare(b.title);
-          }
-          // A film against a film or a show, by minutes left: a film's
-          // runtime, a show's minutes still to watch. No figure goes last.
-          const ra = (ta ? ta.minutesLeft : a.runtime) || Infinity;
-          const rb = (tb ? tb.minutesLeft : b.runtime) || Infinity;
-          if (ra !== rb) return ra < rb ? -1 : 1;
-          return a.title.localeCompare(b.title);
-        }
-        if (sortOrder === 'recent') {
-          // A show by its latest season, a film by its release.
-          const latest = (item: WatchlistItem) => {
-            const dates = [item.release_date, ...(item.seasons ?? []).map((season) => season.release_date)]
-              .filter((date): date is string => !!date)
-              .map((date) => new Date(date).getTime());
-            return Math.max(...dates, 0);
-          };
-          return latest(b) - latest(a);
-        }
-        return 0;
-      });
-    }
-    return result;
-  }, [
-    categoryItems,
-    selectedPlatform,
-    selectedGenre,
-    selectedAutoCategory,
-    selectedStatus,
-    searchQuery,
-    searching,
-    sortable,
-    sortOrder,
-    byTimeLeft,
-    finishTimes,
-    rankTimes,
-    heldKeys,
-  ]);
+  const filteredWatchlist = useMemo(
+    () =>
+      filterAndSortWatchlist({
+        items: categoryItems,
+        selectedPlatform,
+        selectedGenre,
+        selectedAutoCategory,
+        selectedStatus,
+        searchQuery,
+        searching,
+        sortable,
+        sortOrder,
+        byTimeLeft,
+        finishTimes,
+        rankTimes,
+        heldKeys,
+      }),
+    [
+      categoryItems,
+      selectedPlatform,
+      selectedGenre,
+      selectedAutoCategory,
+      selectedStatus,
+      searchQuery,
+      searching,
+      sortable,
+      sortOrder,
+      byTimeLeft,
+      finishTimes,
+      rankTimes,
+      heldKeys,
+    ],
+  );
 
+  const SHELF_ICON: Record<Shelf, typeof Eye> = {
+    Watching: Eye,
+    'To watch': Bookmark,
+    Upcoming: Bell,
+    'Up to date': CalendarClock,
+    Finished: CheckCircle,
+    'Stopped watching': PauseCircle,
+    Hidden: EyeOff,
+  };
   const getCategoryIcon = (shelf: Shelf) => {
-    switch (shelf) {
-      case 'Watching':
-        return <Eye className="h-4 w-4" />;
-      case 'To watch':
-        return <Bookmark className="h-4 w-4" />;
-      case 'Upcoming':
-        return <Bell className="h-4 w-4" />;
-      case 'Up to date':
-        return <CalendarClock className="h-4 w-4" />;
-      case 'Finished':
-        return <CheckCircle className="h-4 w-4" />;
-      case 'Stopped watching':
-        return <PauseCircle className="h-4 w-4" />;
-      case 'Hidden':
-        return <EyeOff className="h-4 w-4" />;
-    }
+    const Icon = SHELF_ICON[shelf];
+    return <Icon className="h-4 w-4" />;
   };
 
   const finishedGroups = useMemo(() => {
@@ -658,21 +424,10 @@ const Watchlist = () => {
     }));
   }, [selectedCategory, filteredWatchlist]);
 
-  const categoryCounts = useMemo(() => {
-    const counts = Object.fromEntries(SHELVES.map((shelf) => [shelf, 0])) as Record<Shelf, number>;
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    watchlist.forEach((item) => {
-      const shelf = shelfByItem.get(titleKey(item));
-      if (
-        shelf &&
-        matchesLibraryType(item, libraryType) &&
-        (!normalizedQuery || item.title.toLowerCase().includes(normalizedQuery))
-      ) {
-        counts[shelf]++;
-      }
-    });
-    return counts;
-  }, [watchlist, shelfByItem, libraryType, searchQuery]);
+  const categoryCounts = useMemo(
+    () => computeShelfCounts(watchlist, shelfByItem, libraryType, searchQuery),
+    [watchlist, shelfByItem, libraryType, searchQuery],
+  );
 
   const totalSearchMatches = useMemo(() => {
     if (!searching) return 0;
@@ -724,12 +479,7 @@ const Watchlist = () => {
   }, [filteredWatchlist, visibleCount]);
 
   // While a time order is picked, each card says what it is ranked by.
-  const timeLeftLabel = (item: WatchlistItem): string | undefined => {
-    if (!byTimeLeft) return undefined;
-    const finish = finishTimes.get(titleKey(item));
-    if (finish) return timeToFinishLabel(finish);
-    return item.runtime ? formatRuntime(item.runtime) : undefined;
-  };
+  const timeLeftLabel = (item: WatchlistItem) => formatItemTimeLeft(item, byTimeLeft, finishTimes);
 
   const activeFilterCount = [selectedPlatform, selectedGenre, selectedAutoCategory, selectedStatus].filter(Boolean).length;
 
@@ -874,12 +624,7 @@ const Watchlist = () => {
               className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1"
             >
               {displaySyncLog.map((entry) => {
-                const failureMatch = entry.error_message?.match(
-                  /^(\d+)\s*item\(s\)\s*failed/i,
-                );
-                const failureCountBadge = failureMatch
-                  ? `${failureMatch[1]} failed`
-                  : null;
+                const failureCountBadge = syncEntryFailureBadge(entry);
                 return (
                   <button
                     type="button"
@@ -913,13 +658,7 @@ const Watchlist = () => {
                               : 'bg-secondary text-muted-foreground',
                         )}
                       >
-                        {entry.is_missed
-                          ? 'MISSED'
-                          : entry.sync_type === 'auto'
-                            ? 'AUTO'
-                            : entry.sync_type === 'daily'
-                              ? 'DAILY'
-                              : 'MAN'}
+                        {syncEntryTypeLabel(entry)}
                       </span>
                       <span
                         className={cn(
@@ -941,12 +680,7 @@ const Watchlist = () => {
                       )}
                     </div>
                     <span className="text-muted-foreground text-xs whitespace-nowrap flex-shrink-0">
-                      {new Date(entry.synced_at).toLocaleString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      {formatSyncTimestamp(entry.synced_at)}
                     </span>
                   </button>
                 );
@@ -960,12 +694,7 @@ const Watchlist = () => {
             {autoSyncEnabled && (
               <span className="flex items-center gap-1">
                 <Timer className="h-2.5 w-2.5" />
-                Next auto-sync:{' '}
-                {new Date(nextAutoSyncTime).toLocaleString([], {
-                  weekday: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
+                Next auto-sync: {formatNextAutoSync(nextAutoSyncTime)}
               </span>
             )}
           </div>
