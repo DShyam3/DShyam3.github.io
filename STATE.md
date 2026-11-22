@@ -10,7 +10,7 @@ Updated 2026-11-22. Branch `claude/beautiful-hawking-f6254a`, pushed to origin/m
 
 - `watchlist-cron-sync` v28 live on `yvtiybyuifkiwyrnjebe` (verify_jwt true), deployed from this branch (`837670f8` rebased on `48bdbdcf`). Replaces v27. The watched-or-rated guard on every season and episode delete is in it, plus the v27 fixes (no `watched` in the episode upsert; season re-read before delete). Live source downloaded after deploy and matches the branch for `watchlist-cron-sync/index.ts`, `_shared/owner-data.ts`, `_shared/select-all-pages.ts`.
 - Not yet seen: a scheduled sync run against v28 (none observed); the guard is unverified against a real run.
-- Deploy workflow dispatched once after the push to exercise its new `npm run test:functions` step. Not yet seen to run in CI at the time of writing.
+- Deploy run `45030694222` (dispatched on `7d2225fd`) passed, including its new `npm run test:functions` step.
 - Discover ordering by last activity (`31819643`, on main as `36324d8d`, Pages run `44899327331`). Migration `20261120230000_watchlist_last_activity.sql` applied to `yvtiybyuifkiwyrnjebe`; recorded in `schema_migrations`. 0 of 1,227 films and 0 of 423 series stamped (no backfill, by design). Advisors: nothing new.
 - Visitor check (2026-11-21): library read requests `last_activity_at` and returns 200/206. Attempt A stalled at 185 of 219 with tmdb-proxy 429s; attempt B (owner's data, 18 of 218, all 66 calls 200) stalled. The walk stall was fixed in `48bdbdcf`; not re-checked on live.
 
@@ -39,7 +39,7 @@ Updated 2026-11-22. Branch `claude/beautiful-hawking-f6254a`, pushed to origin/m
 |---|---|
 | `npm run lint` | 0 errors, 0 warnings, reported 2026-11-22 on this tree (deploy session) |
 | `npm run typecheck`, `npm run typecheck:functions` | pass, reported 2026-11-22 (deploy session) |
-| `npm run test:functions` (`deno test supabase/functions/_shared/`) | 34 pass, reported 2026-11-22; not yet seen run in CI |
+| `npm run test:functions` (`deno test supabase/functions/_shared/`) | 34 pass, 2026-11-22; green in CI (deploy run `45030694222`) |
 | `npm test` | 2,929 pass, reported 2026-11-22. An earlier run on a rebased tree failed 1 unidentified test (flaky, unverified) |
 | `npm run build` | pass, reported 2026-11-22 |
 | `npm run ship-check` | not run; last 93/100 (`1a38256c`) |
@@ -47,10 +47,9 @@ Updated 2026-11-22. Branch `claude/beautiful-hawking-f6254a`, pushed to origin/m
 ## Next
 
 1. Watch the scheduled `watchlist-cron-sync` run against v28; confirm the guard keeps a watched or rated episode.
-2. Confirm the deploy workflow's `test:functions` step ran green in CI.
-3. Discover order check on the owner's data (item 11).
-4. Browser-verify live after Pages deploys: custom `franchise` override and year-dedupe, `tv-spinoffs` v2, Franchises universes and merged cards, Favourites, Coming soon priority.
-5. The `/dev` stash: re-find it, run `reviewer`, commit by path.
+2. Discover order check on the owner's data (item 11).
+3. Browser-verify live after Pages deploys: custom `franchise` override and year-dedupe, `tv-spinoffs` v2, Franchises universes and merged cards, Favourites, Coming soon priority.
+4. The `/dev` stash: re-find it, run `reviewer`, commit by path.
 
 ## Blockers
 
