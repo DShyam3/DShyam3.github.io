@@ -3,6 +3,7 @@ import { Calendar, Tv } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
 import { PosterCard } from '@/features/watchlist/components/PosterCard';
@@ -725,9 +726,37 @@ const WatchlistNews = () => {
       toolbar={toolbar}
     >
       <div className={cn('curated-news py-2', newsPanel === 'following' ? 'curated-news-following flex flex-col gap-4' : 'space-y-8 py-4')}>
-        <div className="ultrawide-toolbar flex shrink-0 flex-wrap items-center justify-between gap-3">
-          <SegmentedControl label="Show films, series or both" options={LIBRARY_TYPE_OPTIONS} value={newsType} onChange={setNewsType} />
-          {newsPanel === 'following' && <SegmentedControl label="News time range" options={NEWS_WINDOW_OPTIONS} value={newsWindow} onChange={setNewsWindow} />}
+        <div className="shrink-0">
+          <div className={cn('grid gap-2 sm:hidden', newsPanel === 'following' ? 'grid-cols-2' : 'grid-cols-1 max-w-[11rem]')}>
+            <NativeSelect
+              aria-label="Show films, series or both"
+              wrapperClassName="min-w-0"
+              className="rounded-full border border-border/70 bg-card/60 pl-3 pr-8 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              value={newsType}
+              onChange={(event) => setNewsType(event.target.value as LibraryType)}
+            >
+              {LIBRARY_TYPE_OPTIONS.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
+              ))}
+            </NativeSelect>
+            {newsPanel === 'following' && (
+              <NativeSelect
+                aria-label="News time range"
+                wrapperClassName="min-w-0"
+                className="rounded-full border border-border/70 bg-card/60 pl-3 pr-8 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                value={newsWindow}
+                onChange={(event) => setNewsWindow(event.target.value as UpdatesWindow)}
+              >
+                {NEWS_WINDOW_OPTIONS.map((option) => (
+                  <option key={option.key} value={option.key}>{option.label}</option>
+                ))}
+              </NativeSelect>
+            )}
+          </div>
+          <div className="ultrawide-toolbar hidden flex-wrap items-center justify-between gap-3 sm:flex">
+            <SegmentedControl label="Show films, series or both" options={LIBRARY_TYPE_OPTIONS} value={newsType} onChange={setNewsType} />
+            {newsPanel === 'following' && <SegmentedControl label="News time range" options={NEWS_WINDOW_OPTIONS} value={newsWindow} onChange={setNewsWindow} />}
+          </div>
         </div>
         {newsPanel === 'following' ? (
           <div className="ultrawide-news-grid">

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
-import { persistWatchedProgress, upNextQueryOptions } from './up-next-query';
+import { invalidateWatchDerived, persistWatchedProgress } from './up-next-query';
 
 const database = vi.hoisted(() => ({
   watched: new Set<number>(),
@@ -8,31 +8,20 @@ const database = vi.hoisted(() => ({
   readError: null as Error | null,
   returnedIds: null as number[] | null,
   writes: 0,
+  rpcCalls: [] as { fn: string; args: Record<string, unknown> }[],
 }));
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      database.writes++;
+      database.rpcCalls.push({ fn, args });
+      if (database.writeError) return { data: null, error: database.writeError };
+      const ids = (args.p_ids as number[] | undefined) ?? [];
+      ids.forEach((id) => database.watched.add(id));
+      return { data: null, error: null };
+    },
     from: (table: string) => {
-      if (table === 'watchlist_up_next') {
-        return {
-          select: async () => {
-            const next = [1, 2, 3, 4, 5].find((id) => !database.watched.has(id));
-            return {
-              error: database.readError,
-              data: next ? [{
-                tv_show_id: 123,
-                title: 'Lanterns',
-                season_number: 1,
-                episode_number: next,
-                episode_title: next === 4 ? 'The Weenie' : 'Lights Out',
-                state: 'ready',
-                season_in_progress: true,
-                release_date: '2026-09-13',
-              }] : [],
-            };
-          },
-        };
-      }
       if (table === 'tv_show_episodes') {
         return {
           update: ({ watched }: { watched: boolean }) => ({
@@ -56,9 +45,27 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-describe('watched progress and the active Watch Next query', () => {
+const diaryQueryOptions = {
+  queryKey: ['watchlist', 'diary'] as const,
+  queryFn: async () => {
+    if (database.readError) throw database.readError;
+    return Array.from(database.watched).sort((a, b) => a - b);
+  },
+  retry: false,
+};
+
+const newsQueryOptions = {
+  queryKey: ['watchlist', 'news'] as const,
+  queryFn: async () => {
+    if (database.readError) throw database.readError;
+    return { count: database.watched.size };
+  },
+  retry: false,
+};
+
+describe('persistWatchedProgress and invalidateWatchDerived', () => {
   let client: QueryClient;
-  let unsubscribe: () => void;
+  let unsubscribeDiary: () => void;
 
   beforeEach(async () => {
     database.watched = new Set([1, 2, 3]);
@@ -66,42 +73,47 @@ describe('watched progress and the active Watch Next query', () => {
     database.readError = null;
     database.returnedIds = null;
     database.writes = 0;
+    database.rpcCalls = [];
     client = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, gcTime: Infinity } } });
-    await client.fetchQuery(upNextQueryOptions);
-    // A subscribed observer represents the rail remaining mounted behind the dialog.
-    const observer = new QueryObserver(client, upNextQueryOptions);
-    unsubscribe = observer.subscribe(() => {});
+    await client.fetchQuery(diaryQueryOptions);
+    const observer = new QueryObserver(client, diaryQueryOptions);
+    unsubscribeDiary = observer.subscribe(() => {});
   });
 
   afterEach(() => {
-    unsubscribe();
+    unsubscribeDiary();
     client.clear();
   });
 
-  it('advances E4 to E5 after saving, and returns to E4 when unwatched', async () => {
-    expect(client.getQueryData(upNextQueryOptions.queryKey)?.[0].episode_number).toBe(4);
+  it('writes watched and unwatched episodes and refreshes the diary query', async () => {
+    expect(client.getQueryData(diaryQueryOptions.queryKey)).toEqual([1, 2, 3]);
     await persistWatchedProgress(client, [4], true);
-    expect(client.getQueryData(upNextQueryOptions.queryKey)?.[0]).toMatchObject({
-      episode_number: 5, episode_title: 'Lights Out',
-    });
+    expect(database.watched.has(4)).toBe(true);
+    expect(client.getQueryData(diaryQueryOptions.queryKey)).toEqual([1, 2, 3, 4]);
     await persistWatchedProgress(client, [4], false);
-    expect(client.getQueryData(upNextQueryOptions.queryKey)?.[0]).toMatchObject({
-      episode_number: 4, episode_title: 'The Weenie',
-    });
+    expect(database.watched.has(4)).toBe(false);
+    expect(client.getQueryData(diaryQueryOptions.queryKey)).toEqual([1, 2, 3]);
   });
 
   it('refreshes after a whole season is marked watched or unwatched', async () => {
     await persistWatchedProgress(client, [1, 2, 3, 4, 5], true);
-    expect(client.getQueryData(upNextQueryOptions.queryKey)).toEqual([]);
+    expect(client.getQueryData(diaryQueryOptions.queryKey)).toEqual([1, 2, 3, 4, 5]);
     await persistWatchedProgress(client, [1, 2, 3, 4, 5], false);
-    expect(client.getQueryData(upNextQueryOptions.queryKey)?.[0].episode_number).toBe(1);
+    expect(client.getQueryData(diaryQueryOptions.queryKey)).toEqual([]);
   });
 
-  it('does not advance the rail when saving fails', async () => {
+  it('routes non-now watched timestamps through set_watched rpc', async () => {
+    await persistWatchedProgress(client, [4], true, { mode: 'unknown' });
+    expect(database.rpcCalls).toHaveLength(1);
+    expect(database.rpcCalls[0].fn).toBe('set_watched');
+    expect(client.getQueryData(diaryQueryOptions.queryKey)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('does not update or invalidate when saving fails', async () => {
     database.writeError = new Error('Save failed');
     await expect(persistWatchedProgress(client, [4], true)).rejects.toThrow('Save failed');
     expect(database.watched.has(4)).toBe(false);
-    expect(client.getQueryData(upNextQueryOptions.queryKey)?.[0].episode_number).toBe(4);
+    expect(client.getQueryData(diaryQueryOptions.queryKey)).toEqual([1, 2, 3]);
   });
 
   it('rejects missing IDs before writing and rejects silently denied updates', async () => {
@@ -110,21 +122,29 @@ describe('watched progress and the active Watch Next query', () => {
     expect(database.writes).toBe(0);
     database.returnedIds = [];
     await expect(persistWatchedProgress(client, [4], true)).rejects.toThrow('Episode update incomplete');
-    expect(client.getQueryData(upNextQueryOptions.queryKey)?.[0].episode_number).toBe(4);
+    expect(client.getQueryData(diaryQueryOptions.queryKey)).toEqual([1, 2, 3]);
   });
 
-  it('marks an inactive rail stale so returning to News fetches fresh progress', async () => {
-    unsubscribe();
+  it('marks an inactive diary query stale so returning to Diary fetches fresh progress', async () => {
+    unsubscribeDiary();
     await persistWatchedProgress(client, [4], true);
-    expect(client.getQueryState(upNextQueryOptions.queryKey)?.isInvalidated).toBe(true);
-    const rows = await client.fetchQuery(upNextQueryOptions);
-    expect(rows[0].episode_number).toBe(5);
+    expect(client.getQueryState(diaryQueryOptions.queryKey)?.isInvalidated).toBe(true);
+    const rows = await client.fetchQuery(diaryQueryOptions);
+    expect(rows).toEqual([1, 2, 3, 4]);
   });
 
-  it('keeps a successful save successful if the subsequent rail fetch fails', async () => {
+  it('keeps a successful save successful if the subsequent diary fetch fails', async () => {
     database.readError = new Error('Read failed');
     await expect(persistWatchedProgress(client, [4], true)).resolves.toBeUndefined();
     expect(database.watched.has(4)).toBe(true);
-    expect(client.getQueryState(upNextQueryOptions.queryKey)?.status).toBe('error');
+    expect(client.getQueryState(diaryQueryOptions.queryKey)?.status).toBe('error');
+  });
+
+  it('invalidates both news and diary queries via invalidateWatchDerived', async () => {
+    unsubscribeDiary();
+    await client.fetchQuery(newsQueryOptions);
+    await invalidateWatchDerived(client);
+    expect(client.getQueryState(newsQueryOptions.queryKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(diaryQueryOptions.queryKey)?.isInvalidated).toBe(true);
   });
 });

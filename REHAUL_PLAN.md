@@ -333,22 +333,15 @@ Open after the News and Library redesign, 2026-11-17. Its three migrations are a
 
 1. **Decide whether favourites become a flag on `movies` and `tv_shows`** instead
    of a separate table of copied titles.
-2. **Phone News still stacks three switch rows** (tab, type and, on Following,
-   This week / This month). Make them fit one row or collapse them.
-3. **Signed-in admin check in a browser:** Add, Seen it, the rating picker, the
+2. **Signed-in admin check in a browser:** Add, Seen it, the rating picker, the
    rating prompts, the favourite toggle, ratings written to and read back from
    `watchlist_ratings`, and "Not interested" synced to
    `watchlist_dismissed_suggestions`. Only signed-out views are verified.
-4. **Most watched episodes have no watch date.** On hosted, 2,447 of 2,532 watched
+3. **Most watched episodes have no watch date.** On hosted, 2,447 of 2,532 watched
    episodes have no `watched_at`; the earliest dated one is 2026-09-13, and only 57
    dated watches fall before 17 November. A series finished before dating began
    therefore sorts after dated titles under Recently watched. Backfilling is not
    possible from what is stored.
-5. **Nothing reads `watchlist_up_next` any more.** `upNextQueryOptions` in
-   `src/features/watchlist/up-next-query.ts` survives only so a watched write
-   can invalidate a query no screen observes, with its test and
-   `selectUpNextRail` in `watchlist-utils.ts`. Delete them, keep
-   `persistWatchedProgress`, and decide whether the view itself goes too.
 
 ### Discover as taste data — what is left
 

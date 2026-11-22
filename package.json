@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck:functions": "deno check supabase/functions/**/*.ts",
-    "test:functions": "deno test supabase/functions/_shared/"
+    "test:functions": "deno test supabase/functions/_shared/ supabase/functions/watchlist-cron-sync/"
   },
   "dependencies": {
     "@fontsource/doto": "5.3.0",

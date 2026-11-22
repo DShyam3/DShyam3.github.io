@@ -24,7 +24,6 @@ import {
   relativeDay,
   releasedEpisodeSentence,
   seasonPremiereSentence,
-  selectUpNextRail,
   statusChangeSentence,
   totalWatchedRuntime,
   type AnnouncementCandidate,
@@ -33,7 +32,6 @@ import {
   type SeasonFirstSeenCandidate,
   type UpdateEventCandidate,
   type UpdatesFeedRow,
-  type UpNextRailCandidate,
 } from './watchlist-utils';
 import type { Episode, Season } from './WatchlistContext';
 
@@ -182,64 +180,6 @@ describe('daysUntil', () => {
   it('returns null for a null or missing date', () => {
     expect(daysUntil(null, today)).toBeNull();
     expect(daysUntil(undefined, today)).toBeNull();
-  });
-});
-
-describe('selectUpNextRail', () => {
-  const today = new Date('2026-09-12T00:00:00');
-
-  const row = (overrides: Partial<UpNextRailCandidate> = {}): UpNextRailCandidate => ({
-    state: 'ready',
-    release_date: '2026-09-12',
-    season_in_progress: false,
-    ...overrides,
-  });
-
-  it('includes a row exactly 14 days old', () => {
-    const result = selectUpNextRail([row({ release_date: '2026-08-29' })], today);
-    expect(result).toHaveLength(1);
-    expect(result[0].reason).toBe('New');
-  });
-
-  it('excludes a row 15 days old', () => {
-    const result = selectUpNextRail([row({ release_date: '2026-08-28' })], today);
-    expect(result).toHaveLength(0);
-  });
-
-  it('excludes a ready row with no release date', () => {
-    const result = selectUpNextRail([row({ release_date: null })], today);
-    expect(result).toHaveLength(0);
-  });
-
-  it('excludes an upcoming row with a recent date -- it has not aired', () => {
-    const result = selectUpNextRail(
-      [row({ state: 'upcoming', release_date: '2026-09-10' })],
-      today,
-    );
-    expect(result).toHaveLength(0);
-  });
-
-  it('includes a season-in-progress row with a two-year-old air date', () => {
-    const result = selectUpNextRail(
-      [row({ season_in_progress: true, release_date: '2024-01-01' })],
-      today,
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0].reason).toBe('Continue');
-  });
-
-  it('sorts continuing rows before just-dropped ones, and just-dropped rows newest first', () => {
-    const result = selectUpNextRail(
-      [
-        row({ release_date: '2026-09-01' }), // New, older
-        row({ season_in_progress: true, release_date: '2020-01-01' }), // Continue
-        row({ release_date: '2026-09-10' }), // New, newer
-      ],
-      today,
-    );
-    expect(result.map((r) => r.reason)).toEqual(['Continue', 'New', 'New']);
-    expect(result[1].release_date).toBe('2026-09-10');
-    expect(result[2].release_date).toBe('2026-09-01');
   });
 });
 

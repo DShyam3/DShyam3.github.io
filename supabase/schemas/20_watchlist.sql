@@ -1634,3 +1634,102 @@ REVOKE ALL ON TABLE "public"."watchlist_wikidata_cache" FROM PUBLIC, "anon", "au
 GRANT SELECT ON TABLE "public"."watchlist_wikidata_cache" TO "anon", "authenticated";
 
 GRANT ALL ON TABLE "public"."watchlist_wikidata_cache" TO "service_role";
+
+-- Cron-only atomic prune RPCs for watchlist-cron-sync. Both check watched and
+-- watchlist_ratings state inside the single DELETE statement so a concurrent
+-- watch or rating cannot be lost between read and delete. SECURITY INVOKER
+-- with an empty search_path; EXECUTE is granted only to service_role.
+CREATE OR REPLACE FUNCTION "public"."prune_unowned_tv_episodes"(p_ids integer[])
+    RETURNS integer[]
+    LANGUAGE plpgsql SECURITY INVOKER
+    SET search_path = ''
+    AS $$
+DECLARE
+  v_deleted integer[];
+BEGIN
+  PERFORM 1
+  FROM public.tv_show_episodes e
+  WHERE e.id = ANY (p_ids)
+  ORDER BY e.id
+  FOR UPDATE;
+
+  WITH deleted AS (
+    DELETE FROM public.tv_show_episodes e
+    WHERE e.id = ANY (p_ids)
+      AND COALESCE(e.watched, false) = false
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.watchlist_ratings r
+        WHERE r.episode_id = e.id
+      )
+    RETURNING e.id
+  )
+  SELECT COALESCE(array_agg(deleted.id), ARRAY[]::integer[])
+  INTO v_deleted
+  FROM deleted;
+
+  RETURN v_deleted;
+END;
+$$;
+
+ALTER FUNCTION "public"."prune_unowned_tv_episodes"(integer[]) OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION "public"."prune_unowned_tv_episodes"(integer[]) FROM PUBLIC, "anon", "authenticated";
+
+GRANT EXECUTE ON FUNCTION "public"."prune_unowned_tv_episodes"(integer[]) TO "service_role";
+
+CREATE OR REPLACE FUNCTION "public"."prune_unowned_tv_seasons"(p_ids integer[])
+    RETURNS integer[]
+    LANGUAGE plpgsql SECURITY INVOKER
+    SET search_path = ''
+    AS $$
+DECLARE
+  v_deleted integer[];
+BEGIN
+  PERFORM 1
+  FROM public.tv_show_episodes e
+  WHERE e.season_id = ANY (p_ids)
+  ORDER BY e.id
+  FOR UPDATE;
+
+  PERFORM 1
+  FROM public.tv_show_seasons s
+  WHERE s.id = ANY (p_ids)
+  ORDER BY s.id
+  FOR UPDATE;
+
+  WITH deleted AS (
+    DELETE FROM public.tv_show_seasons s
+    WHERE s.id = ANY (p_ids)
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.tv_show_episodes e
+        WHERE e.season_id = s.id
+          AND e.watched IS TRUE
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.watchlist_ratings r
+        WHERE r.season_id = s.id
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.tv_show_episodes e
+        JOIN public.watchlist_ratings r ON r.episode_id = e.id
+        WHERE e.season_id = s.id
+      )
+    RETURNING s.id
+  )
+  SELECT COALESCE(array_agg(deleted.id), ARRAY[]::integer[])
+  INTO v_deleted
+  FROM deleted;
+
+  RETURN v_deleted;
+END;
+$$;
+
+ALTER FUNCTION "public"."prune_unowned_tv_seasons"(integer[]) OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION "public"."prune_unowned_tv_seasons"(integer[]) FROM PUBLIC, "anon", "authenticated";
+
+GRANT EXECUTE ON FUNCTION "public"."prune_unowned_tv_seasons"(integer[]) TO "service_role";

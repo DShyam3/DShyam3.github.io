@@ -107,72 +107,6 @@ export const daysUntil = (
     return Math.round(diffMs / 86_400_000);
 };
 
-/** A show belongs on the Up Next rail for one of two reasons -- see below. */
-export type UpNextReason = 'Continue' | 'New';
-
-/** The columns `upNextReason` needs, a subset of `UpNextItem`. */
-export interface UpNextRailCandidate {
-    state: 'ready' | 'upcoming' | 'unscheduled';
-    release_date?: string | null;
-    season_in_progress: boolean;
-}
-
-/** A drop counts as "just dropped" for this many days after it airs. */
-const JUST_DROPPED_WINDOW_DAYS = 14;
-
-/**
- * The Up Next rail's inclusion rule (REHAUL_PLAN.md 8.C): every started show
- * used to qualify, which made the rail a thirteen-card library rather than a
- * next action. A row belongs on it for one of two reasons instead:
- *
- *   Continue -- `season_in_progress`: an episode of THIS season is already
- *   watched, so the next one is a continuation no matter how old it is.
- *   New -- the episode has aired (`state === 'ready'`) within the last
- *   14 days, whether or not the show has ever been started.
- *
- * `today` is a parameter rather than `new Date()` so the boundary is
- * testable without mocking the clock. Returns null when neither reason
- * applies, so the row is left off the rail.
- */
-export const upNextReason = (
-    item: UpNextRailCandidate,
-    today: Date,
-): UpNextReason | null => {
-    if (item.season_in_progress) return 'Continue';
-
-    if (item.state === 'ready') {
-        const age = daysUntil(item.release_date, today);
-        // daysUntil is negative once the date has passed; `ready` never sits
-        // in the future, but the range guards it anyway rather than assuming.
-        if (age !== null && age <= 0 && age >= -JUST_DROPPED_WINDOW_DAYS) {
-            return 'New';
-        }
-    }
-
-    return null;
-};
-
-/**
- * Filters and orders the rail: continuing shows first, then just-dropped
- * ones by air date descending (newest first). Rows matching neither reason
- * are dropped entirely -- there is no in-between state to render.
- */
-export const selectUpNextRail = <T extends UpNextRailCandidate>(
-    items: T[],
-    today: Date,
-): (T & { reason: UpNextReason })[] =>
-    items
-        .reduce<(T & { reason: UpNextReason })[]>((acc, item) => {
-            const reason = upNextReason(item, today);
-            if (reason) acc.push({ ...item, reason });
-            return acc;
-        }, [])
-        .sort((a, b) => {
-            if (a.reason !== b.reason) return a.reason === 'Continue' ? -1 : 1;
-            if (a.reason === 'Continue') return 0;
-            return (b.release_date ?? '').localeCompare(a.release_date ?? '');
-        });
-
 /**
  * Total minutes watched: `sum(runtime) where watched`, over every episode of
  * every show. An episode with no stored runtime -- TMDB does not always have
@@ -201,9 +135,8 @@ export const totalWatchedRuntime = (
 // ─── The News page (REHAUL_PLAN.md 8.C-bis) ────────────────────────────────
 //
 // Grouping, premiere detection, sentence building and day-count formatting
-// for the News page. All pure and dependent only on their arguments -- see
-// `selectUpNextRail` above for why "now" is always a parameter, never
-// `new Date()` read inside the function.
+// for the News page. All pure and dependent only on their arguments -- "now"
+// is always a parameter, never `new Date()` read inside the function.
 
 /**
  * TMDB files specials, extras and behind-the-scenes under season 0. Neither
@@ -693,11 +626,10 @@ const sortableInstant = (occurredAt: string): string =>
  * one for the same title. Platform and status rows are not grouped -- a title
  * can change platform twice in a month -- so they key by the event's own id.
  *
- * `today` is accepted rather than read internally for the same reason as
- * `selectUpNextRail`'s -- every date-aware function on this page takes the
- * clock as an argument so it stays testable -- even though this particular
- * merge does no date maths of its own; each source already stamped its own
- * `occurredAt`.
+ * `today` is accepted rather than read internally so every date-aware
+ * function on this page takes the clock as an argument and stays testable --
+ * even though this particular merge does no date maths of its own; each
+ * source already stamped its own `occurredAt`.
  */
 export const buildUpdatesFeed = (
     released: RecentEpisodeGroup[],
