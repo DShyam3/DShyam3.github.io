@@ -43,6 +43,8 @@ import {
   viewingOrdersQueryOptions,
 } from '@/features/watchlist/viewing-orders-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { visibleLibraryFor } from '@/features/watchlist/library-state';
+import { tvSeedIdsOf } from '@/features/watchlist/wikidata-cache-query';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useToast } from '@/hooks/use-toast';
 
@@ -85,10 +87,7 @@ export default function WatchlistFranchises() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const visibleWatchlist = useMemo(
-    () => (isAdmin ? watchlist : watchlist.filter((item) => item.library_state !== 'hidden' && item.library_state !== 'stopped')),
-    [watchlist, isAdmin],
-  );
+  const visibleWatchlist = useMemo(() => visibleLibraryFor(watchlist, isAdmin), [watchlist, isAdmin]);
   const lookup = useMemo(() => libraryLookup(visibleWatchlist, new Date()), [visibleWatchlist]);
 
   const savedOrders = useMemo(() => orders.data ?? [], [orders.data]);
@@ -220,14 +219,7 @@ export default function WatchlistFranchises() {
     return candidates.filter((c) => !covered.has(c.collection.collectionId));
   }, [activeCollections, expandedCollections, lookup, filmUniverses]);
 
-  const tvSeedIds = useMemo(
-    () =>
-      visibleWatchlist
-        .filter((item) => item.category === 'TV Shows' && item.tmdb_id)
-        .map((item) => item.tmdb_id!)
-        .sort((a, b) => a - b),
-    [visibleWatchlist],
-  );
+  const tvSeedIds = useMemo(() => tvSeedIdsOf(visibleWatchlist), [visibleWatchlist]);
   const tvSpinoffsQuery = useQuery({
     queryKey: ['watchlist', 'tv-spinoffs', 'v2', tvSeedIds],
     queryFn: () => getTvSpinoffs(tvSeedIds, { throwOnError: true }),

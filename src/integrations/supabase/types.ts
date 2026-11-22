@@ -3144,6 +3144,27 @@ export type Database = {
           },
         ]
       }
+      watchlist_wikidata_cache: {
+        Row: {
+          lookup: string
+          results: Json
+          seed_ids: number[]
+          synced_at: string
+        }
+        Insert: {
+          lookup: string
+          results: Json
+          seed_ids?: number[]
+          synced_at?: string
+        }
+        Update: {
+          lookup?: string
+          results?: Json
+          seed_ids?: number[]
+          synced_at?: string
+        }
+        Relationships: []
+      }
       weekly_schedule: {
         Row: {
           day_of_week: string

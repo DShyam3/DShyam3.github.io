@@ -17,6 +17,7 @@ import { pickCollection } from './tmdb-score';
 import { isImdbId } from './omdb-scores';
 import { releaseYear } from './watchlist-utils';
 import { seriesStatus } from './discovery-add';
+import { cachedFilmUniverseMembers, cachedSpinoffLinks, spinoffSeedList } from './wikidata-cache-query';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
 const TMDB_BACKDROP_BASE_URL = 'https://image.tmdb.org/t/p/w1280';
@@ -186,12 +187,13 @@ export function useTMDB() {
     }, [fetchTMDB, queryClient]);
 
     /**
-     * TV spin-off and parent relationships from Wikidata via tmdb-proxy; []
-     * on failure unless `throwOnError`, for a caller that caches the answer
-     * and must not keep a failure as "no spin-offs".
+     * TV spin-off and parent relationships from Wikidata: the nightly cache
+     * when it holds this exact seed list, else tmdb-proxy. [] on failure
+     * unless `throwOnError`, for a caller that caches the answer and must not
+     * keep a failure as "no spin-offs".
      */
     const getTvSpinoffs = useCallback(async (tmdbIds: number[], options?: { throwOnError?: boolean }): Promise<WikidataTvSpinoffLink[]> => {
-        const clean = [...new Set(tmdbIds.filter((id) => Number.isInteger(id) && id > 0))].sort((a, b) => a - b);
+        const clean = spinoffSeedList(tmdbIds);
         if (clean.length === 0) return [];
         try {
             return await queryClient.fetchQuery({
@@ -201,6 +203,8 @@ export function useTMDB() {
                 retry: detailRetry,
                 retryDelay: detailRetryDelay,
                 queryFn: async () => {
+                    const cached = await cachedSpinoffLinks(clean);
+                    if (cached) return cached;
                     const data = await fetchTMDB<{ results?: WikidataTvSpinoffLink[] }>('wikidata/tv-spinoffs', {
                         ids: clean.join(','),
                     });
@@ -216,7 +220,8 @@ export function useTMDB() {
 
     /**
      * Films of the shared universes tmdb-proxy knows (the Marvel Cinematic
-     * Universe), from Wikidata; [] on failure unless `throwOnError`, as for
+     * Universe), from Wikidata: the nightly cache when it is fresh, else
+     * tmdb-proxy. [] on failure unless `throwOnError`, as for
      * `getTvSpinoffs`. Takes no ids: the proxy's registry decides which
      * universes, and the caller which of them the library has started.
      */
@@ -229,6 +234,8 @@ export function useTMDB() {
                 // ten minutes at a time, so waiting out a minute cannot help.
                 retry: false,
                 queryFn: async () => {
+                    const cached = await cachedFilmUniverseMembers();
+                    if (cached) return cached;
                     const data = await fetchTMDB<{ results?: FilmUniverseMember[] }>('wikidata/film-universes', {});
                     return data.results ?? [];
                 },

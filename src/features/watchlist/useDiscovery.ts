@@ -43,7 +43,8 @@ import { fetchCachedCollections } from './collection-parts-query';
 import type { DismissSource } from './discovery-answers';
 import { detailRetry, detailRetryDelay, isNotFound, useTMDB } from './useTMDB';
 import { useDismissedSuggestions } from './useDismissedSuggestions';
-import type { LibraryType } from './library-state';
+import { visibleLibraryFor, type LibraryType } from './library-state';
+import { tvSeedIdsOf } from './wikidata-cache-query';
 import type { TMDBCollection, TMDBSearchResponse } from './tmdb-types';
 
 /** TMDB stops paging at 500; the filler never needs to go that far. */
@@ -371,10 +372,7 @@ export function useDiscovery(type: LibraryType) {
   // A visitor's cards read only what a visitor's seeds do: a hidden or
   // stopped title is neither a seed nor shown as in the library, so a card
   // never reveals it (its tick, its count, its details).
-  const visibleLibrary = useMemo(
-    () => (isAdmin ? watchlist : watchlist.filter((item) => item.library_state !== 'hidden' && item.library_state !== 'stopped')),
-    [watchlist, isAdmin],
-  );
+  const visibleLibrary = useMemo(() => visibleLibraryFor(watchlist, isAdmin), [watchlist, isAdmin]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
   const lookup = useMemo(() => libraryLookup(visibleLibrary, today), [visibleLibrary, week]);
 
@@ -493,14 +491,7 @@ export function useDiscovery(type: LibraryType) {
   );
   const universesPending = type !== 'tv' && universeLibrary.size > 0 && filmUniverses.isPending;
 
-  const tvSeedIds = useMemo(
-    () =>
-      visibleLibrary
-        .filter((item) => item.category === 'TV Shows' && item.tmdb_id)
-        .map((item) => item.tmdb_id!)
-        .sort((a, b) => a - b),
-    [visibleLibrary],
-  );
+  const tvSeedIds = useMemo(() => tvSeedIdsOf(visibleLibrary), [visibleLibrary]);
   const tvSpinoffs = useQuery({
     queryKey: ['watchlist', 'tv-spinoffs', 'v2', tvSeedIds],
     enabled: !loading && type !== 'movie' && tvSeedIds.length > 0,

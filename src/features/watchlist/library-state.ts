@@ -7,6 +7,17 @@ import type { WatchlistItem } from './WatchlistContext';
  */
 export type LibraryState = 'active' | 'paused' | 'hidden' | 'stopped';
 
+/**
+ * The library as a viewer sees it: all of it for the owner; for anyone else,
+ * nothing hidden or stopped. Discover and Franchises build their cards, and
+ * the TV seeds they send for spin-offs, from this, so a card never reveals a
+ * hidden or stopped title. watchlist-cron-sync builds the visitor's seed list
+ * the same way (`visitorTvSeedIds`) for the Wikidata cache.
+ */
+export function visibleLibraryFor(watchlist: WatchlistItem[], isAdmin: boolean): WatchlistItem[] {
+  return isAdmin ? watchlist : watchlist.filter((item) => item.library_state !== 'hidden' && item.library_state !== 'stopped');
+}
+
 /** Titles News follows: Paused stays; Stopped watching and Hidden leave. */
 export const FOLLOWED_STATES = ['active', 'paused'] as const;
 export function isFollowedState(state: string | null | undefined): boolean {

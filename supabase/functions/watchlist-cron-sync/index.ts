@@ -8,6 +8,15 @@ import { selectAllPages } from '../_shared/select-all-pages.ts'
 import { ratedEpisodes, seasonsToKeep, UNWATCHED_ONLY } from '../_shared/owner-data.ts'
 import { createUsageBatcher } from '../_shared/api-usage.ts'
 import { collectionPartRows, type CollectionPartRow } from '../_shared/collection-parts.ts'
+import {
+  fetchFilmUniverses,
+  fetchTvSpinoffs,
+  filmUniverseCacheRow,
+  spinoffSeedIds,
+  tvSpinoffCacheRow,
+  visitorTvSeedIds,
+  type WikidataCacheRow,
+} from '../_shared/wikidata-lookups.ts'
 
 let activeUsage = createUsageBatcher('cron')
 
@@ -176,6 +185,14 @@ const TRAILER_BACKFILL_CONCURRENCY = 8
  * cast are not asked again every run and do not use up this allowance.
  */
 const MAX_CREDITS_BACKFILL_PER_RUN = 150
+
+/**
+ * The least run time the Wikidata pass starts with. The spin-off lookup took
+ * ~17s when the browser asked for it; the universes run beside it. With less
+ * left the pass is skipped: a row for tonight's seed list stands, any other
+ * spin-off row is deleted.
+ */
+const WIKIDATA_PASS_MIN_MS = 30_000
 
 /**
  * IMDb, Rotten Tomatoes and Metacritic scores come from OMDb after the TMDB
@@ -1166,6 +1183,81 @@ serve(async (req) => {
       )
     }
 
+    // Wikidata pass: the last nightly part answers tmdb-proxy's two Wikidata
+    // lookups with the proxy's own code (_shared/wikidata-lookups.ts) and
+    // stores them in watchlist_wikidata_cache, which Discover and Franchises
+    // read before asking the proxy. Spin-offs are answered for the seed list
+    // a signed-out visitor sends, so a hidden or stopped show is never a seed;
+    // a browser with another list (the owner, or the library changed since)
+    // asks the proxy as before. Only a complete answer is stored (every TMDB
+    // poster and date answered; the sibling-franchise query may have failed,
+    // as it does for the proxy on nearly every call). Otherwise a
+    // row for tonight's seed list stays (the browser stops trusting it after
+    // 48 hours), and a row for any other list is deleted: it can no longer
+    // match a visitor, and it may name a show hidden or stopped since.
+    //
+    // It starts once the titles are synced and runs beside the best-effort
+    // passes below, which can each run to the ceiling, so they cannot starve
+    // it; it is awaited before the run logs. Its calls are network waits.
+    const runWikidataPass = async (): Promise<void> => {
+      const seeds = visitorTvSeedIds(shows.map((show) => ({ tmdb_id: show.tmdb_id, library_state: show.library_state })))
+      const clearOtherSeedLists = async () => {
+        const { error } = await supabaseAdmin
+          .from('watchlist_wikidata_cache')
+          .delete()
+          .eq('lookup', 'tv-spinoffs')
+          .neq('seed_ids', `{${seeds.join(',')}}`)
+        if (error) console.warn(`[Sync ${runLabel}] Wikidata cache clear failed for tv-spinoffs:`, error.message)
+      }
+      const remainingMs = MAX_EXECUTION_TIME_MS - (Date.now() - startTime)
+      if (remainingMs < WIKIDATA_PASS_MIN_MS) {
+        console.warn(`[Sync ${runLabel}] Wikidata cache skipped: ${Math.round(remainingMs / 1000)}s left.`)
+        await clearOtherSeedLists()
+        return
+      }
+      const signal = AbortSignal.timeout(remainingMs)
+      const storeLookup = async (row: WikidataCacheRow): Promise<boolean> => {
+        const { error } = await supabaseAdmin.from('watchlist_wikidata_cache').upsert(row, { onConflict: 'lookup' })
+        if (error) console.warn(`[Sync ${runLabel}] Wikidata cache upsert failed for ${row.lookup}:`, error.message)
+        return !error
+      }
+      const timed = async <T>(endpoint: string, run: () => Promise<T>): Promise<T | null> => {
+        const startedAt = Date.now()
+        try {
+          const answer = await run()
+          activeUsage.record({ provider: 'wikidata', endpoint, statusCode: 200, outcome: 'ok', durationMs: Date.now() - startedAt })
+          return answer
+        } catch (error) {
+          activeUsage.record({ provider: 'wikidata', endpoint, statusCode: null, outcome: 'error', durationMs: Date.now() - startedAt })
+          console.warn(`[Sync ${runLabel}] Wikidata ${endpoint} failed:`, error)
+          return null
+        }
+      }
+      const [spinoffs, universes] = await Promise.all([
+        seeds.length === 0
+          ? Promise.resolve(null)
+          : timed('tv-spinoffs', () => fetchTvSpinoffs(spinoffSeedIds(seeds), { tmdbApiKey: TMDB_API_KEY, signal })),
+        TMDB_API_KEY
+          ? timed('film-universes', () => fetchFilmUniverses(activeUsage, { tmdbApiKey: TMDB_API_KEY, signal }))
+          : Promise.resolve(null),
+      ])
+      const spinoffsStored = spinoffs?.complete === true &&
+        await storeLookup(tvSpinoffCacheRow(seeds, spinoffs.links, new Date().toISOString()))
+      if (!spinoffsStored) await clearOtherSeedLists()
+      const universesStored = universes !== null &&
+        await storeLookup(filmUniverseCacheRow(universes, new Date().toISOString()))
+      const spinoffOutcome = !spinoffs
+        ? (seeds.length === 0 ? 'no seeds' : 'failed')
+        : `${spinoffs.links.length} links, siblings ${spinoffs.siblings}${spinoffs.complete ? '' : ', TMDB incomplete'}, ${spinoffsStored ? 'stored' : 'not stored'}`
+      const universeOutcome = !TMDB_API_KEY
+        ? 'no TMDB key'
+        : !universes ? 'failed' : `${universes.length} films, ${universesStored ? 'stored' : 'not stored'}`
+      console.log(`[Sync ${runLabel}] Wikidata cache: tv-spinoffs (${seeds.length} seeds) ${spinoffOutcome}; film-universes ${universeOutcome}.`)
+    }
+    const wikidataPass = shard && shard.index === shard.count - 1
+      ? runWikidataPass().catch((error) => console.warn(`[Sync ${runLabel}] Wikidata pass failed:`, error))
+      : Promise.resolve()
+
     // Season trailer backfill, after the sync proper so it can neither fail a
     // title nor spend the time a title needs. Best effort: a season that
     // fails here, or that the ceiling cuts off, stays unchecked for next run.
@@ -1502,6 +1594,8 @@ serve(async (req) => {
         )
       }
     }
+
+    await wikidataPass
 
     const durationMs = Date.now() - startTime
     const { error: logError } = await supabaseAdmin.from('sync_log').insert({
