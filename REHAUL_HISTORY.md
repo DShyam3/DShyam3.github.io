@@ -3263,3 +3263,17 @@ History is people, not years. Directors and leads of the most-watched films are 
 Likely seen and YOU MIGHT LIKE open together, so no title shows in one and then moves to the other (the reviewer's bug). People lookups get eight more seconds, then join the end of the list. Once a section is open it stays open for the week, for that sign-in and tab.
 
 Closure: `fc16742f` on main, migration `20261122201711_watchlist_not_seen`. The signed-in owner path is open in `STATE.md`.
+
+### Taste profile: two profiles, status weights, fixed with the first page — 2026-11-22
+
+Rules over rows, not a model. A title's weight comes from the owner's rating when there is one: 8 or more is +3, 6 or more is +1.5, under 6 is −2. Without a rating it comes from library status: seen or part-seen is +1, To Watch +0.25, Stopped −1, Hidden 0. A favourite adds +2. Genre comes from the title's genre ids (series ids mapped onto film ids), decade from its year, and language from its original language. Each title's score is 0.6 genre, 0.2 decade and 0.2 language, each relative to the strongest of the same sign and clamped to ±1.
+
+Saved counts a quarter of a watch. At 0.5, 1,021 saved films outweighed 379 watched films and named Drama and the 2020s as the taste. Films and series are separate profiles: series leaned Drama (283 of about 400), films leaned Comedy, Action and Adventure.
+
+Weights read `libraryStatus`, not the shelf. The reviewer caught series between seasons or waiting on a return being weighted as backlog.
+
+The profile is fixed with the first page and travels with the pages like the seeds, so it waits for ratings. The reviewer caught it freezing before ratings and re-picking on return.
+
+Not interested and skips are not in the profile: they store no genres. That is the next plan item.
+
+Closure: `fbe288dd` on main, live via `00527d91`. No migration.

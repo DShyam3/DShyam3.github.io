@@ -360,7 +360,7 @@ why and where: `reason`, `source`, `answered_at` on
 hosted 2026-11-22) is shipped. So is step 2 (Likely seen from the whole
 history, and Not seen in `watchlist_not_seen`, migration `20261122201711`
 applied to hosted 2026-11-22). Step 3 (the taste profile, ordering YOU MIGHT
-LIKE) is built. The rest is below, in this order, because each step reads
+LIKE) is shipped (`fbe288dd`, live via `00527d91`). The rest is below, in this order, because each step reads
 the one before.
 
 Decided, with reasons:
