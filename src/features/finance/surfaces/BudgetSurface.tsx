@@ -820,9 +820,13 @@ return (
               </TooltipProvider>
             </span>
             {activeFilterCategory && (
-              <span className="text-xs font-sans text-primary underline cursor-pointer" onClick={() => setSelectedBudgetCategoryFilter('all')}>
+              <button
+                type="button"
+                className="text-xs font-sans text-primary underline cursor-pointer bg-transparent border-0 p-0"
+                onClick={() => setSelectedBudgetCategoryFilter('all')}
+              >
                 Reset filter
-              </span>
+              </button>
             )}
           </div>
 

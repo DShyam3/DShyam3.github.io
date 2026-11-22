@@ -85,7 +85,7 @@ const escapeHtmlAttribute = (value: string): string =>
   value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const sitePlugin = (): Plugin => {
-  const { name, siteTitle, tagline, description, url, twitterHandle, analytics } = SITE;
+  const { name, siteTitle, tagline, role, description, url, twitterHandle, socials, analytics } = SITE;
   const tokens: Record<string, string> = {
     SITE_TITLE: siteTitle,
     SITE_DESCRIPTION: description,
@@ -95,6 +95,28 @@ const sitePlugin = (): Plugin => {
     SITE_OG_IMAGE_ALT: `${name} — ${tagline.toLowerCase()}`,
     SITE_TWITTER_HANDLE: twitterHandle,
   };
+  const sameAs = socials
+    .map((s) => s.href)
+    .filter((href) => href.startsWith("https://") || href.startsWith("http://"));
+  const structuredData = JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Person",
+        name,
+        jobTitle: role,
+        url: `${url}/`,
+        sameAs,
+      },
+      {
+        "@type": "WebSite",
+        name: siteTitle,
+        url: `${url}/`,
+        description,
+        author: { "@type": "Person", name },
+      },
+    ],
+  }).replace(/</g, "\\u003c");
 
   return {
     name: "inject-site-meta",
@@ -105,22 +127,32 @@ const sitePlugin = (): Plugin => {
           (acc, [key, value]) => acc.replaceAll(`%${key}%`, escapeHtmlAttribute(value)),
           html,
         );
-        if (!analytics.umamiWebsiteId) return withTokens;
-        return {
-          html: withTokens,
-          tags: [
-            {
-              tag: "script",
-              attrs: {
-                defer: true,
-                src: analytics.umamiScriptUrl,
-                "data-website-id": analytics.umamiWebsiteId,
-                "data-exclude-search": "true",
-              },
-              injectTo: "head",
+        const tags: Array<{
+          tag: string;
+          attrs?: Record<string, string | boolean>;
+          children?: string;
+          injectTo: "head";
+        }> = [
+          {
+            tag: "script",
+            attrs: { type: "application/ld+json" },
+            children: structuredData,
+            injectTo: "head",
+          },
+        ];
+        if (analytics.umamiWebsiteId) {
+          tags.push({
+            tag: "script",
+            attrs: {
+              defer: true,
+              src: analytics.umamiScriptUrl,
+              "data-website-id": analytics.umamiWebsiteId,
+              "data-exclude-search": "true",
             },
-          ],
-        };
+            injectTo: "head",
+          });
+        }
+        return { html: withTokens, tags };
       },
     },
   };

@@ -9,6 +9,7 @@ import { DisplayModeProvider } from '@/contexts/DisplayModeContext';
 import { OpeningSequence } from '@/components/layout/OpeningSequence';
 import { useTimeBasedTheme } from '@/hooks/useTimeBasedTheme';
 import { useSiteWarmup } from '@/hooks/useSiteWarmup';
+import { useRouteMeta } from '@/hooks/useRouteMeta';
 import { attachPublicQueryPersistence } from '@/lib/query-cache-persistence';
 import { PageLoader } from '@/components/layout/PageLoader';
 import { FinanceRoute, FinanceSession } from '@/features/finance/FinanceSession';
@@ -124,6 +125,12 @@ function TimeBasedThemeManager() {
   return null;
 }
 
+/** Keeps document title, meta description, canonical, OG tags, and robots in sync per route. */
+function RouteMetaManager() {
+  useRouteMeta();
+  return null;
+}
+
 const OPENING_SEEN_KEY = 'opening-sequence-seen';
 
 const App = () => {
@@ -156,6 +163,7 @@ const App = () => {
               both are the default behaviour in react-router 7, and the prop no
               longer exists. */}
           <BrowserRouter>
+            <RouteMetaManager />
             <DisplayModeProvider>
             <AppProviders>
               <Suspense fallback={<PageLoader />}>

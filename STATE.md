@@ -16,6 +16,7 @@ Updated 2026-11-22. Branch `claude/beautiful-hawking-f6254a`, pushed to origin/m
 
 ## Pushed, awaiting live browser check
 
+- Launch checklist fixes (Checks 3, 4, 7, 9): per-route `<title>`/`description`/`canonical`/`og:*`/`noindex` (`src/config/route-meta.ts`, `src/hooks/useRouteMeta.ts`, `src/App.tsx`), `public/sitemap.xml`, `Sitemap:` in `public/robots.txt`, `Person`/`WebSite` JSON-LD in `vite.config.ts`, one `<h1>` per page (`Header.tsx`, `NotFound.tsx`), on-brand 404 copy, semantic `<button>` in `BudgetSurface.tsx`, and modal focus/Escape + `prefers-reduced-motion` fast-path in `OpeningSequence.tsx`. Manual live checks still open: phone pass (Check 1), mobile PageSpeed Insights (Check 5), `umami.disabled` in owner browsers (Check 6), private-window walkthrough (Check 10).
 - Watchlist: `tvFranchisesFromLinks` respects explicit custom `franchise` overrides and `customFranchisesFromLibrary` strips duplicate trailing `(YYYY)` years (`src/features/watchlist/franchise.ts`); not browser-verified on live.
 - Watchlist (`419e3340`): `tv-spinoffs` cache key bumped to `v2`; library items whose custom `franchise` tag matches a TV franchise or film universe merge into that card; not browser-verified on live.
 - Watchlist (`747dd7e5`, `354995c2`): Discover poster order, Franchises film universes, merged TV cards, `Largest` | `A–Z` sort, Favourites tab and search, Coming soon priority and `watchlist_collection_upcoming` cache (`20261121130500_watchlist_collection_upcoming.sql` applied); not browser-verified on live.

@@ -157,13 +157,13 @@ export function Header({
                 className="w-fit max-w-full cursor-pointer select-none active:opacity-70 md:ml-auto"
                 onClick={handleTitleClick}
               >
-                <div>
+                <h1>
                   <DotMatrixText
                     text={title.toUpperCase()}
                     size="sm"
                     className="text-foreground justify-start md:justify-end"
                   />
-                </div>
+                </h1>
                 <div className="max-[699px]:hidden">
                   <DotMatrixText
                     text={subtitle.toUpperCase()}
