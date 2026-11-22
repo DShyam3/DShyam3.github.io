@@ -24,6 +24,7 @@ import { Activity, ArrowUpRight, Check, CheckCircle2, PiggyBank, RefreshCw } fro
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { useFinanceTotals } from '../useFinanceTotals';
 import { SurfaceHero } from '../components/SurfaceHero';
+import { CategoryBar } from '@/components/ui/bar-list';
 import { Figure } from '../components/Figure';
 import { AlertList } from '../components/AlertList';
 import { WhatChangedCard } from '../components/WhatChangedCard';
@@ -565,14 +566,18 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         {/* Progress bars section */}
         <div className="space-y-3.5 border-t border-border/20 pt-3">
           {/* Cash Flow Progress Bar */}
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-muted-foreground uppercase tracking-wider font-mono">
               <span>Actual Cash Flow</span>
             </div>
-            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
-              <div className="h-full bg-positive transition-[width] duration-300" style={{ width: `${incomeFlowPercent}%` }} />
-              <div className="h-full bg-chart-5 transition-[width] duration-300" style={{ width: `${spendFlowPercent}%` }} />
-            </div>
+            <CategoryBar
+              ariaLabel="Actual cash flow: income versus spending"
+              showLegend={false}
+              segments={[
+                { label: 'In', value: incomeFlowPercent, color: 'hsl(var(--positive))' },
+                { label: 'Out', value: spendFlowPercent, color: 'hsl(var(--chart-5))' },
+              ]}
+            />
             <div className="flex items-center justify-between text-xs text-muted-foreground font-mono tabular-nums">
               <span>In: <span className="text-positive font-bold">{formatGBP(monthlyIncome)}</span></span>
               <span>Out: <span className="text-foreground font-bold">{formatGBP(totalSpent)}</span></span>
@@ -580,7 +585,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
           </div>
 
           {/* Budget Proportional Segmented Progress Bar */}
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-muted-foreground uppercase tracking-wider font-mono">
               <span>Budget Allocation</span>
             </div>
@@ -589,11 +594,15 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               const billsWidth = totalBudget > 0 ? Math.min(100 - spentWidth, billsPercent) : 0;
               const freeWidth = totalBudget > 0 && freeToSpend > 0 ? Math.max(0, 100 - spentWidth - billsWidth) : 0;
               return (
-                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
-                  <div className="h-full bg-chart-5 transition-[width] duration-300" style={{ width: `${spentWidth}%` }} title={`Spent: ${spentPercent.toFixed(0)}%`} />
-                  <div className="h-full bg-chart-4 transition-[width] duration-300" style={{ width: `${billsWidth}%` }} title={`Bills: ${billsPercent.toFixed(0)}%`} />
-                  <div className="h-full bg-positive transition-[width] duration-300" style={{ width: `${freeWidth}%` }} title={`Free: ${freePercent.toFixed(0)}%`} />
-                </div>
+                <CategoryBar
+                  ariaLabel="Budget allocation: spent, bills, and free cash"
+                  showLegend={false}
+                  segments={[
+                    { label: 'Spent', value: spentWidth, color: 'hsl(var(--chart-5))' },
+                    { label: 'Bills', value: billsWidth, color: 'hsl(var(--chart-4))' },
+                    { label: 'Free', value: freeWidth, color: 'hsl(var(--positive))' },
+                  ]}
+                />
               );
             })()}
             <div className="flex flex-wrap items-center justify-between text-xs font-mono text-muted-foreground gap-y-1">

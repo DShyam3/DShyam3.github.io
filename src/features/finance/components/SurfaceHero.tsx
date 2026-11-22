@@ -1,7 +1,33 @@
 import { cn } from '@/lib/utils';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ReactNode } from 'react';
+
+const PARSEABLE_FIGURE = /^([+-]?)(£|€|\$)?([\d,]+(?:\.\d+)?)(%?)$/;
+
+function parseAnimatedFigure(raw: string): {
+  numeric: number;
+  prefix?: string;
+  suffix?: string;
+  decimals: number;
+} | null {
+  const match = PARSEABLE_FIGURE.exec(raw.trim());
+  if (!match) return null;
+  const [, sign, currency, digits, pct] = match;
+  const parsed = Number(digits.replace(/,/g, ''));
+  if (!Number.isFinite(parsed)) return null;
+  const dotIdx = digits.indexOf('.');
+  const decimals = dotIdx >= 0 ? digits.length - dotIdx - 1 : 0;
+  const numeric = sign === '-' ? -parsed : parsed;
+  const prefix = `${sign === '+' ? '+' : ''}${currency ?? ''}` || undefined;
+  return {
+    numeric,
+    prefix,
+    suffix: pct || undefined,
+    decimals,
+  };
+}
 
 /**
  * The one number a surface exists to answer, above whatever it renders.
@@ -37,6 +63,8 @@ const TONE: Record<NonNullable<SurfaceHeroProps['tone']>, string> = {
 };
 
 export function SurfaceHero({ label, value, tone = 'neutral', detail, aside, loading }: SurfaceHeroProps) {
+  const parsed = !loading ? parseAnimatedFigure(value) : null;
+
   return (
     <section
       aria-label={label}
@@ -55,7 +83,19 @@ export function SurfaceHero({ label, value, tone = 'neutral', detail, aside, loa
         ) : (
           <>
             <p className={cn('font-sans text-3xl font-bold tabular-nums sm:text-4xl', TONE[tone])}>
-              {value}
+              {parsed ? (
+                <AnimatedNumber
+                  value={parsed.numeric}
+                  prefix={parsed.prefix}
+                  suffix={parsed.suffix}
+                  format={{
+                    minimumFractionDigits: parsed.decimals,
+                    maximumFractionDigits: parsed.decimals,
+                  }}
+                />
+              ) : (
+                value
+              )}
             </p>
             {/* A div, not a p: detail is a ReactNode and callers put block
                 content in it -- the net worth hero passes a chart -- which is

@@ -14,6 +14,7 @@ import { AlertTriangle, CheckCircle2, History, RefreshCw, Timer, X, XCircle } fr
 import { SyncHistoryIcon } from '@/components/shared/SyncHistoryIcon';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tracker } from '@/components/ui/tracker';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/format-date';
 import { formatCooldownEnd } from '@/hooks/useCooldown';
@@ -163,7 +164,25 @@ export function BankSyncStatus({ status, isSyncing, syncAvailableAt, onSync, cla
           ) : history.length === 0 ? (
             <p className="py-2 text-center text-xs text-muted-foreground">No runs logged yet</p>
           ) : (
-            <ul className="space-y-1.5" aria-label="Sync history">
+            <>
+              <Tracker
+                ariaLabel="Recent bank sync runs"
+                className="h-3.5 pb-1"
+                data={history
+                  .slice(0, 14)
+                  .reverse()
+                  .map(entry => ({
+                    key: entry.id,
+                    tone:
+                      entry.status === 'missed' || entry.status === 'error'
+                        ? 'error'
+                        : entry.status === 'partial'
+                          ? 'warn'
+                          : 'ok',
+                    label: `${formatRunTime(entry.synced_at, now)} — ${runSummary(entry)}`,
+                  }))}
+              />
+              <ul className="space-y-1.5" aria-label="Sync history">
               {history.map(entry => {
                 const failed = entry.status === 'missed' || entry.status === 'error';
                 const failedBanks = entry.banks.filter(bank => bank.status === 'failed');
@@ -217,7 +236,8 @@ export function BankSyncStatus({ status, isSyncing, syncAvailableAt, onSync, cla
                   </li>
                 );
               })}
-            </ul>
+              </ul>
+            </>
           )}
         </div>
 

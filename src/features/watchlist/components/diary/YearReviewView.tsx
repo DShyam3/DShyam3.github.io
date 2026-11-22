@@ -1,17 +1,10 @@
 import type { YearReview } from '@/features/watchlist/year-review';
+import { MetricTile } from '@/components/ui/metric-tile';
+import { BarList } from '@/components/ui/bar-list';
 import { formatDayHeading, formatMinutes, formatTotal } from './format';
 
 const MONTH_NAMES = Array.from({ length: 12 }, (_, i) =>
   new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(new Date(2000, i, 1)));
-
-function Figure({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col-reverse rounded-xl border border-border/70 bg-card/60 p-3">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="font-serif text-xl font-semibold tabular-nums">{value}</dd>
-    </div>
-  );
-}
 
 function Heading({ children }: { children: string }) {
   return <h2 className="font-serif text-base font-semibold">{children}</h2>;
@@ -67,13 +60,17 @@ export function YearReviewView({ review }: { review: YearReview }) {
   const days = (n: number) => `${n} day${n === 1 ? '' : 's'}`;
   return (
     <div className="space-y-8">
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Figure label="Time watched" value={formatTotal(totals.minutes, totals.unknownRuntime)} />
-        <Figure label="Episodes" value={String(totals.episodes)} />
-        <Figure label="Films" value={String(totals.films)} />
-        <Figure label="Shows" value={String(totals.shows)} />
-        <Figure label="Days with something watched" value={String(totals.days)} />
-      </dl>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <MetricTile
+          label="Time watched"
+          value={formatTotal(totals.minutes, totals.unknownRuntime)}
+          variant="gradient"
+        />
+        <MetricTile label="Episodes" value={totals.episodes} />
+        <MetricTile label="Films" value={totals.films} />
+        <MetricTile label="Shows" value={totals.shows} />
+        <MetricTile label="Active days" value={totals.days} />
+      </div>
 
       <MonthChart months={review.months} />
 
@@ -95,17 +92,19 @@ export function YearReviewView({ review }: { review: YearReview }) {
         {review.genres.length > 0 && (
           <section className="space-y-2">
             <Heading>Genres</Heading>
-            <ul className="space-y-2">
-              {review.genres.map((g) => {
+            <BarList
+              data={review.genres.map((g) => {
                 const percent = Math.round(g.share * 100);
-                return (
-                  <li key={g.genre} className="space-y-1 text-sm">
-                    <div className="flex justify-between gap-3"><span className="truncate">{g.genre}</span><span className="tabular-nums text-muted-foreground">{percent}%</span></div>
-                    <div className="h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary/70" style={{ width: `${percent}%` }} /></div>
-                  </li>
-                );
+                return {
+                  key: g.genre,
+                  name: g.genre,
+                  value: percent,
+                  valueLabel: `${percent}%`,
+                  color: 'hsl(var(--primary))',
+                };
               })}
-            </ul>
+              maxValue={100}
+            />
           </section>
         )}
 
@@ -113,14 +112,15 @@ export function YearReviewView({ review }: { review: YearReview }) {
           <section className="space-y-2">
             <Heading>Where they stream now</Heading>
             <p className="text-xs text-muted-foreground">Platforms are where each title streams today, not where you watched it.</p>
-            <ul className="divide-y divide-border/50">
-              {review.platforms.map((p) => (
-                <li key={p.platform} className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
-                  <span className="min-w-0 truncate">{p.platform}</span>
-                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatMinutes(p.minutes)}</span>
-                </li>
-              ))}
-            </ul>
+            <BarList
+              data={review.platforms.map((p) => ({
+                key: p.platform,
+                name: p.platform,
+                value: p.minutes,
+                valueLabel: formatMinutes(p.minutes),
+                color: 'hsl(var(--chart-2))',
+              }))}
+            />
           </section>
         )}
 

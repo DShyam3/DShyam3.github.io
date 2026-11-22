@@ -2,6 +2,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { buildMemberships, countMembers, assertTotals, countPlaces } from '@/features/travel/memberships';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixGlobe } from '@/components/dot-matrix/DotMatrixGlobe';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { getResolution, isValidCell, latLngToCell } from 'h3-js';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVisitedCountries } from '@/features/travel/useVisitedCountries';
@@ -600,9 +601,9 @@ const TravelContent = () => {
                                                 ISO 3166-1
                                             </span>
                                             <span className="text-xs tabular-nums">
-                                                {places.visited}/{places.total}
+                                                <AnimatedNumber value={places.visited} />/{places.total}
                                                 <span className="text-muted-foreground/60 ml-1.5">
-                                                    {placesPercent}%
+                                                    <AnimatedNumber value={placesPercent} suffix="%" />
                                                 </span>
                                             </span>
                                         </div>
@@ -612,9 +613,9 @@ const TravelContent = () => {
                                                     {body.label}
                                                 </span>
                                                 <span className="text-xs tabular-nums">
-                                                    {visited}/{body.total}
+                                                    <AnimatedNumber value={visited} />/{body.total}
                                                     <span className="text-muted-foreground/60 ml-1.5">
-                                                        {Math.round((visited / body.total) * 100)}%
+                                                        <AnimatedNumber value={Math.round((visited / body.total) * 100)} suffix="%" />
                                                     </span>
                                                 </span>
                                             </div>
@@ -636,7 +637,7 @@ const TravelContent = () => {
                                         onClick={() => setViewMode('cities')}
                                     >
                                         <MapPin className="w-3.5 h-3.5" />
-                                        Cities{totalCitiesVisited > 0 ? ` (${totalCitiesVisited})` : ''}
+                                        Cities{totalCitiesVisited > 0 ? <> (<AnimatedNumber value={totalCitiesVisited} />)</> : ''}
                                     </button>
                                 </div>
 

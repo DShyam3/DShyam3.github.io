@@ -1,7 +1,20 @@
-import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
+import { Area, AreaChart, YAxis } from 'recharts';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart';
 import { netWorthChangeSince, startOfMonth, type NetWorthPoint } from '@/lib/finance';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { cn } from '@/lib/utils';
+
+const NET_WORTH_CHART_CONFIG: ChartConfig = {
+  netWorth: {
+    label: 'Net worth',
+    color: 'hsl(var(--chart-1))',
+  },
+};
 
 /**
  * Net worth over time, and what it has done this month.
@@ -56,42 +69,41 @@ export function NetWorthTrend({ points, today }: { points: NetWorthPoint[]; toda
           The summary above already carries the whole story until there is a
           shape worth drawing. */}
       {points.length < 3 ? null : (
-      <div className="h-16 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={points} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-            <defs>
-              <linearGradient id="nw-trend" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            {/* Net worth is often negative and rarely near zero, so a domain
-                anchored at 0 would flatten every real movement out of view.
-                An unchanged series collapses dataMin onto dataMax and renders
-                nothing at all, so a flat run gets a little padding to draw
-                against -- which is the common case in the first few days. */}
-            <YAxis hide domain={domain} />
-            <Tooltip
-              cursor={false}
-              contentStyle={{
-                background: 'hsl(var(--popover))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: 'var(--radius)',
-                fontSize: 12,
-              }}
-              labelFormatter={(_, payload) => payload?.[0]?.payload?.capturedOn ?? ''}
-              formatter={(v: number) => [formatGBP(v), 'Net worth']}
-            />
-            <Area
-              type="monotone"
-              dataKey="netWorth"
-              stroke="hsl(var(--chart-1))"
-              strokeWidth={2}
-              fill="url(#nw-trend)"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      <ChartContainer
+        config={NET_WORTH_CHART_CONFIG}
+        className="aspect-auto h-16 w-full"
+      >
+        <AreaChart data={points} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id="nw-trend" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--color-netWorth)" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="var(--color-netWorth)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          {/* Net worth is often negative and rarely near zero, so a domain
+              anchored at 0 would flatten every real movement out of view.
+              An unchanged series collapses dataMin onto dataMax and renders
+              nothing at all, so a flat run gets a little padding to draw
+              against -- which is the common case in the first few days. */}
+          <YAxis hide domain={domain} />
+          <ChartTooltip
+            cursor={false}
+            content={
+              <ChartTooltipContent
+                labelFormatter={(_, payload) => String(payload?.[0]?.payload?.capturedOn ?? '')}
+                valueFormatter={(v) => (typeof v === 'number' ? formatGBP(v) : String(v))}
+              />
+            }
+          />
+          <Area
+            type="monotone"
+            dataKey="netWorth"
+            stroke="var(--color-netWorth)"
+            strokeWidth={2}
+            fill="url(#nw-trend)"
+          />
+        </AreaChart>
+      </ChartContainer>
       )}
     </div>
   );
