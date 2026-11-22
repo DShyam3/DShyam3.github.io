@@ -3215,3 +3215,15 @@ The reason is the cascade. Deleting a season or episode removes its watch state 
 Known and open: the season delete is not atomic. Something watched or rated between the read and the delete can still cascade away; closing that needs a SQL function, and is not done.
 
 Closure: `supabase/functions/_shared/owner-data.ts`, `supabase/functions/watchlist-cron-sync/index.ts`. Committed as `1f63bea1` on the feature branch, not pushed or deployed.
+
+### Discover collection walk: nightly parts cache over a batch proxy endpoint — 2026-11-22
+
+The walk asked tmdb-proxy once per film collection in the library, paced: about nine minutes for a fresh visitor, 218 calls. A batch endpoint was rejected. tmdb-proxy's limiter (`check_rate_limit`) adds 1 per call; a batch call counted once would let one visitor, or a loop of curl calls, spend 20 times today's per-visitor TMDB ceiling. Counted per id, it still caps at 60 ids a minute, so 218 takes over four minutes. Weighted counting needed a migration anyway. Either way every fresh visitor would still cost 218 TMDB calls.
+
+The cron already fetched every collection nightly for its own sync. Storing what it fetched costs one upsert per collection, and a visitor costs 0 TMDB calls. Table `watchlist_collection_parts` is public read; writes are for the service role only.
+
+A row holds exactly what the walk reads, normalised the same way the walk normalises TMDB's response. Anything a row cannot repeat exactly (the same part id twice, a date that is not a calendar date, a title over 300 characters) is not stored, so the walk asks TMDB for that collection. A vitest runs the cron's row builder through the walk's reader. Live check: 218 of 218 collections gave identical entries from the table and from TMDB.
+
+Rows are used for 48 hours, which allows one missed nightly run and no more. A collection with no fresh rows goes to tmdb-proxy as before, and if the read fails, every collection does.
+
+The walk still waits for the Wikidata TV spin-off lookup in All. How many film groups the walk needs depends on the spin-off groups, and walking on without them would change which cards show.
