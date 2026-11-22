@@ -58,17 +58,51 @@ describe('createCallPacer', () => {
     expect(order).toEqual(['a@1000', 'b@2000']);
   });
 
-  it('keeps room under a lower ceiling for callers that pass none', async () => {
+  it('caps one kind of call without holding up the others', async () => {
     const clock = fakeClock();
     const slot = createCallPacer(4, 1000, clock.now, clock.sleep);
-    await slot(2);
-    await slot(2);
-    // The background caller is at its ceiling, but others still get through.
-    await slot();
+    await slot({ kind: 'page', limit: 2 });
+    await slot({ kind: 'page', limit: 2 });
+    // Pages are at their own limit, but other calls still get straight in.
     await slot();
     expect(clock.now()).toBe(0);
-    // A third background call waits for the window to drop to one.
-    await slot(2);
+    // A third page waits for the first to leave the window.
+    await slot({ kind: 'page', limit: 2 });
     expect(clock.now()).toBe(1000);
+  });
+
+  it('lets other calls take every place pages leave', async () => {
+    const clock = fakeClock();
+    const slot = createCallPacer(4, 1000, clock.now, clock.sleep);
+    await slot({ kind: 'page', limit: 1 });
+    for (let i = 0; i < 3; i++) await slot();
+    expect(clock.now()).toBe(0);
+    // The window is full: the next call of any kind waits.
+    await slot();
+    expect(clock.now()).toBe(1000);
+  });
+  it('waits for whichever limit frees last, in one sleep', async () => {
+    let time = 0;
+    const sleeps: number[] = [];
+    const slot = createCallPacer(4, 1000, () => time, async (ms) => { sleeps.push(ms); time += ms; });
+    const page = { kind: 'page', limit: 2 };
+    await slot();
+    time = 100; await slot(page);
+    time = 200; await slot(page);
+    time = 300; await slot();
+    // Full overall (frees at 1000) and full of pages (frees at 1100): the
+    // later one decides.
+    await slot(page);
+    expect(time).toBe(1100);
+    expect(sleeps).toEqual([800]);
+  });
+
+  it('grants a page at once while the walk is at its own limit', async () => {
+    const clock = fakeClock();
+    const slot = createCallPacer(4, 1000, clock.now, clock.sleep);
+    const walk = { kind: 'walk', limit: 3 };
+    for (let i = 0; i < 3; i++) await slot(walk);
+    await slot({ kind: 'page', limit: 2 });
+    expect(clock.now()).toBe(0);
   });
 });

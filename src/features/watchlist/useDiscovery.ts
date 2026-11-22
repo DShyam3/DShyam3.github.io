@@ -53,20 +53,27 @@ const MAX_PAGES = 200;
  * the owner's adds, "Seen it" and searches, which do not.
  */
 const DISCOVER_CALLS_PER_MINUTE = 40;
-/** The collection walk's ceiling, so the sections' own pages always get in. */
-const WALK_CALLS_PER_MINUTE = 24;
+/**
+ * How those are shared. Franchises lead the page, so the collection walk has
+ * the larger share; with many dismissals the other sections can page for
+ * minutes without adding a tile. Each share is a ceiling, so neither can take
+ * the other's last places: pages keep at least 12 a minute, the walk 20.
+ */
+const PAGE_CALLS_PER_MINUTE = 20;
+const WALK_CALLS_PER_MINUTE = 28;
 const discoverSlot = createCallPacer(DISCOVER_CALLS_PER_MINUTE, 60_000);
-const walkSlot = () => discoverSlot(WALK_CALLS_PER_MINUTE);
+const pageSlot = () => discoverSlot({ kind: 'page', limit: PAGE_CALLS_PER_MINUTE });
+const walkSlot = () => discoverSlot({ kind: 'walk', limit: WALK_CALLS_PER_MINUTE });
 
 /**
- * One tmdb-proxy call, paced by `discoverSlot`. A 429 (from calls outside
- * the pacer) waits and tries again: 5s, 20s, 40s, together longer than the
- * proxy's one-minute window.
+ * One tmdb-proxy call for a section's page, paced by `pageSlot`. A 429 (from
+ * calls outside the pacer) waits and tries again: 5s, 20s, 40s, together
+ * longer than the proxy's one-minute window.
  */
 async function request(endpoint: string, params: Record<string, string>): Promise<TMDBSearchResponse> {
   const query = new URLSearchParams({ endpoint, language: 'en-GB', page: '1', ...params });
   for (let failures = 0; ; failures += 1) {
-    await discoverSlot();
+    await pageSlot();
     const { data, error } = await supabase.functions.invoke(`tmdb-proxy?${query}`, { method: 'GET' });
     if (!error) return data as TMDBSearchResponse;
     if (!detailRetry(failures, error)) throw error;
@@ -173,9 +180,11 @@ export interface DiscoveryFranchiseGroup {
 // - HAVE YOU ALREADY WATCHED? walks the library's film collections in a fixed
 //   order, most recently touched first, a batch at a time, until it has
 //   enough with something unanswered; Show more asks for six more. It takes
-//   at most WALK_CALLS_PER_MINUTE, so the other sections' pages are never
-//   queued behind it. A collection is kept for a day, so the walk is paid for
-//   once a day (about 200 calls at most); a fresh cached one skips the queue.
+//   up to WALK_CALLS_PER_MINUTE, never fewer than 20. A collection
+//   is kept for a day, so the walk is paid for once a day (about 200 calls
+//   at most); a fresh cached one skips the queue.
+// - Every other section's pages share PAGE_CALLS_PER_MINUTE, never fewer
+//   than 12; each section's first page (12 calls in All) goes at once.
 // - COMING SOON pages until its grid is full, at most 10 pages (20 calls).
 // - YOU MIGHT LIKE and Likely seen page until full, at most 6 and 5 pages
 //   automatically per visit; Show more is the owner's own call.
