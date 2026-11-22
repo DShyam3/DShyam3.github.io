@@ -482,9 +482,10 @@ Admin-only. Five routed surfaces, seventeen sections — each one linkable, each
 one a real URL with a working back button.
 
 Finance opens with its money hidden. The Show figures / Hide figures button in its
-toolbar paints over every £ amount in text, charts, dialogs and toasts. Labels,
-dates, percentages, rates and hours stay readable as text; every number field blurs
-until you click into it. Showing lasts for the browser tab, through reloads, and a
+toolbar paints over every £ amount in text, charts, dialogs and toasts, the
+animated headline figure on each surface included. Labels, dates, percentages,
+rates and hours stay readable as text; every number field blurs until you click
+into it. Showing lasts for the browser tab, through reloads, and a
 freshly opened tab starts hidden again. Values stay in the page for screen readers and hover
 tooltips, so this is a screen-privacy aid, not a lock. Browsers without support show
 figures and no button.

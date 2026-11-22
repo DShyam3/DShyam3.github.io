@@ -11,6 +11,8 @@ const BLUR_ID = 'finance-figure-blur';
 const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'title', 'desc']);
 /** A sign rendered as its own text node, which `{sign}{formatGBP(x)}` produces. */
 const TRAILING_SIGN = /[-−+]$/;
+/** NumberFlow's element (`AnimatedNumber`), which draws its figure inside a shadow root. */
+const SHADOW_FIGURE = 'number-flow-react';
 
 const supported = typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight === 'function';
 
@@ -98,8 +100,30 @@ function hideFigures(root: HTMLElement): () => void {
     }));
   };
 
+  /* NumberFlow keeps its digits in a shadow root, which neither the text
+     walker nor a highlight reaches, so the whole element is marked and the
+     stylesheet blurs it. Its `data` attribute (React 18) carries the
+     formatted value whole. Failing that, the shadow's own text: each digit is
+     a column of all ten numerals with the currency sign right before them,
+     which still reads as a figure, but parts animating out linger in it, so
+     it is only trusted for a fresh element. */
+  const shadowValue = (element: Element) => {
+    try {
+      const data: unknown = JSON.parse(element.getAttribute('data') ?? 'null');
+      if (data && typeof data === 'object' && 'valueAsString' in data && typeof data.valueAsString === 'string') return data.valueAsString;
+    } catch { /* Not NumberFlow's JSON; read the shadow instead. */ }
+    return Array.from(element.shadowRoot?.children ?? [], part => (part.localName === 'style' ? '' : part.textContent ?? '')).join('');
+  };
+  const paintShadow = (element: Element) => {
+    mark(element, figureSpans(shadowValue(element)).length > 0);
+  };
+
   const scan = (node: Node) => {
     if (node instanceof Text) return paint(node);
+    if (node instanceof Element) {
+      if (node.matches(SHADOW_FIGURE)) paintShadow(node);
+      node.querySelectorAll(SHADOW_FIGURE).forEach(paintShadow);
+    }
     const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
     for (let text = walker.nextNode(); text; text = walker.nextNode()) paint(text as Text);
   };
@@ -115,6 +139,13 @@ function hideFigures(root: HTMLElement): () => void {
         scan(mutation.target);
         continue;
       }
+      /* NumberFlow takes each new value through its `data` attribute (React
+         18). React 19 sets a property instead, which no observer sees;
+         revisit this if React moves. */
+      if (mutation.type === 'attributes') {
+        if (mutation.target instanceof Element && mutation.target.matches(SHADOW_FIGURE)) paintShadow(mutation.target);
+        continue;
+      }
       mutation.addedNodes.forEach(scan);
       if (mutation.removedNodes.length === 0) continue;
       removed = true;
@@ -125,7 +156,7 @@ function hideFigures(root: HTMLElement): () => void {
     for (const node of ranges.keys()) if (!node.isConnected) forget(node);
     for (const element of marked) if (!element.isConnected) marked.delete(element);
   });
-  observer.observe(root, { childList: true, characterData: true, subtree: true });
+  observer.observe(root, { childList: true, characterData: true, subtree: true, attributeFilter: ['data'] });
 
   return () => {
     observer.disconnect();

@@ -23,6 +23,15 @@ describe('figureSpans', () => {
     expect(figures('£1,000–£2,000')).toEqual(['£1,000', '£2,000']);
   });
 
+  /* An animated figure's shadow root spells each digit as a column of all ten
+     numerals behind the pound sign; useHiddenFigures relies on that still
+     reading as a figure. */
+  it('reads an animated figure, digit columns and all', () => {
+    expect(figureSpans('£0123456789,012345678901234567890123456789.01234567890123456789')).not.toEqual([]);
+    expect(figureSpans('£-0123456789.01234567890123456789')).not.toEqual([]);
+    expect(figureSpans('01234567890123456789%')).toEqual([]);
+  });
+
   it('leaves text without a pound figure alone', () => {
     expect(figureSpans('Amount (£)')).toEqual([]);
     expect(figureSpans('12% in 2026')).toEqual([]);

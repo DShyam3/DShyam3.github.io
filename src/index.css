@@ -602,6 +602,14 @@
   filter: url(#finance-figure-blur);
 }
 
+/* An animated figure draws in a shadow root the highlight cannot reach, and
+   its digits fade under a mask that would clip a text shadow, so the element
+   blurs whole. Foreground colour, since a hero's tone gives away the sign. */
+[data-finance-figures="hidden"] number-flow-react[data-hidden-figure] {
+  color: hsl(var(--foreground) / 0.75);
+  filter: blur(0.25em);
+}
+
 [data-finance-figures="hidden"] tspan[data-hidden-figure] {
   fill-opacity: 0;
   stroke: hsl(var(--foreground) / 0.12);
