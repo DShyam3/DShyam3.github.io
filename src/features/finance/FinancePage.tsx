@@ -1,7 +1,9 @@
 import { toISODate } from '@/lib/finance/dates';
 import { memo, Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import { format } from 'date-fns';
+import { SPRING_PILL } from '@/theme/motion';
 import { Navigate, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppShell } from '@/components/layout/AppShell';
@@ -84,6 +86,7 @@ import type {
  * without threading two dozen props through each of them.
  */
 function FinanceView() {
+  const prefersReducedMotion = useReducedMotion();
   const {
     bankAccounts,
     budgetCategories,
@@ -755,22 +758,33 @@ function FinanceView() {
         section, so it renders no second row. */}
     {activeSections.length > 1 && (
       <nav aria-label="Finance sections" className="flex flex-wrap items-center gap-x-4 gap-y-2 md:gap-x-5 py-3 px-4 md:px-0 border-b border-border/30">
-        {activeSections.map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            onPointerEnter={() => sectionChunks[tab]?.()}
-            aria-current={activeTab === tab ? 'page' : undefined}
-            className={cn(
-              'text-xs whitespace-nowrap font-sans transition-colors',
-              activeTab === tab
-                ? 'text-foreground font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            {TAB_LABELS[tab]}
-          </button>
-        ))}
+        {activeSections.map(tab => {
+          const isCurrent = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              onPointerEnter={() => sectionChunks[tab]?.()}
+              aria-current={isCurrent ? 'page' : undefined}
+              className={cn(
+                'relative pb-1 text-xs whitespace-nowrap font-sans transition-colors',
+                isCurrent
+                  ? 'text-foreground font-semibold'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {TAB_LABELS[tab]}
+              {isCurrent && (
+                <motion.span
+                  layoutId="finance-section-underline"
+                  transition={prefersReducedMotion ? { duration: 0 } : SPRING_PILL}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary"
+                />
+              )}
+            </button>
+          );
+        })}
       </nav>
     )}
     </div>

@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
+import { toast as sonnerToast } from 'sonner';
 import { AppShell } from '@/components/layout/AppShell';
+import { SPRING_PILL } from '@/theme/motion';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,6 +48,7 @@ type HomeMode = 'overview' | 'experience' | 'biography';
 
 const Index = () => {
   const navigate = useNavigate();
+  const prefersReducedMotion = useReducedMotion();
   const [activeMode, setActiveMode] = useState<HomeMode>('overview');
 
   const { isAdmin } = useAuth();
@@ -149,16 +153,18 @@ const Index = () => {
 
     setUploadingCv(true);
     try {
-      const newUrl = await uploadDocument(file, 'cv.pdf');
-      setCvUrl(newUrl);
-      toast({ title: 'CV Uploaded successfully' });
+      const uploadPromise = uploadDocument(file, 'cv.pdf').then((newUrl) => {
+        setCvUrl(newUrl);
+        return newUrl;
+      });
+      sonnerToast.promise(uploadPromise, {
+        loading: 'Uploading CV…',
+        success: 'CV uploaded',
+        error: (err: Error) => `Upload failed: ${err.message}`,
+      });
+      await uploadPromise;
     } catch (error) {
       console.error('Error uploading CV:', error);
-      toast({
-        title: 'Upload failed',
-        description: (error as Error).message,
-        variant: 'destructive',
-      });
     } finally {
       setUploadingCv(false);
       if (cvInputRef.current) cvInputRef.current.value = '';
@@ -201,7 +207,7 @@ const Index = () => {
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  className={`home-mode-tab ${active ? 'home-mode-tab--active' : ''}`}
+                  className={`home-mode-tab relative ${active ? 'home-mode-tab--active' : ''}`}
                   onClick={() => {
                     setActiveMode(modeId);
                     if (modeId === 'experience') {
@@ -209,7 +215,15 @@ const Index = () => {
                     }
                   }}
                 >
-                  {label}
+                  {active && (
+                    <motion.span
+                      layoutId="home-mode-pill"
+                      transition={prefersReducedMotion ? { duration: 0 } : SPRING_PILL}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 rounded-full bg-primary/15 ring-1 ring-primary/40"
+                    />
+                  )}
+                  <span className="relative z-10">{label}</span>
                 </button>
               );
             })}

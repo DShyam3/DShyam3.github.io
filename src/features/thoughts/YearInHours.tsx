@@ -1,11 +1,11 @@
 import { useId, useMemo, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SPRING_PILL } from '@/theme/motion';
-import { AlertTriangle, Clock } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Clock } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { cn } from '@/lib/utils';
 import {
@@ -222,6 +222,9 @@ function SliderRow({ label, emoji, hint, display, value, min, max, step, nested,
 const CARD = 'bg-card/50 border border-border/40 rounded-lg hover:border-border/80 transition-colors shadow-none';
 
 export function YearInHours() {
+  const prefersReducedMotion = useReducedMotion();
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const sourcesPanelId = useId();
   const [input, setInput] = useState<YearHoursInput>(DHYAN_YEAR_HOURS_INPUT);
   const [unit, setUnit] = useState<YearTimeUnit>('hours');
   const result = useMemo(() => yearHours(input), [input]);
@@ -346,11 +349,34 @@ export function YearInHours() {
           Sources cover different years and groups; these are starting estimates, not personal targets.
           Adjust them to match your routine.
         </p>
-        <details className="rounded-lg border border-border/40 bg-card/50 p-3">
-          <summary className="cursor-pointer font-medium text-foreground hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
-            Sources and assumptions
-          </summary>
-          <ul className="mt-3 space-y-3 list-disc pl-4 leading-relaxed [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 [&_a]:break-words">
+        <div className="rounded-lg border border-border/40 bg-card/50 p-3">
+          <button
+            type="button"
+            aria-expanded={sourcesOpen}
+            aria-controls={sourcesPanelId}
+            onClick={() => setSourcesOpen((prev) => !prev)}
+            className="flex w-full items-center justify-between gap-2 text-left font-medium text-foreground transition-colors hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <span>Sources and assumptions</span>
+            <ChevronDown
+              aria-hidden="true"
+              className={cn(
+                'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+                sourcesOpen && 'rotate-180',
+              )}
+            />
+          </button>
+          <AnimatePresence initial={false}>
+            {sourcesOpen && (
+              <motion.div
+                id={sourcesPanelId}
+                initial={prefersReducedMotion ? { opacity: 1 } : { height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={prefersReducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+                transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+                className="overflow-hidden"
+              >
+                <ul className="mt-3 space-y-3 list-disc pl-4 leading-relaxed [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 [&_a]:break-words">
             <li>
               <span className="font-semibold text-foreground">Sleep / time in bed:</span>{' '}
               <a href="https://www.dreams.co.uk/sleep-matters-club/the-2026-uk-sleep-survey" target="_blank" rel="noopener noreferrer">Dreams, January 2026</a>{' '}
@@ -408,7 +434,10 @@ export function YearInHours() {
               for a selected year. Dhyan’s preset is the site owner’s own routine.
             </li>
           </ul>
-        </details>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {result.overAllocatedHours > 0 && (

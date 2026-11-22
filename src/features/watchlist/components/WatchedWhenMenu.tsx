@@ -1,12 +1,20 @@
 import { useState, type ReactNode } from 'react';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from '@/components/ui/drawer';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import {
   isCalendarDate,
@@ -42,6 +50,7 @@ export function WatchedWhenMenu({
   size = 'sm',
   label,
 }: WatchedWhenMenuProps) {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [picking, setPicking] = useState(false);
   const [date, setDate] = useState('');
@@ -65,67 +74,111 @@ export function WatchedWhenMenu({
       })
     : null;
 
-  return (
-    <DropdownMenu
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) {
-          setPicking(false);
-          setDate('');
-        }
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
+      setPicking(false);
+      setDate('');
+    }
+  };
+
+  const triggerButton = (
+    <Button
+      type="button"
+      variant={variant}
+      size={size}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={cn('min-h-10 gap-2 text-xs', className)}
+    >
+      {children}
+    </Button>
+  );
+
+  const dateForm = (
+    <form
+      className="space-y-2 p-2"
+      // Keys typed in the date field must not reach the menu's typeahead.
+      onKeyDown={(event) => event.stopPropagation()}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (valid) pick({ mode: 'at', date });
       }}
     >
-      <DropdownMenuTrigger asChild>
+      <label className="block space-y-1 text-xs text-muted-foreground">
+        <span>Date watched</span>
+        <Input
+          type="date"
+          value={date}
+          min={minDate}
+          max={today}
+          onChange={(event) => setDate(event.target.value)}
+          className="min-h-10"
+        />
+      </label>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={!valid} className="min-h-10 flex-1 text-xs">
+          Save
+        </Button>
         <Button
           type="button"
-          variant={variant}
-          size={size}
-          disabled={disabled}
-          aria-label={label}
-          title={label}
-          className={cn('min-h-10 gap-2 text-xs', className)}
+          variant="ghost"
+          size="sm"
+          onClick={() => setPicking(false)}
+          className="min-h-10 text-xs"
         >
-          {children}
+          Back
         </Button>
-      </DropdownMenuTrigger>
+      </div>
+    </form>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={handleOpenChange}>
+        <DrawerTrigger asChild>{triggerButton}</DrawerTrigger>
+        <DrawerContent>
+          <DrawerHeader className="text-left">
+            <DrawerTitle>When did you watch this?</DrawerTitle>
+          </DrawerHeader>
+          <div className="px-4 pb-6">
+            {picking ? (
+              dateForm
+            ) : (
+              <div className="flex flex-col gap-2">
+                <Button type="button" variant="outline" className="justify-start" onClick={() => pick({ mode: 'now' })}>
+                  Just now
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="justify-start"
+                  disabled={!releaseDate || notOutYet}
+                  onClick={() => pick({ mode: 'release' })}
+                >
+                  {releaseText ?? `On release date${releaseLabel ? ` (${releaseLabel}${notOutYet ? ', not out yet' : ''})` : ''}`}
+                </Button>
+                <Button type="button" variant="outline" className="justify-start" onClick={() => pick({ mode: 'unknown' })}>
+                  Date unknown
+                </Button>
+                <Button type="button" variant="outline" className="justify-start" onClick={() => setPicking(true)}>
+                  Pick a date…
+                </Button>
+              </div>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
+      <DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-52">
         {picking ? (
-          <form
-            className="space-y-2 p-2"
-            // Keys typed in the date field must not reach the menu's typeahead.
-            onKeyDown={(event) => event.stopPropagation()}
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (valid) pick({ mode: 'at', date });
-            }}
-          >
-            <label className="block space-y-1 text-xs text-muted-foreground">
-              <span>Date watched</span>
-              <Input
-                type="date"
-                value={date}
-                min={minDate}
-                max={today}
-                onChange={(event) => setDate(event.target.value)}
-                className="min-h-10"
-              />
-            </label>
-            <div className="flex gap-2">
-              <Button type="submit" size="sm" disabled={!valid} className="min-h-10 flex-1 text-xs">
-                Save
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setPicking(false)}
-                className="min-h-10 text-xs"
-              >
-                Back
-              </Button>
-            </div>
-          </form>
+          dateForm
         ) : (
           <>
             <DropdownMenuItem className="min-h-10" onSelect={() => pick({ mode: 'now' })}>

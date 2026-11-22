@@ -13,8 +13,15 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, History, RefreshCw, Timer, X, XCircle } from 'lucide-react';
 import { SyncHistoryIcon } from '@/components/shared/SyncHistoryIcon';
 import { Button } from '@/components/ui/button';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTitle,
+  DrawerTrigger,
+} from '@/components/ui/drawer';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tracker } from '@/components/ui/tracker';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/format-date';
 import { formatCooldownEnd } from '@/hooks/useCooldown';
@@ -60,6 +67,7 @@ const runDetail = (entry: BankSyncHistoryEntry) =>
     : `${entry.connections_synced} bank${entry.connections_synced === 1 ? '' : 's'} · ${entry.transactions_synced} transactions read · ${(entry.duration_ms / 1000).toFixed(1)}s`;
 
 export function BankSyncStatus({ status, isSyncing, syncAvailableAt, onSync, className }: BankSyncStatusProps) {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   // Reset on each open, so "missed" and "next sync" reflect when the popover
   // was looked at rather than when the page loaded.
@@ -87,27 +95,21 @@ export function BankSyncStatus({ status, isSyncing, syncAvailableAt, onSync, cla
   const latestNightly = history.find(entry => entry.trigger === 'scheduled');
   const needsAttention = [latest, latestNightly].some(entry => entry !== undefined && entry.status !== 'success');
 
-  return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn('h-9 border-border/40 rounded-lg text-xs gap-1.5 bg-background/30 hover:bg-background/80 hover:text-foreground font-mono', className)}
-          aria-label={needsAttention ? 'Bank sync status, last run needs attention' : 'Bank sync status'}
-        >
-          <SyncHistoryIcon spinning={isSyncing} className="h-3.5 w-3.5" />
-          <span>{isSyncing ? 'Syncing…' : lastSynced ? `Synced ${formatRelativeTime(lastSynced)}` : 'Not synced'}</span>
-          {needsAttention && <span className="h-2 w-2 rounded-full bg-destructive" />}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        collisionPadding={12}
-        className="flex w-96 max-w-[calc(100vw-24px)] flex-col gap-3 overflow-hidden font-mono"
-        style={{ maxHeight: 'min(520px, var(--radix-popover-content-available-height))' }}
-        aria-label="Bank sync status"
-      >
+  const triggerButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      className={cn('h-9 border-border/40 rounded-lg text-xs gap-1.5 bg-background/30 hover:bg-background/80 hover:text-foreground font-mono', className)}
+      aria-label={needsAttention ? 'Bank sync status, last run needs attention' : 'Bank sync status'}
+    >
+      <SyncHistoryIcon spinning={isSyncing} className="h-3.5 w-3.5" />
+      <span>{isSyncing ? 'Syncing…' : lastSynced ? `Synced ${formatRelativeTime(lastSynced)}` : 'Not synced'}</span>
+      {needsAttention && <span className="h-2 w-2 rounded-full bg-destructive" />}
+    </Button>
+  );
+
+  const panelBody = (
+    <>
         <div className="flex shrink-0 items-center justify-between gap-2">
           <h3 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground flex items-center gap-1.5">
             <History className="h-3.5 w-3.5" /> Bank sync
@@ -246,6 +248,34 @@ export function BankSyncStatus({ status, isSyncing, syncAvailableAt, onSync, cla
           Next nightly sync{' '}
           {nextScheduledSync(now).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
         </p>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={handleOpenChange}>
+        <DrawerTrigger asChild>{triggerButton}</DrawerTrigger>
+        <DrawerContent aria-label="Bank sync status" className="px-4 pb-6 font-mono">
+          <DrawerTitle className="sr-only">Bank sync status</DrawerTitle>
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden pt-2">
+            {panelBody}
+          </div>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
+      <PopoverContent
+        align="end"
+        collisionPadding={12}
+        className="flex w-96 max-w-[calc(100vw-24px)] flex-col gap-3 overflow-hidden font-mono"
+        style={{ maxHeight: 'min(520px, var(--radix-popover-content-available-height))' }}
+        aria-label="Bank sync status"
+      >
+        {panelBody}
       </PopoverContent>
     </Popover>
   );

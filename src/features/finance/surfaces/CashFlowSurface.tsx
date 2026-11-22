@@ -17,7 +17,9 @@ import {
   cashFlowSankey, monthlyCashFlow, summariseCashFlow, type CashFlowTransaction,
 } from '@/lib/finance/cash-flow';
 import { Card } from '@/components/ui/card';
+import { Drawer, DrawerContent } from '@/components/ui/drawer';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { cn } from '@/lib/utils';
 import { ArrowUpRight, Check, ChevronDown, Info, TrendingUp } from 'lucide-react';
@@ -40,6 +42,7 @@ interface CashFlowSurfaceProps {
 }
 
 export default function CashFlowSurface({ breakdownRates, todayDateObj }: CashFlowSurfaceProps) {
+  const isMobile = useIsMobile();
   const { bankAccounts, mockTransactions, recurrings, hasLoaded } = useFinanceData();
 
   /* Confirmed internal transfers are neither income nor spending, so every
@@ -621,9 +624,10 @@ return (
 
     <CashFlowSankey sankey={cfSankey} loading={!hasLoaded} />
 
-    {/* ─── SLIDE-OVER SHEET / DRAWERS FOR VIEW MORE ─── */}
-    <Sheet open={!!cfDrawerOpen} onOpenChange={(open) => !open && setCfDrawerOpen(null)}>
-      <SheetContent side="right" className="bg-card border-l border-border/40 sm:max-w-md w-full p-6 text-foreground overflow-y-auto z-[70] font-mono">
+    {/* ─── SLIDE-OVER SHEET (DESKTOP) / VAUL BOTTOM DRAWER (MOBILE) ─── */}
+    {(() => {
+      const drawerContent = (
+        <>
         
         {/* NET INCOME DRAWER */}
         {cfDrawerOpen === 'net' && (
@@ -814,8 +818,29 @@ return (
           </div>
         )}
 
-      </SheetContent>
-    </Sheet>
+        </>
+      );
+
+      if (isMobile) {
+        return (
+          <Drawer open={!!cfDrawerOpen} onOpenChange={(open) => !open && setCfDrawerOpen(null)}>
+            <DrawerContent className="bg-card text-foreground font-mono z-[70]">
+              <div className="app-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-1">
+                {drawerContent}
+              </div>
+            </DrawerContent>
+          </Drawer>
+        );
+      }
+
+      return (
+        <Sheet open={!!cfDrawerOpen} onOpenChange={(open) => !open && setCfDrawerOpen(null)}>
+          <SheetContent side="right" className="bg-card border-l border-border/40 sm:max-w-md w-full p-6 text-foreground overflow-y-auto z-[70] font-mono">
+            {drawerContent}
+          </SheetContent>
+        </Sheet>
+      );
+    })()}
 
   </div>
 );
