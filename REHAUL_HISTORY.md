@@ -3253,3 +3253,13 @@ Three decisions:
 3. **Film universes in the same change.** One more row, and it also spares visitors that lookup's limit of 6 per 10 minutes at the proxy.
 
 Closure: `f618f259` on `claude/tv-spinoff-links-cache`, not pushed. Migration `20261122195334`, applied to hosted and recorded at its file name's version. Live check was signed out, with the local dev and production builds reading the live backend; the live site's client half waits for the push.
+
+### Discover's whole-history step: Not seen is its own answer, not a third reason — 2026-11-22
+
+Likely seen now reads the whole watch history, not a recent window. Not seen is its own table, `watchlist_not_seen`, not a third reason beside Not interested and Skip. Whether you have seen a title and whether you want it suggested are independent questions. One row per title carrying both would let a later answer to one erase the other.
+
+History is people, not years. Directors and leads of the most-watched films are looked up in TMDB by name. Only names are stored, so the lookup is an exact-name match, and no exact match means no person. Actor tiles use only the top three billed, credited roles, matching how `top_cast` is stored: the reviewer caught an uncredited cameo (Ted, Ryan Reynolds) getting a tile the first time round. An era source was dropped. 70% of watched films are 2005-2019, which the all-time most-voted pool already covers.
+
+Likely seen and YOU MIGHT LIKE open together, so no title shows in one and then moves to the other (the reviewer's bug). People lookups get eight more seconds, then join the end of the list. Once a section is open it stays open for the week, for that sign-in and tab.
+
+Closure: `fc16742f` on main, migration `20261122201711_watchlist_not_seen`. The signed-in owner path is open in `STATE.md`.

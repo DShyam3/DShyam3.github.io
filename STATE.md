@@ -1,51 +1,51 @@
 # State
 
-Updated 2026-11-22. Branch `claude/tv-spinoff-links-cache`, HEAD `f618f259`, rebased on origin/main `7024bd5f`. **Not pushed.** Tree clean at close.
+Updated 2026-11-22. Branch `discover-history`, HEAD `fc16742f` = origin/main (pushed). Tree clean at close.
 
 ## Closed
 
-- Discover and Franchises read Wikidata TV spin-offs and film universes from a nightly cache (`f618f259`). Decisions: `REHAUL_HISTORY.md`, 2026-11-22.
-- Live, owner approved: migration `20261122195334` applied to `yvtiybyuifkiwyrnjebe` (grants anon and authenticated SELECT only); `tmdb-proxy` v26 and `watchlist-cron-sync` v31 deployed by CLI from `f618f259`. Shard 2 run by hand 19:59:47Z: success, 43.5s, stored both rows.
-- Verified on local builds against the live backend, signed out (not the live site): cache answers match a fresh proxy call; cold load reads both rows at about 0.9s with zero Wikidata or collection proxy calls.
-- Live site still runs the pre-cache client until `f618f259` is pushed and Pages deploys.
+- Discover as taste data, step 2: Likely seen reads the whole watch history; Not seen is its own answer (`fc16742f`, pushed to main 2026-11-22, Pages run `45065607302` green). Migration `20261122201711_watchlist_not_seen` applied to hosted the same day: table `watchlist_not_seen`, RLS on (Public Read Access, Admin insert, Admin delete), grants anon SELECT, authenticated SELECT,INSERT,DELETE; 0 rows; no new security advisors. Decisions: `REHAUL_HISTORY.md`, 2026-11-22.
+- Step 1 (`ec6881fa`, migration `20261122192738_watchlist_dismissal_reasons`) live as recorded in `REHAUL_HISTORY.md`, 2026-11-22.
+- Discover and Franchises read Wikidata TV spin-offs and film universes from a nightly cache (`f618f259`, migration `20261122195334`, live; on origin/main since `fc16742f`; `tmdb-proxy` v26, `watchlist-cron-sync` v31; shard 2 by hand 19:59:47Z stored both rows). Decisions: `REHAUL_HISTORY.md`, 2026-11-22.
 
-## Checks (`f618f259`, 2026-11-22)
+## Checks (`fc16742f`, 2026-11-22)
 
 | Check | Result |
 |---|---|
 | `npm run lint` | 0 errors, 0 warnings |
-| `npm run typecheck` | pass |
-| `npm run typecheck:functions` | pass |
-| `npm test` | 125 files, 2,964 pass |
-| `npm run test:functions` | 44 pass |
+| `npm run typecheck` | clean |
+| `npm test` | 126 files, 2,975 pass |
 | `npm run build` | pass |
+| `npm run typecheck:functions` | not re-run at `fc16742f` (pass at `f618f259`) |
+| `npm run test:functions` | not re-run at `fc16742f` (44 pass at `f618f259`) |
 | `npm run ship-check` | not run; last 93/100 (`1a38256c`) |
 
-One earlier vitest run had 2 failures that did not reproduce in four later runs. Not identified; unverified.
+Step 2 migration run twice on a scratch Postgres (owner writes, others refused, anon read, bad media rejected, re-run no-op). From the Wikidata-cache session (`f618f259`): one earlier vitest run had 2 failures that did not reproduce in four later runs; unidentified.
+
+Verified, signed out, on live: Likely seen and YOU MIGHT LIKE both appeared; people tiles showed (e.g. "Constantine — By Francis Lawrence"); `watchlist_not_seen` read returned 200. Not seen removing a tile was checked on a local dev server only. YOU MIGHT LIKE took about 40s to show 4 tiles (paging known titles; Browser pane hidden, which throttles timers).
 
 ## Not verified (carry forward)
 
-- Pushed client on the live site: not browser-checked. The 06:20Z run of 2026-11-23 has not been observed refreshing both rows.
+- Signed-in owner view of steps 1 and 2: Not interested and Skip these writing source; skip-to-Not-interested upgrade; skipped titles in Likely seen; Not seen written to `watchlist_not_seen`. `REHAUL_PLAN.md` "Discover as taste data" item 4.
+- Reviewer (Opus), step 2: all findings fixed but the duplicated hook setup (`useNotSeen` repeats `useDismissedSuggestions`' pattern), left by choice; fixes not re-reviewed. Same for `ec6881fa`: a dismissed title can be "Next up" on a collapsed Franchises card, undimmed.
+- Live cache reads for the Wikidata rows (zero Wikidata proxy calls on a cold load): not confirmed on live.
 - Same-day gap: a show added, hidden or stopped changes the visitor's seed list, so visitors use the proxy until the next nightly run. Not closed (a library_state trigger was suggested).
 - Sibling-franchise query times out on nearly every call: no sibling shows for visitors; about 8s of each proxy spin-off call.
 - Proxy reads only the first 400 of 434 visible shows; 34 never get a spin-off lookup (pre-existing).
-- Signed-in owner view of `ec6881fa` (Not interested and Skip these writing source; skip-to-Not-interested upgrade; Likely seen). `REHAUL_PLAN.md` "Discover as taste data" item 4.
-- Reviewer (Opus) findings for `ec6881fa` addressed, not re-reviewed. A dismissed title can be "Next up" on a collapsed Franchises card, undimmed.
 - Scheduled 06:00-06:20Z sync: `watchlist_collection_parts` `synced_at` advances; the guard keeps a watched or rated episode (unverified until a run deletes something).
 - Not browser-verified on live: custom `franchise` override and year-dedupe; `tv-spinoffs` v2; Franchises film universes and merged cards; Favourites tab and search; Coming soon priority.
 - Launch checklist manual checks open: Check 1 (phone), 5 (PageSpeed), 6 (`umami.disabled`), 10 (private window).
 
 ## Next
 
-1. Owner's OK to push `f618f259` to origin/main.
-2. After Pages deploys: fresh signed-out load on the live site; expect both rows read and no Wikidata proxy calls.
-3. Watch the 06:20Z run on 2026-11-23: both `watchlist_wikidata_cache` rows' `synced_at` advance.
-4. Then `REHAUL_PLAN.md` "Discover as taste data" items 1-3 and the signed-in owner check above.
+1. Signed-in owner check of steps 1 and 2 (list above); then `REHAUL_PLAN.md` "Discover as taste data" items 1-3: taste profile; wildcards; "Seen it" in Discover offers the rating.
+3. Fresh signed-out live load: expect both Wikidata rows read and no Wikidata proxy calls.
+4. Watch the 06:20Z run on 2026-11-23: both `watchlist_wikidata_cache` rows' `synced_at` advance.
 
 ## Still open elsewhere
 
 - Worktree `.claude/worktrees/discover-walk-lane`: uncommitted lane pacer on `69d8ea51`; may be unnecessary now the walk reads the parts cache.
-- Shared checkout `/Users/dhyanshyam/Projects/DShyam3.github.io`: behind origin/main, another session's uncommitted STATE.md, untracked `src/features/dev/`.
+- Shared checkout `/Users/dhyanshyam/Projects/DShyam3.github.io`: behind origin/main, another session's uncommitted STATE.md, untracked `src/features/dev/`. Its `node_modules` (19:26, older `package.json`) lacks `@radix-ui/react-toast`; worktrees symlinking it fail typecheck.
 - `/dev` status board and History rework (`src/pages/Dev.tsx`, `src/features/dev/api-status.ts`): uncommitted, not deployed; `reviewer` not run. Was `git stash@{0}`; re-find before use.
 - YOU MIGHT LIKE stays empty for the owner (all 1,120 suggestions from the first 28 seeds already in library, favourited or dismissed).
 - Discover order on the owner's data (`REHAUL_PLAN.md` item 11): not re-checked since `48bdbdcf`.
