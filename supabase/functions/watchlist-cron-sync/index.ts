@@ -7,6 +7,7 @@ import { corsOriginHeader } from '../_shared/site-origins.ts'
 import { selectAllPages } from '../_shared/select-all-pages.ts'
 import { ratedEpisodes, seasonsToKeep, UNWATCHED_ONLY } from '../_shared/owner-data.ts'
 import { createUsageBatcher } from '../_shared/api-usage.ts'
+import { collectionPartRows, type CollectionPartRow } from '../_shared/collection-parts.ts'
 
 let activeUsage = createUsageBatcher('cron')
 
@@ -1286,11 +1287,13 @@ serve(async (req) => {
       )
     }
 
-    // Collection upcoming pass: check each active film collection once a night
+    // Collection pass: check each active film collection once a night
     // (sharded by collection_id % shard.count) or on a single-movie resync,
     // caching any dated future instalments in watchlist_collection_upcoming so
     // Discover's Coming soon catches newly announced sequels across every
-    // franchise without hammering TMDB from the browser. Best-effort only.
+    // franchise without hammering TMDB from the browser, and every part in
+    // watchlist_collection_parts, which Discover's collection walk reads in
+    // place of one tmdb-proxy call per collection. Best-effort only.
     if (shard || target) {
       const todayIso = new Date().toISOString().slice(0, 10)
       const allActiveCollectionIds = new Set<number>()
@@ -1338,6 +1341,61 @@ serve(async (req) => {
             console.warn(`[Sync ${runLabel}] Collection upcoming orphan prune failed:`, orphanError.message)
           }
         }
+        // A collection whose last visible film was removed, hidden or stopped
+        // leaves the public parts cache too. `movies` is the whole library on
+        // a shard run, so every other collection is still active. Read in
+        // pages (the table outgrows one response) and deleted by the orphans'
+        // ids, which stay few, rather than by every active id.
+        const cachedParts = await selectAllPages<{ collection_id: number; tmdb_id: number }>(
+          (from, to) => supabaseAdmin
+            .from('watchlist_collection_parts')
+            .select('collection_id, tmdb_id', { count: 'exact' })
+            .order('collection_id')
+            .order('tmdb_id')
+            .range(from, to),
+          (row) => `${row.collection_id}:${row.tmdb_id}`,
+        )
+        if (cachedParts.error) {
+          console.warn(`[Sync ${runLabel}] Collection parts pre-read failed:`, cachedParts.error.message)
+        } else {
+          const orphanedPartIds = [...new Set(cachedParts.data.map((row) => row.collection_id))]
+            .filter((id) => !allActiveCollectionIds.has(id))
+          for (let i = 0; i < orphanedPartIds.length; i += 100) {
+            const { error: partsPruneError } = await supabaseAdmin
+              .from('watchlist_collection_parts')
+              .delete()
+              .in('collection_id', orphanedPartIds.slice(i, i + 100))
+            if (partsPruneError) {
+              console.warn(`[Sync ${runLabel}] Collection parts orphan prune failed:`, partsPruneError.message)
+            }
+          }
+        }
+      }
+      // Replaces one collection's cached parts. A collection with none to
+      // keep (gone from TMDB, empty, or not storable exactly; see
+      // collectionPartRows) has its rows removed, so the walk asks TMDB for
+      // it. A failed upsert keeps the previous night's rows, which the walk
+      // stops trusting after a week.
+      let partsCollectionsStored = 0
+      const storeCollectionParts = async (collectionId: number, rows: CollectionPartRow[] | null) => {
+        const clear = supabaseAdmin.from('watchlist_collection_parts').delete().eq('collection_id', collectionId)
+        if (!rows || rows.length === 0) {
+          const { error } = await clear
+          if (error) console.warn(`[Sync ${runLabel}] Collection parts clear failed for ${collectionId}:`, error.message)
+          return
+        }
+        const { error: upsertError } = await supabaseAdmin
+          .from('watchlist_collection_parts')
+          .upsert(rows, { onConflict: 'collection_id,tmdb_id' })
+        if (upsertError) {
+          console.warn(`[Sync ${runLabel}] Collection parts upsert failed for ${collectionId}:`, upsertError.message)
+          return
+        }
+        partsCollectionsStored++
+        // Parts TMDB dropped. Left behind they are still ignored: the walk
+        // reads only a collection's newest rows.
+        const { error: cleanError } = await clear.not('tmdb_id', 'in', `(${rows.map((row) => row.tmdb_id).join(',')})`)
+        if (cleanError) console.warn(`[Sync ${runLabel}] Collection parts cleanup failed for ${collectionId}:`, cleanError.message)
       }
       const collectionQueue = [...collectionsToCheck.entries()]
       let collectionCursor = 0
@@ -1359,9 +1417,11 @@ serve(async (req) => {
                 if (existingCachedCollectionIds.has(collectionId)) {
                   await supabaseAdmin.from('watchlist_collection_upcoming').delete().eq('collection_id', collectionId)
                 }
+                await storeCollectionParts(collectionId, null)
                 continue
               }
               collectionsChecked++
+              await storeCollectionParts(collectionId, collectionPartRows(collectionId, col.parts, new Date().toISOString()))
               const colName = col.name?.trim() || fallbackName
               const syncedAt = new Date().toISOString()
               const futureRows: {
@@ -1438,7 +1498,7 @@ serve(async (req) => {
       )
       if (collectionQueue.length > 0) {
         console.log(
-          `[Sync ${runLabel}] Collection upcoming: checked ${collectionsChecked}/${collectionQueue.length}, future titles saved ${upcomingUpserted}.`,
+          `[Sync ${runLabel}] Collection upcoming: checked ${collectionsChecked}/${collectionQueue.length}, future titles saved ${upcomingUpserted}, parts cached for ${partsCollectionsStored}.`,
         )
       }
     }

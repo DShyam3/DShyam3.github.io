@@ -2971,6 +2971,33 @@ export type Database = {
         }
         Relationships: []
       }
+      watchlist_collection_parts: {
+        Row: {
+          collection_id: number
+          poster_path: string | null
+          release_date: string | null
+          synced_at: string
+          title: string
+          tmdb_id: number
+        }
+        Insert: {
+          collection_id: number
+          poster_path?: string | null
+          release_date?: string | null
+          synced_at?: string
+          title: string
+          tmdb_id: number
+        }
+        Update: {
+          collection_id?: number
+          poster_path?: string | null
+          release_date?: string | null
+          synced_at?: string
+          title?: string
+          tmdb_id?: number
+        }
+        Relationships: []
+      }
       watchlist_collection_upcoming: {
         Row: {
           collection_id: number

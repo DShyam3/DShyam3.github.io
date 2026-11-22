@@ -39,6 +39,7 @@ import {
 } from './franchise';
 import { POSTER_BASE } from './components/franchise/EntryList';
 import { createCallPacer } from './call-pacer';
+import { fetchCachedCollections } from './collection-parts-query';
 import { detailRetry, detailRetryDelay, isNotFound, useTMDB } from './useTMDB';
 import { useDismissedSuggestions } from './useDismissedSuggestions';
 import type { LibraryType } from './library-state';
@@ -392,18 +393,34 @@ export function useDiscovery(type: LibraryType) {
     [libraryCollections, collectionLimit],
   );
 
+  // The nightly parts cache answers most collections in one read, before the
+  // walk starts; a failed read leaves every collection to tmdb-proxy.
+  const cachedCollections = useQuery({
+    queryKey: ['watchlist', 'collection-parts'],
+    enabled: !loading && type !== 'tv' && libraryCollections.length > 0,
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+    queryFn: fetchCachedCollections,
+  });
+  // Read, or failed and not being read again: a failed read retried on a
+  // later visit must not send the walk to tmdb-proxy while it is in flight.
+  const cachedCollectionsRead =
+    cachedCollections.data !== undefined || (cachedCollections.isError && !cachedCollections.isFetching);
+
   // `getCollection` caches under `['watchlist', 'tmdb-collection', id]`;
   // using a distinct outer key avoids React Query's same-key fetchQuery deadlock.
   const collectionQueries = useQueries({
     queries: activeCollectionIds.map((collectionId) => ({
       queryKey: ['watchlist', 'discovery-collection', collectionId] as const,
-      enabled: !loading && type !== 'tv',
+      enabled: !loading && type !== 'tv' && cachedCollectionsRead,
       staleTime: 24 * 60 * 60 * 1000,
       retry: false,
       // A failure is thrown, so it is retried on the next visit instead of
       // cached as empty. A collection TMDB no longer has (removed or merged)
       // is not a failure: it has no parts, so it makes no card.
       queryFn: async (): Promise<TMDBCollection> => {
+        const cached = cachedCollections.data?.get(collectionId);
+        if (cached) return cached;
         try {
           // Paced per network attempt, so a collection cached and still
           // fresh costs nothing and a stale one waits its turn.
