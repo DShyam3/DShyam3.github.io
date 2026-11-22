@@ -3241,3 +3241,15 @@ Liked and didn't like are not a new thumbs signal. They are the existing persona
 Finding that set the order of the next step: of 79 collections in the parts cache on 2026-11-22, 7 released films were missing, and all 7 had been turned down one at a time. Step 1 alone therefore does not fill Have you already watched?; the whole-history step does.
 
 Closure: `ec6881fa` on main, migration `20261122192738_watchlist_dismissal_reasons`. Live check was signed out only; the signed-in owner path is open in `STATE.md`.
+
+### Wikidata lookups read from a nightly cache, keyed by the visitor's seed list — 2026-11-22
+
+Discover's spin-offs and film universes each made a live `tmdb-proxy` call to Wikidata on every visit. A fresh walk waited 17.5s on one spin-off call. Each lookup now has a row in `watchlist_wikidata_cache` (jsonb results, `synced_at`, public read, service-role writes). `watchlist-cron-sync` fills both on the last nightly shard, and the browser reads a row only while it is under 48 hours old. The lookup code is one file, `supabase/functions/_shared/wikidata-lookups.ts`, run by both `tmdb-proxy` and the cron, so the two functions must be deployed together.
+
+Three decisions:
+
+1. **One row per lookup, keyed by the whole seed list, not one row per link.** The proxy's answer depends on the whole list: at most 400 seeds, siblings for only the first 15 franchises, posters for only the first 60 targets, and link order decides group names. A per-link cache cannot reproduce that answer. The browser therefore uses the spin-off row only for exactly the seed list it would have sent (signed-out visitors: TV shows not hidden or stopped, sorted). Any other list, including the signed-in owner's, goes to the proxy as before.
+2. **The cache stores answers without sibling shows.** The sibling-franchise query (`747dd7e5`) hit its 8s timeout on about 15 of 16 live proxy calls, so visitors already received answers without siblings. Storing only complete answers would have left the table empty. The cron does require every TMDB poster and date lookup to have answered before it stores a spin-off answer, and a spin-off row for another seed list is deleted.
+3. **Film universes in the same change.** One more row, and it also spares visitors that lookup's limit of 6 per 10 minutes at the proxy.
+
+Closure: `f618f259` on `claude/tv-spinoff-links-cache`, not pushed. Migration `20261122195334`, applied to hosted and recorded at its file name's version. Live check was signed out, with the local dev and production builds reading the live backend; the live site's client half waits for the push.
