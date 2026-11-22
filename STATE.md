@@ -1,14 +1,14 @@
 # State
 
-Updated 2026-11-22. Branch `main`, one commit ahead of `origin/main` (hidden-figures fix, committed locally, **not pushed**).
+Updated 2026-11-22. Branch `main`, synced with `origin/main`.
 
 ## Closed
 
-- **Hidden figures cover animated heroes**: `useHiddenFigures` marks `number-flow-react` elements whose shadow text reads as £ (on mount and on each `data` attribute change); `index.css` blurs them in the foreground colour. Committed locally, not pushed. Browser-verified on the local stack (Income, Wealth heroes; Show/Hide; in-app surface switch) and after the review fixes, including the `data`-attribute update path.
-- **`/dev` status board & History rework**: Committed `src/pages/Dev.tsx`, `src/features/dev/api-status.ts`, and `api-status.test.ts` (16/16 tests pass), with all `reviewer` (Pro) findings fixed (1,000-row PostgREST pagination, error-state banner & rate-limit guards, 12px Recharts floor, DST-safe sub-day bucketing, deterministic `id` tie-breaking).
-- **Live browser audit fixes**: Fixed `WorkspaceInspector` mobile Vaul close button (`data-vaul-no-drag`), ORB-blocked VS Code icon rewrite in `src/collections/link-icons.ts`, `WatchlistLayout` child `<Suspense>` boundary for clean `Diary` → `Franchises` transitions, wider desktop `WorkspaceRail` (`14.5rem`) so `"08 INSPIRATION"` / `"Search"` never clip, canvas edge clamping on `SemanticConstellation` labels, explicit `appearance-none` / `-webkit-appearance: none` on `NativeSelect`, and `"Southmapton, UK"` → `"Southampton, UK"` in hosted `site_content`.
-- **Hosted DB**: Confirmed `20261120230000_watchlist_last_activity` (through `20261122201711_watchlist_not_seen`) already applied to `yvtiybyuifkiwyrnjebe`.
-- **UI Craft & Floorplan Audit**: Completed Apple SF Symbols 7.3, shared Sovereign Folio dashboard primitives (`chart.tsx`, `metric-tile.tsx`, `bar-list.tsx`, `tracker.tsx`), mobile Vaul drawers, `layoutId` pills, smooth disclosure, dead-code/21-package cleanup, and large-file splits (15 → 10).
+- **Local & hosted DB in sync**: `supabase db reset` replayed all 106 migrations cleanly through `20261122201711_watchlist_not_seen.sql`; verified 0 pending migrations on hosted (`yvtiybyuifkiwyrnjebe`).
+- **Live manual launch checks**: Owner completed real-phone pass (Check 1), mobile PageSpeed Insights (Check 5), `umami.disabled` (Check 6), and signed-in Discover/Finance spot-checks.
+- **Live browser audit fixes (`f84abd5e`, `11b868e4`)**: Fixed `WorkspaceInspector` mobile Vaul close (`data-vaul-no-drag`), ORB-blocked VS Code icon rewrite, `WatchlistLayout` child `<Suspense>` boundary, wider desktop `WorkspaceRail` (`14.5rem`), `SemanticConstellation` label clamping, `NativeSelect` `appearance-none`, and `"Southmapton, UK"` → `"Southampton, UK"` in hosted `site_content`.
+- **`/dev` status board & History rework (`11b868e4`)**: Reviewed by `reviewer` (Pro); all findings fixed; 16/16 unit tests pass.
+- **UI Craft & Floorplan Audit (`ba5b34d2` → `5310b3e9`)**: Apple SF Symbols 7.3, shared Sovereign Folio dashboard primitives (`chart.tsx`, `metric-tile.tsx`, `bar-list.tsx`, `tracker.tsx`), mobile Vaul drawers, `layoutId` pills, smooth disclosure, dead-code/21-package cleanup, and large-file splits (15 → 10).
 
 ## Checks (2026-11-22)
 
@@ -18,12 +18,11 @@ Updated 2026-11-22. Branch `main`, one commit ahead of `origin/main` (hidden-fig
 | `npm run typecheck` & `npm run build` | pass |
 | `npx vitest run` (`api-status`, `link-icons`) | pass (21/21) |
 | `yes \| npx --yes impeccable detect src/` | pass, 0 anti-patterns |
+| `supabase db reset` (local) | pass (all migrations through `20261122201711`) |
 | `graphify update .` & `floorplan` refresh | pass |
-| Hidden-figures fix: lint, typecheck, build, `vitest src/features/finance`, `impeccable detect src/` | lint 0/0, typecheck, build pass; 206 tests; 0 anti-patterns; `data`-attribute path browser-verified; gates `web-design-guidelines`, `mobile-native`, `review-animations`, `animation-performance` **not run** |
-| Live `browser` audit (`https://dshyam3.github.io`) | pass on Home, YearInHours, Travel, News, Diary; mobile drawer close + VS Code icon fixed |
 
-## Still open & manual owner checks
+## Still open
 
-- **Hidden figures, sign still readable**: a negative hero still tints its card (`.gradient-metric-tile[data-tone='negative']`, `src/theme/motion.css:183`) and Home's detail line says spending exceeds the allowance, so direction shows while amounts are hidden. Predates the fix; decide whether hiding the sign should hold.
-- **Manual owner checks**: Real-phone mobile pass (Check 1), mobile PageSpeed Insights CWV (Check 5), `localStorage.setItem('umami.disabled', '1')` in owner browsers (Check 6), signed-in Discover steps 1–2 check, and Wikidata 06:20Z nightly run on 2026-11-23.
-- **Ops**: Local DB drifted (`supabase db reset` restores it); Revolut bank access renewal in TrueLayer; `REHAUL_PLAN.md` items 9 & 10 b–d.
+- Confirm Wikidata nightly cache run at `06:20Z` on `2026-11-23`.
+- Renew Revolut bank consent in TrueLayer when convenient.
+- Optional backlog (`REHAUL_PLAN.md`): `watchlist-cron-sync` open items (10 b–d) and Watchlist design questions (item 9).
