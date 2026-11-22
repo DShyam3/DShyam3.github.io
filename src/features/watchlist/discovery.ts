@@ -151,33 +151,6 @@ export function interleaveFreshBySeed(items: DiscoveryItem[], known: ReadonlySet
 }
 
 /**
- * What to do with this browser's dismissals once the owner's table is
- * reachable. A key leaves the browser copy only when a read of the table
- * has it (`confirmed`), never on a successful write alone: a read already in
- * flight when the write lands finishes after it without the new row, and a
- * key released on the write would then vanish from both copies and the title
- * would come back. Keys already being written are not sent twice; keys that
- * could never be written (malformed) are released.
- */
-export function dismissalHandover(
-  local: ReadonlySet<string>,
-  confirmed: readonly string[] | undefined,
-  sending: ReadonlySet<string>,
-): { release: Set<string>; send: { media: DiscoveryMedia; tmdb_id: number }[] } {
-  const inTable = new Set(confirmed ?? []);
-  const release = new Set<string>();
-  const send: { media: DiscoveryMedia; tmdb_id: number }[] = [];
-  for (const key of local) {
-    if (inTable.has(key)) { release.add(key); continue; }
-    const [media, id] = key.split(':');
-    const tmdbId = Number(id);
-    if ((media !== 'movie' && media !== 'tv') || !Number.isInteger(tmdbId) || tmdbId <= 0) { release.add(key); continue; }
-    if (!sending.has(key)) send.push({ media, tmdb_id: tmdbId });
-  }
-  return { release, send };
-}
-
-/**
  * Orders items by when each key was first seen, oldest first, and records new
  * keys in `seen` as they turn up. A list that fills in as pages load then only
  * grows at its end: nothing already on screen moves.
@@ -202,14 +175,14 @@ export function filmGroupsNeeded(type: LibraryType, target: number, seriesGroups
   return Math.max(target - seriesGroups, Math.ceil(target / 2));
 }
 
-/** Titles never to suggest: in the library, favourited, or dismissed. */
+/** Titles never to suggest: in the library, favourited, or turned down (`hidden`). */
 export function knownDiscoveryKeys(
   watchlist: WatchlistItem[],
   favourites: FavouriteItem[],
-  dismissed: ReadonlySet<string>,
+  hidden: ReadonlySet<string>,
 ): Set<string> {
   return new Set([
-    ...dismissed,
+    ...hidden,
     ...watchlist.filter((item) => item.tmdb_id).map((item) => discoveryKey(mediaOf(item), item.tmdb_id!)),
     ...favourites.filter((item) => item.tmdb_id).map((item) => discoveryKey(item.media_type, item.tmdb_id!)),
   ]);
@@ -220,10 +193,10 @@ export function curateDiscovery(
   items: DiscoveryItem[],
   watchlist: WatchlistItem[],
   favourites: FavouriteItem[],
-  dismissed: ReadonlySet<string>,
+  hidden: ReadonlySet<string>,
   excludedKeys?: ReadonlySet<string>,
 ): DiscoveryItem[] {
-  const seen = knownDiscoveryKeys(watchlist, favourites, dismissed);
+  const seen = knownDiscoveryKeys(watchlist, favourites, hidden);
   for (const key of excludedKeys ?? []) seen.add(key);
   return items.filter((item) => {
     const key = discoveryKey(item.media, item.id);

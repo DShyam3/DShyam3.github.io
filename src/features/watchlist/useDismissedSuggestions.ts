@@ -3,29 +3,56 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import { useAuth } from '@/contexts/AuthContext';
-import { discoveryKey, dismissalHandover, type DiscoveryMedia } from './discovery';
+import { discoveryKey, type DiscoveryMedia } from './discovery';
+import {
+  answersHandover,
+  hiddenFromSuggestionKeys,
+  isDismissReason,
+  isDismissSource,
+  mergeAnswers,
+  notInterestedKeys,
+  parseStoredAnswers,
+  type DismissalAnswer,
+  type DismissReason,
+  type DismissSource,
+} from './discovery-answers';
 
-const DISMISSED_KEY = 'watchlist-discovery-dismissed-v1';
+const ANSWERS_KEY = 'watchlist-discovery-answers-v2';
+/** Bare keys, all Not interested; read once and folded into the list above. */
+const LEGACY_DISMISSED_KEY = 'watchlist-discovery-dismissed-v1';
 const DISMISSED_QUERY_KEY = ['watchlist', 'dismissed-suggestions'] as const;
 
-function readDismissed(): Set<string> {
-  try { const saved: unknown = JSON.parse(localStorage.getItem(DISMISSED_KEY) || '[]'); return new Set(Array.isArray(saved) ? saved.filter((key): key is string => typeof key === 'string') : []); } catch { return new Set(); }
+const readJson = (key: string): unknown => {
+  try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
+};
+function writeAnswers(answers: ReadonlyMap<string, DismissalAnswer>) {
+  try {
+    if (answers.size > 0) localStorage.setItem(ANSWERS_KEY, JSON.stringify([...answers]));
+    else localStorage.removeItem(ANSWERS_KEY);
+  } catch { /* Still works for this visit. */ }
+  // On its own: if the write above fails, the old list must still go, or
+  // every load would read its keys again as new answers.
+  try { localStorage.removeItem(LEGACY_DISMISSED_KEY); } catch { /* Nothing more to do. */ }
 }
-function writeDismissed(keys: Set<string>) {
-  try { localStorage.setItem(DISMISSED_KEY, JSON.stringify([...keys])); } catch { /* Still works for this visit. */ }
+function readAnswers(): Map<string, DismissalAnswer> {
+  const legacy = readJson(LEGACY_DISMISSED_KEY);
+  const answers = parseStoredAnswers(readJson(ANSWERS_KEY), legacy, new Date().toISOString());
+  if (legacy !== null) writeAnswers(answers);
+  return answers;
 }
 
 /**
- * Titles marked "Not interested", as `media:tmdbId` keys: this browser's copy
- * plus, once it is reachable, the owner's table shared across devices.
+ * Titles turned down in Discover, as `media:tmdbId` keys with why and where:
+ * this browser's copy plus, once it is reachable, the owner's table shared
+ * across devices. See `DismissReason` for what each answer hides.
  */
 export function useDismissedSuggestions() {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
-  const [localDismissed, setLocalDismissed] = useState(readDismissed);
+  const [localAnswers, setLocalAnswers] = useState(readAnswers);
 
-  // The owner's dismissals, shared across devices. Before the table exists
-  // (migration not applied) the read fails and the browser copy carries on.
+  // The owner's answers, shared across devices. If the read fails the
+  // browser copy carries on.
   const remote = useQuery({
     queryKey: DISMISSED_QUERY_KEY,
     staleTime: 5 * 60 * 1000,
@@ -34,74 +61,92 @@ export function useDismissedSuggestions() {
       // Paged: dismissals only grow, and the Data API stops at 1,000 rows.
       const { data, error } = await selectAllPages((from, to) => supabase
         .from('watchlist_dismissed_suggestions')
-        .select('id, media, tmdb_id', { count: 'exact' })
+        .select('id, media, tmdb_id, reason, source, answered_at', { count: 'exact' })
         .order('id', { ascending: true })
         .range(from, to), (row) => String(row.id));
       if (error) throw new Error(error.message);
-      return data.map((row) => discoveryKey(row.media as DiscoveryMedia, row.tmdb_id));
+      // A plain array, not a Map: TanStack Query keeps an unchanged result's
+      // identity only for plain data, and the handover effect below re-runs
+      // whenever the result's identity changes.
+      return data.map((row): [string, DismissalAnswer] => [discoveryKey(row.media as DiscoveryMedia, row.tmdb_id), {
+        reason: isDismissReason(row.reason) ? row.reason : 'not_interested',
+        source: isDismissSource(row.source) ? row.source : 'unknown',
+        answeredAt: row.answered_at,
+      }]);
     },
   });
   const ownerSynced = isAdmin && remote.isSuccess;
-  const dismissed = useMemo(() => new Set([...localDismissed, ...(remote.data ?? [])]), [localDismissed, remote.data]);
+  const remoteAnswers = useMemo(() => (remote.data ? new Map(remote.data) : undefined), [remote.data]);
+  // Where both copies have a title, the stronger answer wins (see `outranks`).
+  const answers = useMemo(() => mergeAnswers(remoteAnswers ?? new Map(), localAnswers), [remoteAnswers, localAnswers]);
+  const notInterested = useMemo(() => notInterestedKeys(answers), [answers]);
+  const hiddenFromSuggestions = useMemo(() => hiddenFromSuggestionKeys(answers, Date.now()), [answers]);
 
-  // Once the owner's table is reachable, this browser's own dismissals move
+  // Once the owner's table is reachable, this browser's own answers move
   // into it, so a reset on one device clears them on every device.
-  // A key stays in the browser copy, and so stays hidden, until a read of the
-  // table has it; see `dismissalHandover` for why a write alone is not enough.
-  const remoteKeys = remote.data;
+  // An answer stays in the browser copy, and so keeps hiding its title,
+  // until a read of the table has it; see `answersHandover`.
   const sendingRef = useRef(new Set<string>());
   useEffect(() => {
-    if (!ownerSynced || localDismissed.size === 0) return;
-    const { release, send } = dismissalHandover(localDismissed, remoteKeys, sendingRef.current);
+    if (!ownerSynced || localAnswers.size === 0) return;
+    const { release, send } = answersHandover(localAnswers, remoteAnswers, sendingRef.current);
     if (release.size > 0) {
-      setLocalDismissed((prev) => {
-        const next = new Set([...prev].filter((key) => !release.has(key)));
-        if (next.size > 0) writeDismissed(next);
-        else { try { localStorage.removeItem(DISMISSED_KEY); } catch { /* Still works for this visit. */ } }
+      setLocalAnswers((prev) => {
+        // Only an answer unchanged since this pass looked: one given since
+        // is not what the table confirmed.
+        const next = new Map([...prev].filter(([key, answer]) => !(release.has(key) && answer === localAnswers.get(key))));
+        writeAnswers(next);
         return next;
       });
     }
     if (send.length === 0) return;
     const keys = send.map((row) => discoveryKey(row.media, row.tmdb_id));
     for (const key of keys) sendingRef.current.add(key);
-    void supabase.from('watchlist_dismissed_suggestions').upsert(send, { onConflict: 'media,tmdb_id', ignoreDuplicates: true })
+    // The table's trigger keeps whichever answer outranks the other: a skip
+    // given again restarts its 90 days, and Not interested outranks a skip.
+    void supabase.from('watchlist_dismissed_suggestions').upsert(send, { onConflict: 'media,tmdb_id' })
       .then(({ error }) => {
         for (const key of keys) sendingRef.current.delete(key);
         // Re-read, cancelling any read that started before this write; the
         // next pass releases what the fresh read confirms. On an error the
-        // keys stay in the browser and go on the next visit.
+        // answers stay in the browser and go on the next visit.
         if (!error) void queryClient.invalidateQueries({ queryKey: DISMISSED_QUERY_KEY });
       });
-  }, [ownerSynced, localDismissed, remoteKeys, queryClient]);
+  }, [ownerSynced, localAnswers, remoteAnswers, queryClient]);
 
   // Kept in the browser first, so it holds even if the table write fails;
   // the effect above moves it into the table for the owner.
-  const dismissMany = (items: ReadonlyArray<{ media: DiscoveryMedia; id: number }>) => {
+  const dismissMany = (
+    items: ReadonlyArray<{ media: DiscoveryMedia; id: number }>,
+    reason: DismissReason,
+    source: DismissSource,
+  ) => {
     if (items.length === 0) return;
-    setLocalDismissed((prev) => {
-      const next = new Set(prev);
-      for (const item of items) next.add(discoveryKey(item.media, item.id));
-      writeDismissed(next);
+    const answeredAt = new Date().toISOString();
+    setLocalAnswers((prev) => {
+      const next = new Map(prev);
+      for (const item of items) next.set(discoveryKey(item.media, item.id), { reason, source, answeredAt });
+      writeAnswers(next);
       return next;
     });
   };
-  // Visitors can only reset their own browser's dismissals; the owner's
-  // table is theirs alone to clear.
+  // Visitors can only reset their own browser's answers; the owner's table
+  // is theirs alone to clear.
   const resetDismissed = async () => {
-    setLocalDismissed(new Set());
-    try { localStorage.removeItem(DISMISSED_KEY); } catch { /* Still works for this visit. */ }
+    setLocalAnswers(new Map());
+    writeAnswers(new Map());
     if (ownerSynced) {
       await supabase.from('watchlist_dismissed_suggestions').delete().gt('id', 0);
       await queryClient.invalidateQueries({ queryKey: DISMISSED_QUERY_KEY });
     }
   };
-  const resettable = localDismissed.size + (ownerSynced ? remote.data?.length ?? 0 : 0);
+  const resettable = localAnswers.size + (ownerSynced ? remoteAnswers?.size ?? 0 : 0);
 
-  return { dismissed, dismissMany, resetDismissed, resettable, ownerSynced };
+  return { notInterested, hiddenFromSuggestions, dismissMany, resetDismissed, resettable, ownerSynced };
 }
 
 /**
- * The dismissed keys, for lists that mark a "Not interested" title rather
+ * The titles marked Not interested, for lists that mark such a title rather
  * than drop it. Empty unless a page provides it.
  */
 export const DismissedContext = createContext<ReadonlySet<string>>(new Set());

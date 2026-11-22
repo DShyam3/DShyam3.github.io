@@ -65,7 +65,7 @@ export default function WatchlistFranchises() {
   const { getCollection, getTvSpinoffs, getFilmUniverses } = useTMDB();
   const { addToLibrary, isAdding } = useAddToLibrary();
   // Discover's "Not interested" marks: dimmed here rather than dropped.
-  const { dismissed } = useDismissedSuggestions();
+  const { notInterested } = useDismissedSuggestions();
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -385,7 +385,7 @@ export default function WatchlistFranchises() {
 
   return (
     <AppShell title="Watchlist" subtitle="Franchises" toolbar={<WatchlistNav current="franchises" />}>
-    <DismissedContext.Provider value={dismissed}>
+    <DismissedContext.Provider value={notInterested}>
     <div className="space-y-6 pb-8">
       <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/40 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -40,6 +40,7 @@ import {
 import { POSTER_BASE } from './components/franchise/EntryList';
 import { createCallPacer } from './call-pacer';
 import { fetchCachedCollections } from './collection-parts-query';
+import type { DismissSource } from './discovery-answers';
 import { detailRetry, detailRetryDelay, isNotFound, useTMDB } from './useTMDB';
 import { useDismissedSuggestions } from './useDismissedSuggestions';
 import type { LibraryType } from './library-state';
@@ -204,7 +205,7 @@ export function useDiscovery(type: LibraryType) {
   const { watchlist, favourites, loading, ratingsStatus } = useWatchlist();
   const { getCollection, getTvSpinoffs, getFilmUniverses } = useTMDB();
   const { isAdmin } = useAuth();
-  const { dismissed, dismissMany, resetDismissed, resettable, ownerSynced } = useDismissedSuggestions();
+  const { notInterested, hiddenFromSuggestions, dismissMany, resetDismissed, resettable, ownerSynced } = useDismissedSuggestions();
   const [collectionLimit, setCollectionLimit] = useState(COLLECTIONS_PER_BATCH);
   const [franchiseTarget, setFranchiseTarget] = useState(FRANCHISES_PER_STEP);
   const today = new Date();
@@ -289,7 +290,10 @@ export function useDiscovery(type: LibraryType) {
   // Known titles leave before each seed is capped at four (see
   // `interleaveFreshBySeed`). Dismissing a tile lets that seed's next title
   // in at the end of its turns.
-  const knownKeys = useMemo(() => knownDiscoveryKeys(watchlist, favourites, dismissed), [watchlist, favourites, dismissed]);
+  const knownKeys = useMemo(
+    () => knownDiscoveryKeys(watchlist, favourites, hiddenFromSuggestions),
+    [watchlist, favourites, hiddenFromSuggestions],
+  );
   const recommendationItems = useMemo(() => {
     const fresh = (items: DiscoveryItem[]) => interleaveFreshBySeed(items, knownKeys);
     const moviePages = movieRecommendations.data?.pages ?? [];
@@ -305,6 +309,17 @@ export function useDiscovery(type: LibraryType) {
     }
     return interleaved;
   }, [type, movieRecommendations.data, tvRecommendations.data, knownKeys]);
+  // The same pages for Likely seen, with skipped titles kept in: it asks
+  // whether you have seen a title, which a skip in YOU MIGHT LIKE does not
+  // answer. Capped per seed as above, so only the filter differs.
+  const likelySeenKnownKeys = useMemo(
+    () => knownDiscoveryKeys(watchlist, favourites, notInterested),
+    [watchlist, favourites, notInterested],
+  );
+  const likelySeenRecommendationItems = useMemo(() => [
+    ...(type === 'tv' ? [] : movieRecommendations.data?.pages ?? []),
+    ...(type === 'movie' ? [] : tvRecommendations.data?.pages ?? []),
+  ].flatMap((page) => interleaveFreshBySeed(page.items, likelySeenKnownKeys)), [type, movieRecommendations.data, tvRecommendations.data, likelySeenKnownKeys]);
 
   const upcomingItems = useMemo(() => {
     const pages = upcoming.data?.pages ?? [];
@@ -503,7 +518,7 @@ export function useDiscovery(type: LibraryType) {
   const filterDismissedEntries = (entries: OrderEntryInput[]) =>
     entries.filter((entry) => {
       const inLibrary = entry.mediaType === 'movie' ? lookup.movies.has(entry.tmdbId) : lookup.shows.has(entry.tmdbId);
-      return inLibrary || !dismissed.has(entry.key);
+      return inLibrary || !notInterested.has(entry.key);
     });
 
   // A franchise is two or more titles, and it shows once one of them is in
@@ -573,8 +588,8 @@ export function useDiscovery(type: LibraryType) {
       }
     }
     return orderByLastTouched(groups);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `dismissed` is read through filterDismissedEntries.
-  }, [type, libraryCollections, expandedCollectionsData, filmUniverseSummaries, tvFranchiseSummaries, lookup, dismissed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `notInterested` is read through filterDismissedEntries.
+  }, [type, libraryCollections, expandedCollectionsData, filmUniverseSummaries, tvFranchiseSummaries, lookup, notInterested]);
 
   const franchiseEntryKeys = useMemo(
     () => new Set(franchiseGroups.flatMap((g) => g.view.entries.map((e) => e.key))),
@@ -595,10 +610,10 @@ export function useDiscovery(type: LibraryType) {
   const likelySeenOrder = useRef(new Map<string, number>());
   const likelySeen = useMemo(() => {
     const curated = curateDiscovery(
-      [...likelySeenConsensus(recommendationItems, today), ...likelySeenPoolItems],
+      [...likelySeenConsensus(likelySeenRecommendationItems, today), ...likelySeenPoolItems],
       watchlist,
       favourites,
-      dismissed,
+      notInterested,
       franchiseEntryKeys,
     );
     // Sorted by the remembered order always; new titles are only remembered
@@ -607,14 +622,16 @@ export function useDiscovery(type: LibraryType) {
     const ordered = keepFirstSeenOrder(curated, (item) => discoveryKey(item.media, item.id), order);
     return ordered.slice(0, TARGET_LIKELY_SEEN);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
-  }, [recommendationsSettled, recommendationItems, likelySeenPoolItems, watchlist, favourites, dismissed, franchiseEntryKeys, week]);
+  }, [recommendationsSettled, likelySeenRecommendationItems, likelySeenPoolItems, watchlist, favourites, notInterested, franchiseEntryKeys, week]);
 
   const alreadyWatchedKeys = useMemo(
     () => new Set([...franchiseEntryKeys, ...likelySeen.map((item) => discoveryKey(item.media, item.id))]),
     [franchiseEntryKeys, likelySeen],
   );
 
-  const dismiss = (media: DiscoveryMedia, id: number) => dismissMany([{ media, id }]);
+  const dismiss = (media: DiscoveryMedia, id: number, source: DismissSource) => dismissMany([{ media, id }], 'not_interested', source);
+  // "Skip these" under YOU MIGHT LIKE: no to this page, for now.
+  const skipMany = (items: ReadonlyArray<{ media: DiscoveryMedia; id: number }>) => dismissMany(items, 'skip', 'you_might_like');
 
   const activeQueries = useMemo(
     () => (type === 'movie'
@@ -712,15 +729,15 @@ export function useDiscovery(type: LibraryType) {
   const recommendations = useMemo(
     () =>
       keepFirstSeenOrder(
-        curateDiscovery(recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys),
+        curateDiscovery(recommendationItems, watchlist, favourites, hiddenFromSuggestions, alreadyWatchedKeys),
         (item) => discoveryKey(item.media, item.id),
         recommendationsOrderByType.current[type],
       ),
-    [recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys, type],
+    [recommendationItems, watchlist, favourites, hiddenFromSuggestions, alreadyWatchedKeys, type],
   );
   const upcomingCurated = useMemo(
-    () => curateDiscovery([...upcomingFranchiseItems, ...upcomingItems], watchlist, favourites, dismissed),
-    [upcomingFranchiseItems, upcomingItems, watchlist, favourites, dismissed],
+    () => curateDiscovery([...upcomingFranchiseItems, ...upcomingItems], watchlist, favourites, hiddenFromSuggestions),
+    [upcomingFranchiseItems, upcomingItems, watchlist, favourites, hiddenFromSuggestions],
   );
 
   // The walk stops when the latest batch failed whole, even after waiting out
@@ -859,7 +876,7 @@ export function useDiscovery(type: LibraryType) {
       }
     },
     dismiss,
-    dismissMany,
+    skipMany,
     resetDismissed,
     dismissedCount: resettable,
     synced: ownerSynced,

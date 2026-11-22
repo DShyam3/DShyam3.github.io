@@ -17,6 +17,7 @@ import type { TMDBResult } from '../useTMDB';
 import { newItemFromDetails } from '../new-item';
 import { findExistingTitle } from '../existing-title';
 import { discoveryDate, discoveryKey, type DiscoveryItem, type DiscoveryMedia } from '../discovery';
+import { SKIP_DAYS } from '../discovery-answers';
 import { useDiscovery, type DiscoveryFranchiseGroup } from '../useDiscovery';
 import { discoveryAddPayload } from '../discovery-add';
 import type { OrderEntryView } from '../franchise';
@@ -430,7 +431,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {!discovery.upcomingLoading && !discovery.upcomingLoadingMore && !discovery.upcomingFailed && comingSoon.length === 0 && (
           <p className="text-sm text-muted-foreground">Nothing new among the most popular releases of the next six months.</p>
         )}
-        {comingSoon.length > 0 && <TileGrid items={comingSoon} onDismiss={discovery.dismiss} />}
+        {comingSoon.length > 0 && <TileGrid items={comingSoon} onDismiss={(media, id) => discovery.dismiss(media, id, 'coming_soon')} />}
       </section>
 
       <section className="space-y-4 min-w-0" aria-labelledby="discover-already-watched">
@@ -472,7 +473,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
                 onOpen={openEntry}
                 onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
                 onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
-                onDismiss={(entry) => discovery.dismiss(entry.mediaType, entry.tmdbId)}
+                onDismiss={(entry) => discovery.dismiss(entry.mediaType, entry.tmdbId, 'franchise')}
                 isAdding={isAdding}
               />
             ))}
@@ -491,7 +492,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
               <h3 className="text-sm font-medium">Likely seen</h3>
               <p className="text-xs text-muted-foreground">Recommended across titles you have watched, or widely watched on TMDB.</p>
             </div>
-            <TileGrid items={discovery.likelySeen} onDismiss={discovery.dismiss} />
+            <TileGrid items={discovery.likelySeen} onDismiss={(media, id) => discovery.dismiss(media, id, 'likely_seen')} />
           </div>
         )}
       </section>
@@ -512,7 +513,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           </div>
         )}
         {discovery.partlyFailed && <p role="status" className="text-sm text-muted-foreground">A few suggestions couldn’t load; Show more keeps looking.</p>}
-        {discovery.recommendations.length > 0 && <TileGrid items={discovery.recommendations} onDismiss={discovery.dismiss} />}
+        {discovery.recommendations.length > 0 && <TileGrid items={discovery.recommendations} onDismiss={(media, id) => discovery.dismiss(media, id, 'you_might_like')} />}
         {!discovery.loading && !discovery.loadingMore && discovery.recommendations.length === 0 && !discovery.failed && (
           <p className="text-sm text-muted-foreground">
             {discovery.hasMore
@@ -527,12 +528,12 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
                 variant="ghost"
                 disabled={discovery.loadingMore}
                 onClick={() => {
-                  discovery.dismissMany(discovery.recommendations);
+                  discovery.skipMany(discovery.recommendations);
                   if (discovery.hasMore && !discovery.loadingMore) discovery.loadMore();
                 }}
               >
                 <X className="h-4 w-4" />
-                None of these
+                Skip these
               </Button>
             )}
             {discovery.hasMore && (
@@ -545,7 +546,9 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
       </section>
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        <span>Suggestions from TMDB. “Not interested” {discovery.synced ? 'is saved across your devices' : 'is remembered on this browser'}.</span>
+        <span>
+          Suggestions from TMDB. “Not interested” hides a title across Discover; “Skip these” hides a page of suggestions for {SKIP_DAYS} days, but not from “Have you already watched?” Both are {discovery.synced ? 'saved across your devices' : 'remembered on this browser'}.
+        </span>
         {discovery.dismissedCount > 0 && <Button variant="ghost" onClick={() => { void discovery.resetDismissed(); }}>Reset dismissed suggestions</Button>}
       </div>
 
@@ -570,7 +573,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           }}
           onAddToLibrary={isAdmin ? (entry) => addToLibrary(entry) : undefined}
           onSeenIt={isAdmin ? (entry, when) => addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
-          onDismiss={(entry) => discovery.dismiss(entry.mediaType, entry.tmdbId)}
+          onDismiss={(entry) => discovery.dismiss(entry.mediaType, entry.tmdbId, 'franchise')}
           adding={isAdding(previewEntry.key)}
         />
       )}

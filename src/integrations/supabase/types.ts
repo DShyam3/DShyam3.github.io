@@ -3030,21 +3030,30 @@ export type Database = {
       }
       watchlist_dismissed_suggestions: {
         Row: {
+          answered_at: string
           created_at: string
           id: number
           media: string
+          reason: string
+          source: string
           tmdb_id: number
         }
         Insert: {
+          answered_at?: string
           created_at?: string
           id?: never
           media: string
+          reason?: string
+          source?: string
           tmdb_id: number
         }
         Update: {
+          answered_at?: string
           created_at?: string
           id?: never
           media?: string
+          reason?: string
+          source?: string
           tmdb_id?: number
         }
         Relationships: []

@@ -350,6 +350,54 @@ Open after the News and Library redesign, 2026-11-17. Its three migrations are a
    `selectUpNextRail` in `watchlist-utils.ts`. Delete them, keep
    `persistWatchedProgress`, and decide whether the view itself goes too.
 
+### Discover as taste data — what is left
+
+The owner's aim, 2026-11-22: Discover's answers become a record of what they
+like, what they don't, and what they watched before tracking began, so
+suggestions improve and older watches get logged. Step 1 (each answer stores
+why and where: `reason`, `source`, `answered_at` on
+`watchlist_dismissed_suggestions`, migration `20261122192738` applied to
+hosted 2026-11-22) is shipped; the rest is below, in this order, because each
+step reads the one before.
+
+Decided, with reasons:
+- **Skip is not a dislike.** "Skip these" (formerly "None of these") says no to
+  a page of suggestions, not to having seen them, so it hides a title from the
+  suggestion lists for 90 days and never from HAVE YOU ALREADY WATCHED?. Only
+  the per-title Not interested hides a title across Discover, and no later
+  skip undoes it: the client's merge and a trigger on the table both keep the
+  stronger answer, so a stale device cannot weaken one. The 1,679 answers
+  made before the split were guessed from timestamps: one shared by several
+  rows came from one statement, a bulk button or a browser handover, so it is
+  a skip, except the earliest group (44 rows, the first handover when the
+  table went live), which holds per-title clicks. A wrong skip is the costlier
+  guess: the title comes back on franchise cards and in Likely seen.
+- **Liked / didn't like is the personal rating** (0.5–10, `watchlist_ratings`),
+  not a second signal. The library already asks "Watched — rate it?" and seeds
+  already read ratings (8 and up lead, under 6 never seed). A thumbs control
+  beside it would split one answer into two. On 2026-11-22 there were no
+  ratings at all, so the profile in step 3 must work without them.
+- **Every score stays rules over rows**, per Part 1: the profile is weights
+  computed from stored answers and covered by tests; no model ranks.
+
+1. **HAVE YOU ALREADY WATCHED? from the whole history.** Franchise gaps alone
+   leave it nearly empty: of 79 collections cached on 2026-11-22, 7 released
+   films were missing and all 7 were turned down one at a time. Add sources
+   beyond franchises and the Likely seen pool: popular titles from the years
+   the owner watches most, films from directors and leads already watched.
+   Answers are quick: Seen it (logs the watch, offers the rating) or Not seen,
+   which hides nothing and leaves the title eligible for YOU MIGHT LIKE.
+2. **Taste profile.** Weights over genres, decades, original language and
+   people, from favourites, ratings, watched, watchlist, skips and Not
+   interested, in that order of strength (skips weakest and negative). It
+   orders YOU MIGHT LIKE. Genre ids are already stored on `movies`,
+   `tv_shows` and `favourites`; people are not.
+3. **Wildcards.** A few places per page of YOU MIGHT LIKE for well-rated titles
+   outside the owner's usual genres, labelled as such; answers feed step 2.
+4. **Browser check of step 1** on the signed-in owner's data: Not interested
+   and Skip these written with their source, a skip upgraded to Not interested,
+   and skipped titles reappearing in Likely seen. Not run.
+
 ### Watchlist Diary, Franchises, import and public ratings — what is left
 
 Built in the tree on `claude/eloquent-johnson-xdjc53`; not merged to

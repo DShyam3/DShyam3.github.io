@@ -1328,29 +1328,38 @@ COMMENT ON COLUMN "public"."movies"."collection_id" IS
 
 -- TMDB titles the owner marked "Not interested" on Watchlist News discovery,
 -- kept in the database so the dismissal follows the owner across devices.
--- Insert and delete only: a dismissal is made or undone, never edited.
+-- An answer is made, changed (a skip upgraded to "Not interested", or a skip
+-- given again) or undone.
 CREATE TABLE IF NOT EXISTS "public"."watchlist_dismissed_suggestions" (
     "id" bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "media" "text" NOT NULL,
     "tmdb_id" integer NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "reason" "text" DEFAULT 'not_interested' NOT NULL,
+    "source" "text" DEFAULT 'unknown' NOT NULL,
+    "answered_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "watchlist_dismissed_suggestions_media_check" CHECK (("media" = ANY (ARRAY['movie'::"text", 'tv'::"text"]))),
     CONSTRAINT "watchlist_dismissed_suggestions_tmdb_id_check" CHECK (("tmdb_id" > 0)),
+    CONSTRAINT "watchlist_dismissed_suggestions_reason_check" CHECK (("reason" = ANY (ARRAY['not_interested'::"text", 'skip'::"text"]))),
+    CONSTRAINT "watchlist_dismissed_suggestions_source_check" CHECK (("source" = ANY (ARRAY['coming_soon'::"text", 'you_might_like'::"text", 'likely_seen'::"text", 'franchise'::"text", 'unknown'::"text"]))),
     CONSTRAINT "watchlist_dismissed_suggestions_media_tmdb_id_key" UNIQUE ("media", "tmdb_id")
 );
 
 ALTER TABLE "public"."watchlist_dismissed_suggestions" OWNER TO "postgres";
 
 COMMENT ON TABLE "public"."watchlist_dismissed_suggestions" IS
-    'TMDB titles the owner marked "Not interested" on Watchlist News discovery. Identity is media + tmdb_id because TMDB film and show ids can collide. Public read so the public page hides the same suggestions; writes are admin only.';
+    'TMDB titles the owner marked "Not interested" on Watchlist News discovery. Identity is media + tmdb_id because TMDB film and show ids can collide. Public read so the public page hides the same suggestions; writes are admin only. reason: not_interested hides the title everywhere, skip (bulk "Skip these", formerly "None of these") hides it from suggestion lists for 90 days, a window the client applies. source: where the answer was given, unknown for rows from before it was recorded. answered_at: when the current answer was given; unlike created_at it moves when the answer changes.';
 
 ALTER TABLE "public"."watchlist_dismissed_suggestions" ENABLE ROW LEVEL SECURITY;
 
 -- Public read, like the rest of the watchlist: a TMDB id and a media type,
--- nothing private. No UPDATE policy -- rows are inserted or deleted.
+-- nothing private. Writes are admin only: insert, update (an upsert changing the
+-- answer) and delete.
 CREATE POLICY "Public Read Access" ON "public"."watchlist_dismissed_suggestions" FOR SELECT TO "anon", "authenticated" USING (true);
 
 CREATE POLICY "Admin insert" ON "public"."watchlist_dismissed_suggestions" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
+
+CREATE POLICY "Admin update" ON "public"."watchlist_dismissed_suggestions" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 CREATE POLICY "Admin delete" ON "public"."watchlist_dismissed_suggestions" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
@@ -1362,9 +1371,42 @@ REVOKE ALL ON TABLE "public"."watchlist_dismissed_suggestions" FROM PUBLIC, "ano
 
 GRANT SELECT ON TABLE "public"."watchlist_dismissed_suggestions" TO "anon";
 
-GRANT SELECT, INSERT, DELETE ON TABLE "public"."watchlist_dismissed_suggestions" TO "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."watchlist_dismissed_suggestions" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."watchlist_dismissed_suggestions" TO "service_role";
+
+-- An upsert can never weaken an answer. Two devices can upsert out of order, so
+-- a stale device must not overwrite a newer or stronger answer. The client
+-- already merges this way; the table agrees so the rule holds for any writer.
+-- Rank: not_interested outranks skip. The row keeps its current answer when the
+-- incoming reason ranks lower, or ranks equal and is older. Equal rank and
+-- equal time takes the incoming row.
+CREATE OR REPLACE FUNCTION "public"."watchlist_dismissed_suggestions_keep_stronger"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SECURITY INVOKER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  old_rank integer := CASE OLD.reason WHEN 'not_interested' THEN 2 ELSE 1 END;
+  new_rank integer := CASE NEW.reason WHEN 'not_interested' THEN 2 ELSE 1 END;
+BEGIN
+  IF new_rank < old_rank OR (new_rank = old_rank AND NEW.answered_at < OLD.answered_at) THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION "public"."watchlist_dismissed_suggestions_keep_stronger"() OWNER TO "postgres";
+
+-- Trigger-only: nothing calls it directly, so no role needs EXECUTE.
+REVOKE EXECUTE ON FUNCTION "public"."watchlist_dismissed_suggestions_keep_stronger"() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION "public"."watchlist_dismissed_suggestions_keep_stronger"() FROM "anon";
+REVOKE EXECUTE ON FUNCTION "public"."watchlist_dismissed_suggestions_keep_stronger"() FROM "authenticated";
+
+DROP TRIGGER IF EXISTS "tr_watchlist_dismissed_suggestions_keep_stronger" ON "public"."watchlist_dismissed_suggestions";
+
+CREATE TRIGGER "tr_watchlist_dismissed_suggestions_keep_stronger" BEFORE UPDATE ON "public"."watchlist_dismissed_suggestions" FOR EACH ROW EXECUTE FUNCTION "public"."watchlist_dismissed_suggestions_keep_stronger"();
 
 -- The owner's personal scores. Publicly readable since 2026-11-18 (the owner's
 -- choice, reversing the earlier owner-only read); written only by the admin.
