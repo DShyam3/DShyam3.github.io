@@ -382,12 +382,13 @@ under 2026-11-18.
 7. **Favourites as a flag** and the other open items under "Watchlist News and
    Library" above still stand.
 10. **Cron sync, what is still open.** The episode upsert and season-delete fixes
-    (`261065c4`, `f99bbc8a`) are live in `watchlist-cron-sync` v27 (2026-11-21).
-    The watched-or-rated guard on every season and episode delete is committed
-    locally as `1f63bea1`: not pushed, not deployed. The owner approved the fix and
-    its trade-off (a kept episode still counts in progress totals; a watched
-    duplicate Season 0 stays). Open: (a) deploy `watchlist-cron-sync` from
-    `1f63bea1` and push it; both need the owner's OK. (b) The season delete is not
+    (`261065c4`, `f99bbc8a`) and the watched-or-rated guard on every season and
+    episode delete (`837670f8`) are live in `watchlist-cron-sync` v28 (2026-11-22,
+    deployed from this branch; on main after the push). The owner approved the
+    guard and its trade-off (a kept episode still counts in progress totals; a
+    watched duplicate Season 0 stays). Not yet seen run by a scheduled sync. The
+    deploy workflow's new `npm run test:functions` step has not yet been seen to
+    run in CI. Open: (b) The season delete is not
     atomic: an episode watched or rated in the round trip between the read and the
     delete can still cascade away, and so can a rating added between
     `ratedEpisodes` and an episode delete. Closing it needs a SQL function, so a
@@ -395,9 +396,8 @@ under 2026-11-18.
     `supabase/functions/_shared/owner-data.ts` are unit-tested
     (`owner-data.test.ts`, run by `npm run test:functions`); the function is not.
 11. **Browser check of Discover order** on the signed-in owner's data: not run.
-    A visitor attempt on 2026-11-21 stalled at 18 of 218 collections with no cards
-    (all 66 `tmdb-proxy` calls 200, no 429s, no progress for over a minute). The
-    walk needs looking at before the order can be checked. Not diagnosed.
+    The walk stall ("18 of 218") was fixed in `48bdbdcf`. The order check on the
+    owner's data has not been re-run.
 
 ### Deferred by choice
 
