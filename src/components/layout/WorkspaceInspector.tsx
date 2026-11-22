@@ -42,6 +42,7 @@ function DockedDetailBody({ detail, onClose }: DockedDetailBodyProps) {
         </p>
         <button
           type="button"
+          data-vaul-no-drag=""
           onClick={onClose}
           aria-label="Clear selection"
           className="t-press inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/60 text-muted-foreground hover:text-foreground transition-colors"

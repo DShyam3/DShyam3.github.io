@@ -28,6 +28,11 @@ const APPLE_HOSTS = new Set([
   'testflight.apple.com',
 ]);
 
+/** Hosts whose direct asset URLs send Cross-Origin-Resource-Policy: same-origin (ERR_BLOCKED_BY_ORB). */
+const ORB_BLOCKED_ICON_HOSTS = new Set([
+  'code.visualstudio.com',
+]);
+
 export function parseLinkUrl(value: string): URL | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -68,6 +73,9 @@ export function resolveLinkIcon(icon: string | null | undefined, url: string): s
   if (trimmedIcon) {
     try {
       const iconUrl = new URL(trimmedIcon);
+      if (ORB_BLOCKED_ICON_HOSTS.has(iconUrl.hostname.toLowerCase())) {
+        return buildHighDpiFaviconUrl(iconUrl.hostname);
+      }
       if (
         iconUrl.hostname === 'www.google.com' &&
         iconUrl.pathname.startsWith('/s2/favicons')
