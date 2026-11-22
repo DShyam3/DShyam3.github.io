@@ -16,18 +16,18 @@ import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from 
 
 const CREDIT_TIER_COLORS: Record<CreditTier, string> = {
   1: 'hsl(var(--destructive))',
-  2: 'hsl(38 92% 50%)',
-  3: 'hsl(84 81% 44%)',
-  4: 'hsl(160 84% 39%)',
-  5: 'hsl(var(--positive))',
+  2: 'hsl(var(--chart-4))',
+  3: 'hsl(var(--chart-3))',
+  4: 'hsl(var(--positive))',
+  5: 'hsl(var(--chart-2))',
 };
 
 const CREDIT_TIER_CLASSES: Record<CreditTier, string> = {
-  1: 'text-rose-500 dark:text-rose-400',
-  2: 'text-amber-500 dark:text-amber-400',
-  3: 'text-lime-500 dark:text-lime-400',
-  4: 'text-emerald-500 dark:text-emerald-400',
-  5: 'text-teal-500 dark:text-teal-400',
+  1: 'text-destructive',
+  2: 'text-[hsl(var(--chart-4))]',
+  3: 'text-[hsl(var(--chart-3))]',
+  4: 'text-positive',
+  5: 'text-[hsl(var(--chart-2))]',
 };
 
 export default function CreditReportsSection() {

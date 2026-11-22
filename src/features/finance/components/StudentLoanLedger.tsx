@@ -57,7 +57,7 @@ export function StudentLoanLedger({
   ].filter(Boolean) : [];
 
   return (
-    <section aria-label="Repaid and interest" className="surface-card space-y-4 rounded-3xl border p-5 sm:p-6">
+    <section aria-label="Repaid and interest" className="surface-card space-y-4 border p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <h3 className="text-lg font-semibold">Repaid and interest</h3>

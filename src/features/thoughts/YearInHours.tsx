@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { SPRING_PILL } from '@/theme/motion';
 import { AlertTriangle, Clock } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { cn } from '@/lib/utils';
@@ -108,6 +111,12 @@ const amount = (value: number) => {
   return value.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 };
 
+const amountFormat = (value: number) => {
+  if (value > 0 && value < 1) return { maximumSignificantDigits: 2 } as const;
+  const digits = value === 0 || value >= 100 ? 0 : 1;
+  return { minimumFractionDigits: digits, maximumFractionDigits: digits } as const;
+};
+
 const percent = (share: number) => `${(share * 100).toFixed(1)}%`;
 
 interface PillGroupProps<T extends string> {
@@ -119,6 +128,9 @@ interface PillGroupProps<T extends string> {
 }
 
 function PillGroup<T extends string>({ label, options, isSelected, onSelect, className }: PillGroupProps<T>) {
+  const pillId = useId();
+  const prefersReducedMotion = useReducedMotion();
+
   return (
     <div
       role="group"
@@ -137,13 +149,28 @@ function PillGroup<T extends string>({ label, options, isSelected, onSelect, cla
             aria-pressed={selected}
             onClick={() => onSelect(option.value)}
             className={cn(
-              'px-2.5 py-1 rounded text-xs font-mono font-medium whitespace-nowrap transition-colors border',
+              't-press relative isolate px-2.5 py-1 rounded text-xs font-mono font-medium whitespace-nowrap transition-colors border',
               selected
-                ? 'bg-primary/20 text-primary border-primary/40 font-semibold shadow-xs'
+                ? 'text-primary border-transparent font-semibold'
                 : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
-            {option.label}
+            {selected ? (
+              prefersReducedMotion ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-0 -z-10 rounded bg-primary/20 border border-primary/40 shadow-xs"
+                />
+              ) : (
+                <motion.span
+                  layoutId={`${pillId}-pill`}
+                  transition={SPRING_PILL}
+                  aria-hidden="true"
+                  className="absolute inset-0 -z-10 rounded bg-primary/20 border border-primary/40 shadow-xs"
+                />
+              )
+            ) : null}
+            <span className="relative z-10">{option.label}</span>
           </button>
         );
       })}
@@ -714,7 +741,10 @@ export function YearInHours() {
                       centreFigure.length > 7 ? 'text-lg' : 'text-2xl',
                     )}
                   >
-                    {centreFigure}
+                    <AnimatedNumber
+                      value={hoursIn(result.totalHours, unit)}
+                      format={amountFormat(hoursIn(result.totalHours, unit))}
+                    />
                   </span>
                   <span className="text-xs text-muted-foreground font-mono font-semibold">
                     {unit} {result.overAllocatedHours > 0 ? 'entered' : 'in a year'}
@@ -724,16 +754,19 @@ export function YearInHours() {
 
               {/* Top Highlights */}
               <div className="flex-1 w-full grid grid-cols-2 gap-3">
-                {tiles.map((tile) => (
-                  <div key={tile.label} className="bg-card/40 border border-border/40 rounded-lg p-3.5 text-center space-y-1">
-                    <span className="text-xs font-mono text-muted-foreground block">{tile.label}</span>
-                    <span className="font-mono text-xl font-bold tracking-tight text-foreground block tabular-nums">
-                      {amount(hoursIn(tile.hours, unit))}{' '}
-                      <span className="text-sm font-semibold text-muted-foreground">{unit}</span>
-                    </span>
-                    <span className="text-xs font-mono text-muted-foreground tabular-nums">{tile.caption}</span>
-                  </div>
-                ))}
+                {tiles.map((tile) => {
+                  const tileValue = hoursIn(tile.hours, unit);
+                  return (
+                    <div key={tile.label} className="bg-card/40 border border-border/40 rounded-lg p-3.5 text-center space-y-1">
+                      <span className="text-xs font-mono text-muted-foreground block">{tile.label}</span>
+                      <span className="font-mono text-xl font-bold tracking-tight text-foreground block tabular-nums">
+                        <AnimatedNumber value={tileValue} format={amountFormat(tileValue)} />{' '}
+                        <span className="text-sm font-semibold text-muted-foreground">{unit}</span>
+                      </span>
+                      <span className="text-xs font-mono text-muted-foreground tabular-nums">{tile.caption}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -753,7 +786,7 @@ export function YearInHours() {
                       <TooltipTrigger asChild>
                         <div
                           style={{ width: `${(slice.hoursPerYear / result.totalHours) * 100}%`, backgroundColor: slice.color }}
-                          className="h-full rounded-full transition-all hover:opacity-80 cursor-pointer"
+                          className="h-full rounded-full transition-[width,opacity] duration-200 ease-out hover:opacity-80 cursor-pointer"
                         />
                       </TooltipTrigger>
                       <TooltipContent className="bg-popover text-popover-foreground border border-border/40 rounded-lg p-2.5 shadow-md font-mono text-xs max-w-56">

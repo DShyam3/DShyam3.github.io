@@ -1,15 +1,17 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { ArrowUpRight, X } from 'lucide-react';
 import {
   useWorkspaceInspector,
   type DockedInspectorDetail,
   type InspectorMetadataRow,
   type WorkspaceInspectorTarget,
 } from '@/contexts/WorkspaceInspectorContext';
-import { DialogOverlay } from '@/components/ui/dialog';
-import { ignoreOverlayPointerDown } from '@/components/ui/dismiss-on-release';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTitle,
+} from '@/components/ui/drawer';
+import { SFArrowUpRight, SFXmark } from '@/components/ui/sf-symbols';
 import { cn } from '@/lib/utils';
 import { useReturnFocus } from './useReturnFocus';
 
@@ -42,9 +44,9 @@ function DockedDetailBody({ detail, onClose }: DockedDetailBodyProps) {
           type="button"
           onClick={onClose}
           aria-label="Clear selection"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
+          className="t-press inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
         >
-          <X className="h-4 w-4" aria-hidden="true" />
+          <SFXmark className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
 
@@ -81,9 +83,9 @@ function InspectorBody({ target, onNavigate, onClose }: InspectorBodyProps) {
                 type="button"
                 onClick={onClose}
                 aria-label="Close inspector"
-                className="-mt-1 -mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
+                className="t-press -mt-1 -mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
               >
-                <X className="h-4 w-4" aria-hidden="true" />
+                <SFXmark className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             ) : null}
           </div>
@@ -130,12 +132,12 @@ function InspectorBody({ target, onNavigate, onClose }: InspectorBodyProps) {
                 to={target.primaryAction.to}
                 onClick={onNavigate}
                 className={cn(
-                  'inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary/40 bg-primary/15 px-3 py-2 text-xs font-medium text-foreground hover:bg-primary/25 transition-colors text-center',
+                  't-press inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary/40 bg-primary/15 px-3 py-2 text-xs font-medium text-foreground hover:bg-primary/25 transition-colors text-center',
                   !target.secondaryAction?.to && 'col-span-2',
                 )}
               >
                 <span className="truncate">{target.primaryAction.label}</span>
-                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                <SFArrowUpRight className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
               </Link>
             ) : null}
             {target.secondaryAction?.to ? (
@@ -143,7 +145,7 @@ function InspectorBody({ target, onNavigate, onClose }: InspectorBodyProps) {
                 to={target.secondaryAction.to}
                 onClick={onNavigate}
                 className={cn(
-                  'inline-flex items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-border transition-colors text-center',
+                  't-press inline-flex items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-border transition-colors text-center',
                   !target.primaryAction?.to && 'col-span-2',
                 )}
               >
@@ -187,8 +189,6 @@ export function WorkspaceInspector() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [hasSelection, commandOpen, dockedDetail, resetTarget, dismissDockedDetail]);
 
-  if (!hasSelection) return null;
-
   const handleCloseSheet = () => {
     if (dockedDetail) {
       dismissDockedDetail();
@@ -203,52 +203,53 @@ export function WorkspaceInspector() {
   // card's detail sideways.
   return (
     <>
-      <aside
-        aria-label="Contextual inspector"
-        className="workspace-right-inspector flex-col justify-between rounded-2xl border border-border/60 bg-popover/75 p-4 app-scroll overflow-y-auto overflow-x-hidden hud-corners min-h-0"
-      >
-        {/* One copy of the selection at a time: while the sheet shows it, the
-            column (hidden then) renders nothing, so resizing across the
-            breakpoint never brings back a second copy with its own state. */}
-        {inspectorSheetOpen ? null : dockedDetail ? (
-          <DockedDetailBody detail={dockedDetail} onClose={dismissDockedDetail} />
-        ) : target ? (
-          <InspectorBody target={target} onClose={resetTarget} />
-        ) : null}
-      </aside>
+      {hasSelection ? (
+        <aside
+          aria-label="Contextual inspector"
+          className="workspace-right-inspector flex-col justify-between rounded-2xl border border-border/60 bg-popover/75 p-4 app-scroll overflow-y-auto overflow-x-hidden hud-corners min-h-0"
+        >
+          {/* One copy of the selection at a time: while the sheet shows it, the
+              column (hidden then) renders nothing, so resizing across the
+              breakpoint never brings back a second copy with its own state. */}
+          {inspectorSheetOpen ? null : dockedDetail ? (
+            <DockedDetailBody detail={dockedDetail} onClose={dismissDockedDetail} />
+          ) : target ? (
+            <InspectorBody target={target} onClose={resetTarget} />
+          ) : null}
+        </aside>
+      ) : null}
 
-      {/* Below the width that gives the inspector a column it is a modal
-          sheet. Radix traps focus in it and closes it on Escape; focus then
-          returns to the card that opened it. `!fixed` because `.hud-corners`
-          sets `position: relative` later in the same layer. */}
-      <DialogPrimitive.Root
+      {/* Below the width that gives the inspector a column it is a swipeable
+          Vaul bottom drawer. Kept mounted across open -> close so Vaul's
+          usePositionFixed restores document.body scroll cleanly on iOS Safari. */}
+      <Drawer
         open={inspectorSheetOpen}
+        autoFocus
         onOpenChange={(open) => {
           if (!open) handleCloseSheet();
         }}
       >
-        <DialogPrimitive.Portal>
-          <DialogOverlay className="bg-background/75" />
-          <DialogPrimitive.Content
-            aria-describedby={undefined}
-            // Opened by a resize, focus may have been in the column that just
-            // hid and fallen to the body; the selection's opener stands in.
-            onOpenAutoFocus={() => returnFocus.remember(selectionOpener)}
-            onCloseAutoFocus={returnFocus.restore}
-            onPointerDownOutside={ignoreOverlayPointerDown()}
-            className="!fixed inset-x-3 bottom-3 z-50 mx-auto flex max-h-[85dvh] max-w-md flex-col justify-between rounded-2xl border border-border/75 bg-popover/95 p-4 shadow-xl app-scroll overflow-y-auto overflow-x-hidden hud-corners focus:outline-none sm:inset-x-4 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2"
-          >
-            <DialogPrimitive.Title className="sr-only">
-              {dockedDetail?.title ?? target?.title ?? 'Inspector'}
-            </DialogPrimitive.Title>
+        <DrawerContent
+          aria-describedby={undefined}
+          overlayClassName="bg-background/75"
+          // Opened by a resize, focus may have been in the column that just
+          // hid and fallen to the body; the selection's opener stands in.
+          onOpenAutoFocus={() => returnFocus.remember(selectionOpener)}
+          onCloseAutoFocus={returnFocus.restore}
+          className="inset-x-2 bottom-0 z-50 mx-auto max-h-[86dvh] max-w-lg rounded-t-2xl border border-border/75 bg-popover/95 shadow-2xl focus:outline-none sm:inset-x-4"
+        >
+          <DrawerTitle className="sr-only">
+            {dockedDetail?.title ?? target?.title ?? 'Inspector'}
+          </DrawerTitle>
+          <div className="app-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pt-2 flex flex-col justify-between">
             {dockedDetail ? (
               <DockedDetailBody detail={dockedDetail} onClose={dismissDockedDetail} />
             ) : target ? (
               <InspectorBody target={target} onNavigate={resetTarget} onClose={resetTarget} />
             ) : null}
-          </DialogPrimitive.Content>
-        </DialogPrimitive.Portal>
-      </DialogPrimitive.Root>
+          </div>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 }

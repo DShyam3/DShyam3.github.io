@@ -9,7 +9,7 @@
  * `unplaced`, `overdue` and `payModelled` say what was left out, so the caller
  * can show it instead of presenting a partial figure as a complete one.
  */
-import type { BankAccount, FinanceSettings, MockTransaction, RecurringBill } from '@/features/finance/finance-types';
+import type { BankAccount, FinanceSettings, MockTransaction, RecurringBill } from './types';
 import { scheduleBills, type BillOccurrence } from './bill-schedule';
 import { epochDay, isoOfEpochDay } from './dates';
 import { paydaysBetween, paydaysPerYear, type PaydayOptions } from './payday';

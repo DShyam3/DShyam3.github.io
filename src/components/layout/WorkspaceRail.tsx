@@ -1,10 +1,17 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, Columns3, Monitor, Terminal, Type } from 'lucide-react';
 import { useSiteNavLinks } from './navLinks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 import { useDisplayMode } from '@/contexts/DisplayModeContext';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { AppIcon, getSectionIcon } from '@/components/ui/icon';
+import {
+  SFAppleTerminalFill,
+  SFDisplay,
+  SFRectangleSplit3x1,
+  SFTextformatSize,
+  SFWaveformPathEcg,
+} from '@/components/ui/sf-symbols';
 import { cn } from '@/lib/utils';
 
 export function WorkspaceRail() {
@@ -30,6 +37,7 @@ export function WorkspaceRail() {
               location.pathname === link.to ||
               (link.to !== '/' && location.pathname.startsWith(`${link.to}/`));
             const numberBadge = String(index + 1).padStart(2, '0');
+            const SectionIcon = getSectionIcon(link.to);
 
             return (
               <Link
@@ -38,13 +46,23 @@ export function WorkspaceRail() {
                 data-section={link.to.slice(1) || 'about'}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'group flex items-center justify-between gap-2 rounded-xl border border-transparent px-2.5 py-2 text-xs transition-colors',
+                  't-press group flex items-center justify-between gap-2 rounded-xl border border-transparent px-2.5 py-2 text-xs transition-colors',
                   active
                     ? 'bg-primary/10 border-primary/35 text-foreground font-medium'
                     : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
                 )}
               >
-                <span className="flex items-center gap-2.5 min-w-0">
+                <span className="flex items-center gap-2 min-w-0">
+                  <AppIcon
+                    icon={SectionIcon}
+                    active={active}
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      active
+                        ? 'text-primary'
+                        : 'text-[hsl(var(--section-colour))] opacity-80 group-hover:opacity-100',
+                    )}
+                  />
                   <DotMatrixText
                     text={numberBadge}
                     size="ui"
@@ -86,7 +104,7 @@ export function WorkspaceRail() {
             )}
           >
             <span className="flex items-center gap-1.5 min-w-0 truncate">
-              <Activity className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
+              <AppIcon icon={SFWaveformPathEcg} className="h-3.5 w-3.5 text-primary shrink-0" />
               <DotMatrixText text="Dev" size="ui" wrap={false} />
             </span>
             {devActive ? (
@@ -108,7 +126,7 @@ export function WorkspaceRail() {
           )}
         >
           <span className="flex items-center gap-1.5 min-w-0 truncate">
-            <Type className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
+            <AppIcon icon={SFTextformatSize} className="h-3.5 w-3.5 text-primary shrink-0" />
             <span className="truncate">
               <DotMatrixText
                 text={largerDisplay ? 'Text: Large' : 'Text: Std'}
@@ -134,8 +152,8 @@ export function WorkspaceRail() {
         >
           <span className="flex items-center gap-1.5 min-w-0 truncate">
             {wideMode === 'centered'
-              ? <Monitor className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
-              : <Columns3 className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />}
+              ? <AppIcon icon={SFDisplay} className="h-3.5 w-3.5 text-primary shrink-0" />
+              : <AppIcon icon={SFRectangleSplit3x1} className="h-3.5 w-3.5 text-primary shrink-0" />}
             <span className="truncate">
               <DotMatrixText
                 text={wideMode === 'centered' ? 'Wide: Center' : 'Wide: Auto'}
@@ -152,7 +170,7 @@ export function WorkspaceRail() {
           className="w-full flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-background/60 px-2.5 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
         >
           <span className="flex items-center gap-1.5 min-w-0 truncate">
-            <Terminal className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
+            <AppIcon icon={SFAppleTerminalFill} className="h-3.5 w-3.5 text-primary shrink-0" />
             <DotMatrixText text="Search" size="ui" wrap={false} />
           </span>
           <kbd className="rounded border border-border/70 bg-card/80 px-1.5 py-0.5 text-xs font-mono text-muted-foreground">

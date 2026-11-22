@@ -4,7 +4,7 @@
  * upcoming-bills calendar both read this, so they cannot disagree about whether
  * a bill is still to be paid.
  */
-import type { RecurringBill } from '@/features/finance/finance-types';
+import type { RecurringBill } from './types';
 import { epochDay, isoOfEpochDay } from './dates';
 import { isActiveRecurring, recurringCoverage, recurringPeriodDue, shiftPeriodDue } from './recurring-detection';
 

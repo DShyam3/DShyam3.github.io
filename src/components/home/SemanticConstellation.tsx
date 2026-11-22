@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pause, Play, Sparkles, Compass, Cpu, BookOpen, Briefcase, ShieldCheck } from 'lucide-react';
+import {
+  SFBanknoteFill,
+  SFBookFill,
+  SFBriefcaseFill,
+  SFCpuFill,
+  SFPauseFill,
+  SFPlayFill,
+  SFSafariFill,
+  SFSparkles,
+} from '@/components/ui/sf-symbols';
 import type { WorkspaceInspectorTarget } from '@/contexts/WorkspaceInspectorContext';
 
 export type ClusterColorVar = '--primary' | '--sky' | '--peach' | '--lavender';
@@ -565,17 +574,17 @@ export function SemanticConstellation({
     () => (id: string) => {
       switch (id) {
         case 'cluster-home':
-          return Sparkles;
+          return SFSparkles;
         case 'cluster-travel':
-          return Compass;
+          return SFSafariFill;
         case 'cluster-inventory':
-          return Cpu;
+          return SFCpuFill;
         case 'cluster-library':
-          return BookOpen;
+          return SFBookFill;
         case 'cluster-experience':
-          return Briefcase;
+          return SFBriefcaseFill;
         default:
-          return ShieldCheck;
+          return SFBanknoteFill;
       }
     },
     [],
@@ -602,12 +611,12 @@ export function SemanticConstellation({
         >
           {isPaused || reducedMotion ? (
             <>
-              <Play className="h-3 w-3" />
+              <SFPlayFill className="h-3 w-3" />
               <span>Orbit</span>
             </>
           ) : (
             <>
-              <Pause className="h-3 w-3" />
+              <SFPauseFill className="h-3 w-3" />
               <span>Pause</span>
             </>
           )}

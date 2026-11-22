@@ -1,9 +1,19 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useNavigate } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
-import { ArrowUpRight, Compass, Search, Terminal, X } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
+import { useDisplayMode } from '@/contexts/DisplayModeContext';
+import { AppIcon, getSectionIcon } from '@/components/ui/icon';
+import {
+  SFAppleTerminalFill,
+  SFArrowUpRight,
+  SFDisplay,
+  SFMoonStarsFill,
+  SFSunMaxFill,
+  SFXmark,
+} from '@/components/ui/sf-symbols';
 import { collections } from '@/collections/registry';
 import { collectionQuery } from '@/collections/useCollection';
 import {
@@ -12,6 +22,13 @@ import {
   type RecordHit,
 } from '@/collections/record-search';
 import type { CollectionRow } from '@/collections/types';
+import {
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { DialogOverlay } from '@/components/ui/dialog';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { ignoreOverlayPointerDown } from '@/components/ui/dismiss-on-release';
@@ -20,34 +37,29 @@ import { useSiteNavLinks } from './navLinks';
 import { useReturnFocus } from './useReturnFocus';
 
 /**
- * The bar above the footer and the palette it opens: jump to a section, or
- * find a record by its title. It searches rows the site has already read and
- * answers no questions.
+ * The bar above the footer and the ⌘K palette it opens: jump to a section,
+ * find a record by its title, or run a quick display/theme toggle.
  *
- * The palette is a combobox: focus stays in the input, the arrow keys move a
- * highlight through the results, and Enter opens the highlighted one. Radix
- * supplies the modal half -- the focus trap and Escape -- and
- * `useReturnFocus` hands focus back to whatever opened it.
+ * Powered by `cmdk` (`shouldFilter={false}` + `loop`) inside a zero-animation
+ * Radix Dialog (per Emil Kowalski's Raycast principle: 100+/day keyboard
+ * actions never animate open/close).
  */
 export function CommandDock() {
   const { commandOpen, setCommandOpen } = useWorkspaceInspector();
   const links = useSiteNavLinks();
   const navigate = useNavigate();
+  const { resolvedTheme, setTheme } = useTheme();
+  const { largerDisplay, toggleDisplaySize } = useDisplayMode();
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const returnFocus = useReturnFocus();
-  const [query, setQueryState] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  const setQuery = (next: string) => {
-    setQueryState(next);
-    setActiveIndex(0);
-  };
+  const [query, setQuery] = useState('');
+  const [selectedValue, setSelectedValue] = useState('');
 
   useEffect(() => {
     if (!commandOpen) return;
-    setQueryState('');
-    setActiveIndex(0);
+    setQuery('');
+    setSelectedValue('');
   }, [commandOpen]);
 
   useEffect(() => {
@@ -97,6 +109,34 @@ export function CommandDock() {
     );
   }, [links, normalizedQuery]);
 
+  const quickActions = useMemo(() => {
+    const isDark = resolvedTheme !== 'light';
+    const all = [
+      {
+        key: 'action:theme',
+        label: isDark ? 'Switch to Light theme' : 'Switch to Dark theme',
+        hint: 'Theme',
+        keywords: 'theme dark light mode appearance colour color',
+        Icon: isDark ? SFSunMaxFill : SFMoonStarsFill,
+        run: () => setTheme(isDark ? 'light' : 'dark'),
+      },
+      {
+        key: 'action:display',
+        label: largerDisplay ? 'Switch to Standard reading size' : 'Switch to Larger reading size (125%)',
+        hint: largerDisplay ? 'Standard' : 'Larger',
+        keywords: 'display size zoom text font larger standard reading',
+        Icon: SFDisplay,
+        run: () => toggleDisplaySize(),
+      },
+    ];
+    if (!normalizedQuery) return all;
+    return all.filter(
+      (item) =>
+        item.label.toLowerCase().includes(normalizedQuery) ||
+        item.keywords.includes(normalizedQuery),
+    );
+  }, [resolvedTheme, setTheme, largerDisplay, toggleDisplaySize, normalizedQuery]);
+
   const handleSelectRoute = (to: string) => {
     returnFocus.forget();
     setCommandOpen(false);
@@ -109,43 +149,10 @@ export function CommandDock() {
     navigate(hit.path, { state: { revealId: hit.id } });
   };
 
-  // One list for the keyboard: sections first, then records, as drawn.
-  const optionCount = filteredLinks.length + recordHits.length;
-  const active = optionCount > 0 ? Math.min(activeIndex, optionCount - 1) : -1;
-  const optionId = (index: number) => `${listId}-option-${index}`;
-  const activeId = active >= 0 ? optionId(active) : undefined;
-
-  useEffect(() => {
-    if (!commandOpen || !activeId) return;
-    document.getElementById(activeId)?.scrollIntoView?.({ block: 'nearest' });
-  }, [commandOpen, activeId]);
-
-  const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    // Enter and the arrows belong to an input method while it is composing.
-    if (event.nativeEvent.isComposing || optionCount === 0) return;
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setActiveIndex((active + 1) % optionCount);
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setActiveIndex((active - 1 + optionCount) % optionCount);
-    } else if (event.key === 'Enter') {
-      event.preventDefault();
-      if (active < filteredLinks.length) {
-        handleSelectRoute(filteredLinks[active].to);
-      } else {
-        handleSelectRecord(recordHits[active - filteredLinks.length]);
-      }
-    }
+  const handleSelectAction = (run: () => void) => {
+    run();
+    setCommandOpen(false);
   };
-
-  const optionClass = (index: number) =>
-    cn(
-      'group flex items-center justify-between rounded-xl border px-3 py-2 text-left transition-colors',
-      index === active
-        ? 'border-primary/45 bg-secondary/45'
-        : 'border-border/50 bg-background/45',
-    );
 
   return (
     <>
@@ -156,10 +163,10 @@ export function CommandDock() {
           <button
             type="button"
             onClick={() => setCommandOpen(true)}
-            className="flex flex-1 min-w-0 items-center justify-between gap-2 rounded-xl px-2 py-1 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="t-press flex flex-1 min-w-0 items-center justify-between gap-2 rounded-xl px-2 py-1 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <span className="flex items-center gap-2 min-w-0 truncate">
-              <Terminal className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
+              <AppIcon icon={SFAppleTerminalFill} className="h-3.5 w-3.5 text-primary shrink-0" />
               <span className="truncate">
                 <DotMatrixText text="Search sections and records" size="ui" wrap={false} />
               </span>
@@ -173,8 +180,9 @@ export function CommandDock() {
 
       <DialogPrimitive.Root open={commandOpen} onOpenChange={setCommandOpen}>
         <DialogPrimitive.Portal>
-          <DialogOverlay className="bg-background/75" />
+          <DialogOverlay className="bg-background/75 !animate-none" />
           <DialogPrimitive.Content
+            data-command-dock=""
             aria-describedby={undefined}
             onOpenAutoFocus={(event) => {
               returnFocus.remember();
@@ -183,86 +191,73 @@ export function CommandDock() {
             }}
             onCloseAutoFocus={returnFocus.restore}
             onPointerDownOutside={ignoreOverlayPointerDown()}
-            className="!fixed left-1/2 top-3 z-50 flex max-h-[82dvh] w-[calc(100%-1.5rem)] max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border/75 bg-popover/95 shadow-2xl hud-corners focus:outline-none sm:top-6 sm:w-[calc(100%-3rem)] md:top-16"
+            className="!fixed left-1/2 top-3 z-50 flex max-h-[82dvh] w-[calc(100%-1.5rem)] max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border/75 bg-popover/95 shadow-2xl focus:outline-none sm:top-6 sm:w-[calc(100%-3rem)] md:top-16"
           >
             <DialogPrimitive.Title className="sr-only">
               Search sections and records
             </DialogPrimitive.Title>
-            <div className="flex items-center gap-2.5 border-b border-border/50 px-4 py-3">
-              <Search className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
-              <input
+
+            <Command
+              shouldFilter={false}
+              loop
+              value={selectedValue}
+              onValueChange={setSelectedValue}
+              className="bg-transparent"
+            >
+              <CommandInput
                 ref={inputRef}
-                type="text"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={handleInputKeyDown}
+                onValueChange={setQuery}
                 placeholder="Search sections and records"
                 aria-label="Search sections and records"
-                role="combobox"
-                aria-expanded={optionCount > 0}
-                aria-autocomplete="list"
                 aria-controls={listId}
-                aria-activedescendant={activeId}
                 autoComplete="off"
                 spellCheck={false}
-                className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                trailing={
+                  <>
+                    {query ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuery('');
+                          inputRef.current?.focus();
+                        }}
+                        className="t-press rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setCommandOpen(false)}
+                      aria-label="Close search"
+                      className="t-press inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border/60 bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <AppIcon icon={SFXmark} className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                }
               />
-              {query ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuery('');
-                    // The button unmounts with the query; keep the keyboard
-                    // in the input, where the arrow keys are handled.
-                    inputRef.current?.focus();
-                  }}
-                  className="rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Clear
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setCommandOpen(false)}
-                aria-label="Close search"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border/60 bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
 
-            <div
-              id={listId}
-              role="listbox"
-              aria-label="Results"
-              className="app-scroll overflow-y-auto p-4 space-y-4"
-            >
-              <div role="presentation" className="space-y-2">
-                <p id={`${listId}-sections`} className="readout-label">
-                  Sections ({filteredLinks.length})
-                </p>
+              <CommandList id={listId} aria-label="Results">
                 {filteredLinks.length > 0 ? (
-                  <div
-                    role="group"
-                    aria-labelledby={`${listId}-sections`}
-                    className="grid grid-cols-1 sm:grid-cols-2 gap-1.5"
+                  <CommandGroup
+                    heading={<span className="readout-label">Sections ({filteredLinks.length})</span>}
+                    className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-1.5"
                   >
-                    {filteredLinks.map((link, index) => {
+                    {filteredLinks.map((link) => {
                       const badge = String(links.indexOf(link) + 1).padStart(2, '0');
+                      const itemValue = `route:${link.to}`;
+                      const SectionIcon = getSectionIcon(link.to);
                       return (
-                        <button
+                        <CommandItem
                           key={link.to}
-                          id={optionId(index)}
-                          type="button"
-                          role="option"
-                          aria-selected={index === active}
-                          tabIndex={-1}
-                          onPointerMove={() => setActiveIndex(index)}
-                          onClick={() => handleSelectRoute(link.to)}
-                          className={cn(optionClass(index), 'gap-2 text-xs')}
+                          value={itemValue}
+                          onSelect={() => handleSelectRoute(link.to)}
+                          className="gap-2 text-xs"
                         >
                           <span className="flex items-center gap-2 min-w-0">
-                            <Compass className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
+                            <AppIcon icon={SectionIcon} className="h-3.5 w-3.5 text-primary" />
                             <DotMatrixText
                               text={badge}
                               size="ui"
@@ -274,44 +269,41 @@ export function CommandDock() {
                             </span>
                           </span>
                           <span className="font-mono text-xs text-muted-foreground">{link.to}</span>
-                        </button>
+                        </CommandItem>
                       );
                     })}
-                  </div>
+                  </CommandGroup>
                 ) : (
-                  <p className="text-xs text-muted-foreground px-1">No section matches.</p>
+                  <div role="presentation" className="space-y-2">
+                    <p className="readout-label">Sections (0)</p>
+                    <p className="text-xs text-muted-foreground px-1">No section matches.</p>
+                  </div>
                 )}
-              </div>
 
-              {searching ? (
-                <div role="presentation" className="space-y-2">
-                  <p id={`${listId}-records`} className="readout-label">
-                    Records ({recordHits.length})
-                  </p>
-                  {recordsFailed ? (
-                    <p className="text-xs text-destructive px-1">
-                      Could not load some records.
-                    </p>
-                  ) : null}
-                  {recordHits.length > 0 ? (
-                    <div
-                      role="group"
-                      aria-labelledby={`${listId}-records`}
-                      className="grid grid-cols-1 gap-1.5"
+                {searching ? (
+                  recordHits.length > 0 ? (
+                    <CommandGroup
+                      heading={
+                        <span className="block space-y-1">
+                          <span className="readout-label block">Records ({recordHits.length})</span>
+                          {recordsFailed ? (
+                            <span className="block text-xs normal-case tracking-normal text-destructive px-1">
+                              Could not load some records.
+                            </span>
+                          ) : null}
+                        </span>
+                      }
+                      className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 [&_[cmdk-group-items]]:gap-1.5"
                     >
-                      {recordHits.map((hit, hitIndex) => {
-                        const index = filteredLinks.length + hitIndex;
+                      {recordHits.map((hit) => {
+                        const itemValue = `record:${hit.key}`;
+                        const isSelected = selectedValue === itemValue;
                         return (
-                          <button
+                          <CommandItem
                             key={hit.key}
-                            id={optionId(index)}
-                            type="button"
-                            role="option"
-                            aria-selected={index === active}
-                            tabIndex={-1}
-                            onPointerMove={() => setActiveIndex(index)}
-                            onClick={() => handleSelectRecord(hit)}
-                            className={cn(optionClass(index), 'gap-3')}
+                            value={itemValue}
+                            onSelect={() => handleSelectRecord(hit)}
+                            className="gap-3"
                           >
                             <span className="min-w-0">
                               <span className="block truncate text-xs font-medium text-foreground">
@@ -325,30 +317,63 @@ export function CommandDock() {
                             </span>
                             <span className="flex items-center gap-1.5 shrink-0 text-xs text-muted-foreground">
                               <span>{hit.collectionTitle}</span>
-                              <ArrowUpRight
-                                className={cn('h-4 w-4', index === active && 'text-primary')}
-                                aria-hidden="true"
+                              <AppIcon
+                                icon={SFArrowUpRight}
+                                className={cn('h-3.5 w-3.5', isSelected && 'text-primary')}
                               />
                             </span>
-                          </button>
+                          </CommandItem>
                         );
                       })}
-                    </div>
+                    </CommandGroup>
                   ) : (
-                    <p className="text-xs text-muted-foreground px-1">
-                      {recordsLoading ? 'Loading records…' : 'No record matches.'}
-                    </p>
-                  )}
-                </div>
-              ) : null}
-            </div>
+                    <div role="presentation" className="space-y-2">
+                      <p className="readout-label">Records (0)</p>
+                      {recordsFailed ? (
+                        <p className="text-xs text-destructive px-1">
+                          Could not load some records.
+                        </p>
+                      ) : null}
+                      <p className="text-xs text-muted-foreground px-1">
+                        {recordsLoading ? 'Loading records…' : 'No record matches.'}
+                      </p>
+                    </div>
+                  )
+                ) : null}
 
-            <p
-              aria-hidden="true"
-              className="max-md:hidden border-t border-border/50 px-4 py-2 font-mono text-xs text-muted-foreground"
-            >
-              ↑↓ move · ↵ open · esc close
-            </p>
+                {quickActions.length > 0 ? (
+                  <CommandGroup
+                    heading={<span className="readout-label">Quick actions ({quickActions.length})</span>}
+                    className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-1.5"
+                  >
+                    {quickActions.map((action) => {
+                      const Icon = action.Icon;
+                      return (
+                        <CommandItem
+                          key={action.key}
+                          value={action.key}
+                          onSelect={() => handleSelectAction(action.run)}
+                          className="gap-2 text-xs"
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <Icon className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
+                            <span className="truncate text-foreground">{action.label}</span>
+                          </span>
+                          <span className="font-mono text-xs text-muted-foreground">{action.hint}</span>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                ) : null}
+              </CommandList>
+
+              <p
+                aria-hidden="true"
+                className="max-md:hidden border-t border-border/50 px-4 py-2 font-mono text-xs text-muted-foreground"
+              >
+                ↑↓ move · ↵ open · esc close
+              </p>
+            </Command>
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>

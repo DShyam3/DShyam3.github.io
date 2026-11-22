@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { DotMatrixIcon } from '@/components/dot-matrix/DotMatrixIcon';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { AppIcon, getSectionIcon } from '@/components/ui/icon';
+import { SFSquareGrid2x2Fill, SFTextformatSize, SFXmark } from '@/components/ui/sf-symbols';
 import { useDisplayMode } from '@/contexts/DisplayModeContext';
 import { Button } from '@/components/ui/button';
-import { Type } from 'lucide-react';
 import { useSiteNavLinks } from './navLinks';
 import { cn } from '@/lib/utils';
 import { socialIcons } from '@/components/icons/SocialIcons';
@@ -99,7 +99,7 @@ export function NavMenu({ className }: { className?: string }) {
           className,
         )}
       >
-        <DotMatrixIcon icon="menu" size="grid" />
+        <AppIcon icon={open ? SFXmark : SFSquareGrid2x2Fill} className="h-4 w-4 text-primary" />
         {/* Labelled from 700px. Below that the header is one row and has no
             width for the word: the glyph alone is a 44px target between the
             search and theme buttons, and the screen-reader text below still
@@ -153,6 +153,7 @@ export function NavMenu({ className }: { className?: string }) {
         >
           {links.map((link) => {
             const active = location.pathname === link.to || (link.to !== '/' && location.pathname.startsWith(`${link.to}/`));
+            const SectionIcon = getSectionIcon(link.to);
             return (
               <Link
                 key={link.to}
@@ -164,6 +165,14 @@ export function NavMenu({ className }: { className?: string }) {
                   active && 'nav-link-active bg-secondary/60',
                 )}
               >
+                <AppIcon
+                  icon={SectionIcon}
+                  active={active}
+                  className={cn(
+                    'h-3.5 w-3.5',
+                    active ? 'text-[hsl(var(--ribbon-foreground))]' : 'text-[hsl(var(--section-colour))]',
+                  )}
+                />
                 <DotMatrixText
                   text={link.label.toUpperCase()}
                   size="xs"
@@ -175,7 +184,7 @@ export function NavMenu({ className }: { className?: string }) {
         </nav>
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t pt-3">
           <Button variant={largerDisplay ? 'secondary' : 'outline'} onClick={toggleDisplaySize} aria-pressed={largerDisplay}>
-            <Type aria-hidden="true" />
+            <AppIcon icon={SFTextformatSize} className="h-4 w-4" />
             <DotMatrixText
               text={`Display size: ${largerDisplay ? 'Larger' : 'Standard'}`}
               size="ui"

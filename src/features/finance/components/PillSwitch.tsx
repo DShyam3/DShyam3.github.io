@@ -23,7 +23,7 @@ export function PillSwitch<T extends string>({ label, options, value, onChange, 
             aria-pressed={isActive}
             onClick={() => onChange(opt.key)}
             className={cn(
-              'flex-auto px-2.5 py-1 text-xs leading-tight font-mono rounded-md transition-all whitespace-nowrap text-center',
+              'flex-auto px-2.5 py-1 text-xs leading-tight font-mono rounded-md transition-colors whitespace-nowrap text-center',
               isActive
                 ? 'bg-primary text-primary-foreground shadow-sm font-semibold'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'

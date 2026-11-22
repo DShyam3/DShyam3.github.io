@@ -31,6 +31,10 @@ const PLATFORM_LOGOS: Record<string, LogoSpec> = {
   'Apple TV+': { src: '/platform-logos/apple-tv-plus.svg', whiteInDark: true },
   'BBC iPlayer': { src: '/platform-logos/bbc-iplayer.svg' },
   ITVX: { src: '/platform-logos/itvx.png', square: true },
+  NOW: { src: '/platform-logos/now.svg' },
+  'Paramount+': { src: '/platform-logos/paramount-plus.svg' },
+  'Channel 4': { src: '/platform-logos/channel-4.svg', whiteInDark: true, scale: 1.15 },
+  Crunchyroll: { src: '/platform-logos/crunchyroll.svg' },
 };
 
 export const hasPlatformLogo = (platform?: string) =>

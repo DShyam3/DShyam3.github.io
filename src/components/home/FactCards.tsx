@@ -1,7 +1,17 @@
 import { useMemo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, BookOpen, Briefcase, Clapperboard, Compass, Cpu, FolderGit2, Tv, type LucideIcon } from 'lucide-react';
+import {
+  SFArrowRight,
+  SFBookFill,
+  SFBriefcaseFill,
+  SFCpuFill,
+  SFHammerFill,
+  SFMovieclapperFill,
+  SFSafariFill,
+  SFTvFill,
+  type SFSymbolComponent,
+} from '@/components/ui/sf-symbols';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,6 +20,7 @@ import { ABOUT_READ, useSiteContent } from '@/hooks/useSiteContent';
 import { supabaseTableQuery } from '@/hooks/useSupabaseTable';
 import { useExperience } from '@/hooks/useResume';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { FlagStrip } from '@/components/shared/FlagStrip';
 import { collectionQuery } from '@/collections/useCollection';
 import { booksCollection, type BookRow } from '@/collections/books';
@@ -55,7 +66,7 @@ const LOADING = 'Loading…';
 interface Fact {
   id: string;
   kicker: string;
-  icon: LucideIcon;
+  icon: SFSymbolComponent;
   /**
    * A gradient tint, for at most two cards: DESIGN_SYSTEM allows two gradient
    * panels a view, and six read as a screensaver. The rest are plain panels.
@@ -178,8 +189,8 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
     pick: ReturnType<typeof featuredFavourite>,
     items: FavouriteTitle[],
     noun: Noun,
-    icon: LucideIcon,
-    palette: string,
+    icon: SFSymbolComponent,
+    palette: string | undefined,
   ): Fact | null => {
     if (!pick) {
       return favourites.isLoading
@@ -208,14 +219,15 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
     countryListFailed ? null : {
       id: 'travel',
       kicker: 'Travelled to',
-      icon: Compass,
+      icon: SFSafariFill,
       palette: 'sky',
       // The headline matches the Travel page's: every country and territory.
       // The UN count, the one people usually mean by "countries", sits under it.
       value: travel && !countriesLoading
         ? (
           <span className="fact-card-figure">
-            {travel.places}<span className="fact-card-figure-total">/{travel.placesTotal}</span>
+            <AnimatedNumber value={travel.places} />
+            <span className="fact-card-figure-total">/{travel.placesTotal}</span>
             {/* The visible unit sits in the label, after the UN line; a screen
                 reader hears it here, next to the figure it belongs to. */}
             <span className="sr-only"> countries and territories,</span>
@@ -225,7 +237,10 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
       sub: travel && !countriesLoading
         ? (
           <>
-            <span className="fact-card-figure fact-card-figure--small">{travel.countries}<span className="fact-card-figure-total">/{travel.total}</span></span>
+            <span className="fact-card-figure fact-card-figure--small">
+              <AnimatedNumber value={travel.countries} />
+              <span className="fact-card-figure-total">/{travel.total}</span>
+            </span>
             {' '}<span>UN states</span>
           </>
         )
@@ -249,13 +264,13 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
       stacked: true,
       onOpen: () => navigate('/travel'),
     },
-    favouriteFact('movie', film, films, { one: 'film', many: 'films' }, Clapperboard, 'peach'),
-    favouriteFact('tv', show, series, { one: 'series', many: 'series' }, Tv, undefined),
+    favouriteFact('movie', film, films, { one: 'film', many: 'films' }, SFMovieclapperFill, 'peach'),
+    favouriteFact('tv', show, series, { one: 'series', many: 'series' }, SFTvFill, undefined),
     book
       ? {
         id: 'book',
         kicker: book.kicker,
-        icon: BookOpen,
+        icon: SFBookFill,
         value: book.row.title,
         label: book.row.author ? `by ${book.row.author}` : '',
         more: 'See the bookshelf',
@@ -263,26 +278,26 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
         onOpen: () => navigate('/books', { state: { revealId: book.row.id } }),
       }
       : books.isLoading
-        ? { id: 'book', kicker: 'Reading now', icon: BookOpen, value: LOADING, label: '', more: 'See the bookshelf', onOpen: () => navigate('/books') }
+        ? { id: 'book', kicker: 'Reading now', icon: SFBookFill, value: LOADING, label: '', more: 'See the bookshelf', onOpen: () => navigate('/books') }
         : null,
     role
       ? {
         id: 'work',
         kicker: 'Working as',
-        icon: Briefcase,
+        icon: SFBriefcaseFill,
         value: role.title,
         label: [role.company && `at ${role.company}`, role.start_date && `since ${role.start_date}`].filter(Boolean).join(' · '),
         more: 'Experience & CV',
         onOpen: onOpenExperience,
       }
       : experienceLoading
-        ? { id: 'work', kicker: 'Working as', icon: Briefcase, value: LOADING, label: '', more: 'Experience & CV', onOpen: onOpenExperience }
+        ? { id: 'work', kicker: 'Working as', icon: SFBriefcaseFill, value: LOADING, label: '', more: 'Experience & CV', onOpen: onOpenExperience }
         : null,
     project
       ? {
         id: 'project',
         kicker: project.kicker,
-        icon: FolderGit2,
+        icon: SFHammerFill,
         value: project.row.title,
         label: project.row.summary ?? '',
         more: 'See my projects',
@@ -294,7 +309,7 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
       ? {
         id: 'gear',
         kicker: 'Carrying',
-        icon: Cpu,
+        icon: SFCpuFill,
         value: `${inventory.data.length} ${inventory.data.length === 1 ? 'thing' : 'things'}`,
         label: 'Everyday carry, desk and camera gear',
         more: 'See the inventory',
@@ -308,11 +323,11 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
       {facts.filter((fact): fact is Fact => fact !== null).map((fact) => {
         const Icon = fact.icon;
         return (
-          <div key={fact.id} role="listitem" className={`fact-card hud-corners ${fact.palette ? 'ambient-card' : 'surface-card'}`} data-palette={fact.palette}>
-            <button type="button" className="fact-card-open" onClick={fact.onOpen}>
+          <div key={fact.id} role="listitem" className={`fact-card t-hover-lift hud-corners ${fact.palette ? 'ambient-card' : 'surface-card'}`} data-palette={fact.palette}>
+            <button type="button" className="fact-card-open t-press" onClick={fact.onOpen}>
               <span className="fact-card-top">
                 <span className="readout-label">{fact.kicker}</span>
-                <Icon className="h-4 w-4 shrink-0 text-primary/80" aria-hidden="true" />
+                <Icon className="h-[1.1rem] w-[1.1rem] shrink-0 text-primary" aria-hidden="true" />
               </span>
               <span className={`fact-card-body${fact.stacked ? ' fact-card-body--stacked' : ''}`}>
                 {fact.media && <span className="fact-card-media">{fact.media}</span>}
@@ -324,7 +339,7 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
               </span>
               <span className="fact-card-more">
                 {fact.more}
-                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                <SFArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
               </span>
             </button>
             {fact.admin && <div className="fact-card-admin">{fact.admin}</div>}

@@ -5,6 +5,7 @@ import "./theme/fonts";
 import "./index.css";
 import "./theme/surfaces.css";
 import "./theme/responsive.css";
+import "./theme/motion.css";
 
 installFrameGuard();
 

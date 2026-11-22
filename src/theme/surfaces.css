@@ -78,8 +78,7 @@
   border-radius: 0.25rem;
   padding: 0.75rem 0.9rem;
   background: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-left: 3px solid hsl(var(--section-colour));
+  border: 1px solid hsl(var(--section-colour, var(--border)) / 0.45);
 }
 
 .navigation-panel .nav-link::before {
@@ -95,7 +94,6 @@
   background: hsl(var(--ribbon));
   color: hsl(var(--ribbon-foreground));
   border-color: hsl(var(--brass));
-  border-left-color: hsl(var(--section-colour));
   font-weight: 700;
 }
 
@@ -133,8 +131,7 @@
 .surface-card[data-palette] {
   background-color: hsl(var(--popover));
   background-image: none;
-  border-color: hsl(var(--brass) / 0.7);
-  border-left: 3px solid hsl(var(--section-colour, var(--sage)));
+  border-color: hsl(var(--section-colour, var(--brass)) / 0.65);
   box-shadow:
     inset 0 0 0 3px hsl(var(--background)),
     inset 0 0 0 4px hsl(var(--brass) / 0.25),
@@ -144,7 +141,7 @@
 .about-intro {
   background-color: hsl(var(--popover));
   background-image: none;
-  border-left: 3px solid hsl(var(--sage));
+  border-color: hsl(var(--sage) / 0.55);
 }
 
 .portrait-card {
@@ -222,8 +219,15 @@
   .glass-dialog,
   .surface-card,
   .ambient-card,
-  .item-card {
+  .item-card,
+  [data-command-dock],
+  [data-vaul-drawer] {
     background-color: hsl(var(--card));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  [data-vaul-overlay] {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

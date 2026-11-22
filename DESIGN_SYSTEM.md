@@ -254,7 +254,7 @@ Charts must preserve series identity when their data is filtered or reordered.
 | Body, card descriptions, form text | Space Mono | Existing body stack; comfortable line spacing |
 | Figures and aligned data | Existing monospace stack | Tabular numerals, consistent decimals and units |
 
-Use the scale in [src/theme/typography.ts](src/theme/typography.ts). Secondary
+Use the Tailwind `text-*` ladder documented in [src/theme/README.md](src/theme/README.md). Secondary
 copy is generally 14px, fine print 12px, body copy 16px. Preserve existing
 display scaling instead of inventing tiny captions to make a card fit.
 
@@ -292,13 +292,11 @@ uppercase-label question that `REHAUL_PLAN.md` carried until 11 September
 | Dialog | Frosted container over a dimmed, blurred backdrop | `DialogContent`, `glass-dialog` |
 | Native select | A plain `<select>` at 44px, its browser arrow hidden and a `ChevronDown` drawn in the muted foreground colour; no fixed-colour arrow images | `NativeSelect` |
 | Travel | Map framed as the main visual, separate readable list | `travel-map-col`, `travel-sidebar` |
-| Gradient metric tile *(planned)* | Large radius, soft mesh gradient, oversized light figure, smaller suffix, dot-grid fade, optional circular action | Not built — extend `ambient-card` with a figure slot |
+| Gradient metric tile | Soft two-stop radial mesh, dot-grid halftone fade, oversized light `NumberFlow` figure | `.gradient-metric-tile` in `src/theme/motion.css`, used by `SurfaceHero` and `FactCards` |
 | Instrument panel *(planned)* | Dark card, hairline rule, corner brackets, tabular readout rail | Not built — extend `ambient-card`, do not fork `Card` |
 | Readout rail *(planned)* | Label above figure, tabular numerals, unit always shown | Not built — compose from `MetricProgress` and existing figure styles |
 
-Shared panels use 24px corners, reduced to 20px on phones. Collection cards use
-16px corners. Controls use pills where appropriate. `--radius` is 14px for the
-existing token-derived control sizes; it does not set every panel's corner.
+Base `--radius` is `0.375rem` (6px) in `src/index.css` (stepping down to `0.25rem` on `<640px` for `surface-card` and `ambient-card`); modals, bottom drawers, and focal tiles use larger explicit radii (`rounded-2xl` / `rounded-3xl`) where appropriate, and controls use pills where appropriate.
 Use 16–24px gaps and 20–32px panel padding as starting points, adjusted for the
 content and available viewport.
 
@@ -651,7 +649,7 @@ Suggested brief for a combined pass, once a first panel exists:
 - [Surface composition and route accents](src/theme/surfaces.css)
 - [Theme implementation guide](src/theme/README.md)
 - [Font contract](src/theme/fonts.ts)
-- [Typography scale](src/theme/typography.ts)
+- [Motion tokens](src/theme/motion.css)
 - [App frame](src/components/layout/AppShell.tsx)
 - [Existing architecture and finance constraints](REHAUL_PLAN.md)
 

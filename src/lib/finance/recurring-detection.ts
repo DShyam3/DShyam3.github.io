@@ -1,5 +1,5 @@
 /** Recurring-payment suggestions from ledger rows; a person confirms every suggestion. */
-import type { MockTransaction, RecurringBill } from '@/features/finance/finance-types';
+import type { MockTransaction, RecurringBill } from './types';
 import { epochDay } from './dates';
 
 export interface RecurringCandidate {

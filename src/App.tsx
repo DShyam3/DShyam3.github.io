@@ -1,5 +1,4 @@
 import { useState, lazy, Suspense } from 'react';
-import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -155,8 +154,7 @@ const App = () => {
         disableTransitionOnChange
       >
         <TimeBasedThemeManager />
-        <TooltipProvider>
-          <Toaster />
+        <TooltipProvider delayDuration={250} skipDelayDuration={300}>
           <Sonner />
 
           {/* The v7_startTransition / v7_relativeSplatPath opt-ins are gone:

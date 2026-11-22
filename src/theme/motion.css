@@ -1,0 +1,228 @@
+/* Shared motion tokens and transition primitives (Emil Kowalski + transitions.dev).
+   All motion respects prefers-reduced-motion and hover/pointer capability. */
+
+:root {
+  /* Custom easing curves — stronger than CSS built-ins (emil-design-eng + transitions.dev) */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Duration scale — UI animations stay under 300ms except drawers/modals/toasts */
+  --duration-stagger: 40ms;
+  --duration-micro: 80ms;
+  --duration-press: 150ms;
+  --duration-quick: 150ms;
+  --duration-fast: 220ms;
+  --duration-medium: 320ms;
+  --duration-slow: 400ms;
+
+  /* Distances, scales & blur (transitions.dev scale) */
+  --distance-micro: 4px;
+  --distance-small: 6px;
+  --distance-base: 8px;
+  --distance-medium: 12px;
+  --scale-large: 0.96;
+  --scale-medium: 0.97;
+  --scale-small: 0.98;
+  --scale-tiny: 0.99;
+  --blur-small: 2px;
+  --blur-medium: 3px;
+}
+
+/* Apple SF-Symbols Regular/Medium optical stroke weight (1.75px instead of 2px)
+   applied across all lucide-react icons unless explicitly overridden via strokeWidth.
+   Wrapped in :where() so inline stroke-width attributes on <svg> still win. */
+:where(svg.lucide) {
+  stroke-width: 1.75;
+}
+
+/* Origin-aware popovers, dropdowns, selects, and tooltips.
+   Modals (DialogContent) are deliberately excluded and stay centered. */
+.origin-radix-popover {
+  transform-origin: var(--radix-popover-content-transform-origin, center);
+}
+
+.origin-radix-dropdown {
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin, center);
+}
+
+.origin-radix-select {
+  transform-origin: var(--radix-select-content-transform-origin, center);
+}
+
+.origin-radix-tooltip {
+  transform-origin: var(--radix-tooltip-content-transform-origin, center);
+}
+
+/* Tactile press feedback for interactive controls */
+.t-press {
+  transition:
+    transform var(--duration-press) var(--ease-out-strong),
+    background-color var(--duration-press) ease,
+    border-color var(--duration-press) ease,
+    color var(--duration-press) ease;
+}
+
+.t-press:active:not(:disabled):not([aria-disabled='true']) {
+  transform: scale(var(--scale-medium));
+}
+
+/* Smooth height disclosure using grid-template-rows (transitions.dev 21-accordion).
+   Padding belongs on .t-disclosure-inner, never on .t-disclosure-body. */
+.t-disclosure-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--duration-fast) var(--ease-smooth-out),
+    opacity var(--duration-quick) var(--ease-smooth-out);
+}
+
+.t-disclosure-body[data-open='true'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.t-disclosure-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Cross-platform chevron flip (transitions.dev 21-accordion: scaleY(-1) works in Safari/Firefox/Chrome) */
+.t-chevron-flip {
+  transition: transform var(--duration-fast) var(--ease-smooth-out);
+}
+
+.t-chevron-flip[data-open='true'],
+[aria-expanded='true'] > .t-chevron-flip {
+  transform: scaleY(-1);
+}
+
+/* Tactile pop for favourite hearts and watched checkmarks (transitions.dev 10 & 23) */
+@keyframes t-icon-pop {
+  0% {
+    transform: scale(0.82);
+  }
+  55% {
+    transform: scale(1.16);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.t-pop-on-active[data-active='true'] {
+  animation: t-icon-pop var(--duration-medium) var(--ease-out-expo);
+}
+
+/* Validation error shake (transitions.dev 12-error-state-shake) */
+@keyframes t-error-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(calc(var(--distance-small) * -1));
+  }
+  45% {
+    transform: translateX(var(--distance-small));
+  }
+  70% {
+    transform: translateX(calc(var(--distance-micro) * -1));
+  }
+  85% {
+    transform: translateX(2px);
+  }
+}
+
+.t-shake {
+  animation: t-error-shake 280ms var(--ease-smooth-out);
+}
+
+/* Hover lift gated strictly to fine pointers so touch taps never stick */
+@media (hover: hover) and (pointer: fine) {
+  .t-hover-lift {
+    transition:
+      transform var(--duration-fast) var(--ease-out-strong),
+      border-color var(--duration-quick) ease,
+      box-shadow var(--duration-fast) var(--ease-out-strong);
+  }
+
+  .t-hover-lift:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* Sovereign Folio Gradient Metric Tile (DESIGN_SYSTEM.md section "Gradient metric cards")
+   Soft two-stop radial mesh with a dot-matrix halftone fade, never a linear progress ramp.
+   Status gradients use semantic status tokens (--positive / --destructive), not decorative palettes. */
+.gradient-metric-tile {
+  --tile-accent: var(--brass);
+  position: relative;
+  overflow: hidden;
+  background-color: hsl(var(--popover));
+  background-image:
+    radial-gradient(
+      120% 95% at 0% 0%,
+      hsl(var(--tile-accent) / 0.14) 0%,
+      transparent 68%
+    ),
+    radial-gradient(
+      90% 85% at 100% 100%,
+      hsl(var(--brass) / 0.12) 0%,
+      transparent 70%
+    );
+}
+
+.gradient-metric-tile[data-tone='positive'] {
+  --tile-accent: var(--positive);
+}
+
+.gradient-metric-tile[data-tone='negative'] {
+  --tile-accent: var(--destructive);
+}
+
+.gradient-metric-tile > * {
+  position: relative;
+  z-index: 1;
+}
+
+.gradient-metric-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: auto;
+  height: auto;
+  border: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    circle,
+    hsl(var(--tile-accent) / 0.16) 1px,
+    transparent 1px
+  );
+  background-size: 10px 10px;
+  mask-image: linear-gradient(125deg, transparent 35%, black 100%);
+  -webkit-mask-image: linear-gradient(125deg, transparent 35%, black 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-press,
+  .t-disclosure-body,
+  .t-chevron-flip,
+  .t-hover-lift {
+    transition: none !important;
+  }
+
+  .t-press:active:not(:disabled):not([aria-disabled='true']),
+  .t-hover-lift:hover {
+    transform: none !important;
+  }
+
+  .t-pop-on-active[data-active='true'],
+  .t-shake {
+    animation: none !important;
+  }
+}

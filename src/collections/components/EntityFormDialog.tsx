@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { safeHref } from '@/lib/safe-url';
+import { safeHref, safeImageSrc } from '@/lib/safe-url';
 import { ALL } from '../facets';
 import type {
   CollectionConfig,
@@ -329,6 +329,15 @@ export function EntityFormDialog<T extends CollectionRow, R>({
       return;
     }
 
+    const badImages = config.fields.filter(
+      (f) => f.type === 'image' && !files[f.name] && values[f.name]?.trim() && !safeImageSrc(values[f.name]),
+    );
+    if (badImages.length) {
+      setErrors(Object.fromEntries(badImages.map((f) => [f.name, 'Enter an image URL starting with https://, /, or data:image/'])));
+      document.getElementById(`${mode}-${config.table}-${badImages[0].name}`)?.focus();
+      return;
+    }
+
     const invalid = config.validate?.(values, item);
     if (invalid) {
       setErrors(invalid);
@@ -464,7 +473,10 @@ export function EntityFormDialog<T extends CollectionRow, R>({
               <img
                 src={previews[field.name] || value}
                 alt="Preview"
-                className="h-8 w-8 shrink-0 rounded object-contain bg-secondary/30"
+                className={cn(
+                  'h-8 w-8 shrink-0 rounded object-contain',
+                  config.card.imageFit === 'logo' ? 'bg-white p-0.5' : 'bg-secondary/30',
+                )}
                 onError={() =>
                   setImageFailed((p) => ({ ...p, [field.name]: true }))
                 }

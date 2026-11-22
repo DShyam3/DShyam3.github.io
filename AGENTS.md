@@ -30,14 +30,16 @@ Three things make the rewrite honest, and they matter more than doing it:
 - **Carry unverified findings forward as unverified.** Something automation
   could not check is not something that passed.
 
-## graphify
+## graphify and floorplan
 
-This project has a graphify knowledge graph at `graphify-out/`.
+This project maintains two complementary code graphs — `graphify-out/` (AST symbol graph for agents) and `floorplan/` (interactive system map, health check, and recent-work board for the owner, gitignored):
 
 - Before answering architecture or codebase questions, read `graphify-out/GRAPH_REPORT.md` for god nodes and community structure
 - If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files
 - For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"` or `graphify explain "<concept>"` over grep -- these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
-- After modifying code files, run `graphify update .` to keep the graph current (AST-only, no API cost)
+- After modifying code files, always run **both**:
+  - `graphify update .` to keep the AST graph current (no API cost)
+  - `node .agents/skills/floorplan/scripts/refresh.mjs .` (and update `floorplan/recent-work.json` + `node .agents/skills/floorplan/scripts/build.mjs .` when a task closes) so `floorplan/index.html` and its **Recent work** and **Health** panels stay in sync automatically
 
 ## Checks before shipping
 
@@ -46,8 +48,22 @@ This project has a graphify knowledge graph at `graphify-out/`.
 - `npm run typecheck:functions` -- `deno check` over `supabase/functions`, which no
   npm script reaches; Deno is the runtime they actually run on
 - `npm run build`
+- `yes | npx --yes impeccable detect src/` -- 0 UI anti-patterns (also run `npx --yes impeccable detect http://localhost:PORT` against the running preview/dev server when verifying rendered pages)
 - `npm run ship-check` -- should-i-ship launch-readiness scan, writes to `.should-i-ship/` (gitignored)
 - `security/AI-CHECKLIST.md` -- the vibe-check audit, run on request: "Run the security audit defined in security/AI-CHECKLIST.md against this project"
+
+### End-of-task skill gate (when UI, motion, or React components change)
+
+Before closing out `STATE.md` on any task that touches `src/`, apply the relevant end-of-task review skills from `.agents/skills/`:
+
+| Trigger | Skill(s) to run at the end of the task | What it enforces |
+|---|---|---|
+| Any UI, CSS, or component change | `impeccable` (`yes | npx --yes impeccable detect src/`) + `web-design-guidelines` + `mobile-native` | 0 anti-patterns, 44px coarse-pointer touch targets, visible focus rings, keyboard reachability, focus restoration, and `@media (hover: hover) and (pointer: fine)` gating |
+| Any animation, transition, drawer, or motion change | `review-animations` + `animation-performance` | No `transition: all`, no `scale(0)` entrance, no `ease-in`, UI durations < 300ms, origin-aware popovers, compositor-only `transform`/`opacity`, and `@media (prefers-reduced-motion: reduce)` |
+| New or refactored React hooks, queries, or large lists | `react-best-practices` | No async waterfalls, no derived state in `useEffect`, no barrel-import bloat, and $O(1)$ `Map`/`Set` lookups in hot paths |
+| A new card, table, inspector, or data view | `break-ui` | Survives worst-case data (long titles, unbreakable strings, missing artwork, zero items, huge numbers) without clipping or horizontal scroll |
+| The owner corrected a design, layout, or motion detail | `learn-taste` | Captures the correction and its reasoning into `DESIGN_SYSTEM.md` so future sessions do not repeat the mistake |
+| Code files changed and task is closing | `floorplan` (`refresh.mjs` + `recent-work.json` + `build.mjs`) + `graphify update .` + `scribe` | Updates `floorplan/index.html`, `graphify-out/`, `FEATURES.md`, `REHAUL_HISTORY.md`, and `STATE.md` |
 
 ## Which file to read, and which to write
 

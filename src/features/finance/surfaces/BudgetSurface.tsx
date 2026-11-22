@@ -702,7 +702,7 @@ return (
       <button
         onClick={() => setSelectedBudgetCategoryFilter('all')}
         className={cn(
-          "px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all flex items-center gap-1.5 border",
+          "px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors flex items-center gap-1.5 border",
           selectedBudgetCategoryFilter === 'all'
             ? "bg-primary text-primary-foreground border-primary shadow-sm"
             : "bg-card/40 hover:bg-card/60 text-muted-foreground border-border/40"
@@ -724,7 +724,7 @@ return (
             key={cat.id}
             onClick={() => setSelectedBudgetCategoryFilter(isSelected ? 'all' : cat.id)}
             className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all flex items-center gap-1.5 border",
+              "px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors flex items-center gap-1.5 border",
               isSelected
                 ? "bg-primary text-primary-foreground border-primary shadow-sm font-semibold"
                 : "bg-card/40 hover:bg-card/60 text-muted-foreground border-border/40"

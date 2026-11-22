@@ -1,5 +1,6 @@
 import { DetailSection } from '@/components/cards/CardDetailDialog';
 import { uploadPhoto } from '@/lib/storage';
+import { buildHighDpiFaviconUrl, parseLinkUrl, resolveLinkIcon } from './link-icons';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface LinkRow extends CollectionRow {
@@ -23,22 +24,6 @@ const CATEGORIES = [
 const labelFor = (key: string) =>
   CATEGORIES.find((c) => c.key === key)?.label ?? key;
 
-/**
- * Best-effort URL parse: tries the value as-is, then with an https:// prefix,
- * since people type "figma.com" without a scheme.
- */
-function parseUrl(value: string): URL | null {
-  try {
-    return new URL(value);
-  } catch {
-    try {
-      return new URL(`https://${value}`);
-    } catch {
-      return null;
-    }
-  }
-}
-
 export const linksCollection: CollectionConfig<LinkRow> = {
   table: 'links',
   columns: 'id, name, url, description, category, icon, created_at',
@@ -59,7 +44,7 @@ export const linksCollection: CollectionConfig<LinkRow> = {
     imageFit: 'logo',
     title: (link) => link.name,
     subtitle: (link) => labelFor(link.category),
-    image: (link) => link.icon ?? undefined,
+    image: (link) => resolveLinkIcon(link.icon, link.url),
     href: (link) => link.url,
     excerpt: (link) => link.description ?? undefined,
   },
@@ -89,10 +74,10 @@ export const linksCollection: CollectionConfig<LinkRow> = {
   // Fill the favicon in once a URL is entered, unless one is already set.
   onFieldBlur: (field, values) => {
     if (field !== 'url' || !values.url?.trim()) return null;
-    const parsed = parseUrl(values.url.trim());
+    const parsed = parseLinkUrl(values.url.trim());
     if (!parsed || values.icon?.trim()) return null;
     return {
-      icon: `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=64`,
+      icon: buildHighDpiFaviconUrl(parsed.hostname),
     };
   },
 

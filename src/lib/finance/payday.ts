@@ -5,7 +5,7 @@
  * a payday falling on a weekend or bank holiday moves *backwards*.
  */
 
-import type { FinanceSettings } from '@/features/finance/finance-types';
+import type { FinanceSettings } from './types';
 import { epochDay, isoOfEpochDay } from './dates';
 
 type PaydaySchedule = NonNullable<FinanceSettings['paydaySchedule']>;

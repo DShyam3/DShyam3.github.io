@@ -395,7 +395,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                     key={opt.key}
                     onClick={() => setDashboardSpendRange(opt.key as ('this_month' | 'last_3m' | 'ytd' | 'all_time'))}
                     className={cn(
-                      "px-2.5 py-1 text-xs font-mono rounded-md transition-all whitespace-nowrap",
+                      "px-2.5 py-1 text-xs font-mono rounded-md transition-colors whitespace-nowrap",
                       isActive
                         ? "bg-primary text-primary-foreground shadow-sm font-semibold"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
@@ -570,8 +570,8 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               <span>Actual Cash Flow</span>
             </div>
             <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
-              <div className="h-full bg-positive transition-all duration-300" style={{ width: `${incomeFlowPercent}%` }} />
-              <div className="h-full bg-chart-5 transition-all duration-300" style={{ width: `${spendFlowPercent}%` }} />
+              <div className="h-full bg-positive transition-[width] duration-300" style={{ width: `${incomeFlowPercent}%` }} />
+              <div className="h-full bg-chart-5 transition-[width] duration-300" style={{ width: `${spendFlowPercent}%` }} />
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground font-mono tabular-nums">
               <span>In: <span className="text-positive font-bold">{formatGBP(monthlyIncome)}</span></span>
@@ -590,9 +590,9 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               const freeWidth = totalBudget > 0 && freeToSpend > 0 ? Math.max(0, 100 - spentWidth - billsWidth) : 0;
               return (
                 <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
-                  <div className="h-full bg-chart-5 transition-all duration-300" style={{ width: `${spentWidth}%` }} title={`Spent: ${spentPercent.toFixed(0)}%`} />
-                  <div className="h-full bg-chart-4 transition-all duration-300" style={{ width: `${billsWidth}%` }} title={`Bills: ${billsPercent.toFixed(0)}%`} />
-                  <div className="h-full bg-positive transition-all duration-300" style={{ width: `${freeWidth}%` }} title={`Free: ${freePercent.toFixed(0)}%`} />
+                  <div className="h-full bg-chart-5 transition-[width] duration-300" style={{ width: `${spentWidth}%` }} title={`Spent: ${spentPercent.toFixed(0)}%`} />
+                  <div className="h-full bg-chart-4 transition-[width] duration-300" style={{ width: `${billsWidth}%` }} title={`Bills: ${billsPercent.toFixed(0)}%`} />
+                  <div className="h-full bg-positive transition-[width] duration-300" style={{ width: `${freeWidth}%` }} title={`Free: ${freePercent.toFixed(0)}%`} />
                 </div>
               );
             })()}
@@ -739,7 +739,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                   initial={false}
                   exit={{ opacity: 0, x: -80, scale: 0.95, transition: { duration: 0.2 } }}
                   className={cn(
-                    "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border border-border/30 transition-all duration-200 font-mono",
+                    "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border border-border/30 transition-colors duration-200 font-mono",
                     tx.isReviewed ? "opacity-60 bg-muted/10" : "bg-card/40 hover:bg-muted/20"
                   )}
                 >
@@ -766,13 +766,14 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                         {(() => {
                           const linkedAccount = bankAccountById.get(tx.bankAccountId || tx.accountId || '');
                           if (!linkedAccount) return null;
+                          const accountColor = linkedAccount.color || 'hsl(var(--chart-5))';
                           return (
-                            <span 
+                            <span
                               className="text-xs font-mono font-semibold px-2 py-0.5 rounded-sm border flex items-center gap-1 shrink-0 select-none"
-                              style={{ 
-                                backgroundColor: `${linkedAccount.color || 'hsl(var(--chart-5))'}15`, 
-                                color: linkedAccount.color || 'hsl(var(--chart-5))',
-                                borderColor: `${linkedAccount.color || 'hsl(var(--chart-5))'}35`
+                              style={{
+                                backgroundColor: `color-mix(in srgb, ${accountColor} 8%, transparent)`,
+                                color: accountColor,
+                                borderColor: `color-mix(in srgb, ${accountColor} 22%, transparent)`,
                               }}
                             >
                               <span>{linkedAccount.emoji || '💰'}</span>
@@ -965,7 +966,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                   <span className="font-bold font-mono text-xs tabular-nums">{formatGBP(bill.amount)}</span>
                   <button
                     onClick={() => toggleRecurringPaid(bill.id)}
-                    className="h-5 w-5 rounded-md flex items-center justify-center border border-border/40 hover:border-positive/50 hover:bg-positive/10 text-transparent hover:text-positive/70 transition-all shrink-0"
+                    className="h-5 w-5 rounded-md flex items-center justify-center border border-border/40 hover:border-positive/50 hover:bg-positive/10 text-transparent hover:text-positive/70 transition-colors shrink-0"
                     title="Mark as Paid"
                   >
                     <Check className="h-3.5 w-3.5" />

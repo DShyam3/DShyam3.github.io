@@ -177,6 +177,9 @@ footer.app-footer { padding-block: .75rem; }
   .card-actions, .travel-remove-btn, .city-remove-btn { opacity: 1; }
   .app-shell :is(button, [role="combobox"], .nav-link),
   .glass-dialog :is(button, [role="combobox"]),
+  [data-sonner-toast] [data-close-button],
+  [cmdk-root] :is(button, [cmdk-item]),
+  [data-vaul-drawer] :is(button, a, [role="combobox"]),
   .travel-remove-btn, .city-remove-btn { min-height: 2.75rem; min-width: 2.75rem; }
   .item-card:hover { transform: none; }
 }

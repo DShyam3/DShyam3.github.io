@@ -37,7 +37,7 @@ the site silently fell back to the system monospace default.
 
 ## Type
 
-`src/theme/typography.ts` holds the scale. The short version:
+Tailwind's default `text-*` classes hold the scale. The short version:
 
 - **Sizes**: 12, 14, 16, 18, 20, 24, 30, 36, 48, 60, 72. Nothing below 12.
   Tailwind's default `text-*` classes land exactly on this ladder, so the rule

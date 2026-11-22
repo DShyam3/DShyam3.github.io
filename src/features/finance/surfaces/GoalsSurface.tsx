@@ -317,7 +317,7 @@ export default function GoalsSurface() {
             key={goal.id}
             onClick={() => setSelectedGoalId(isActiveGoal ? null : goal.id)}
             className={cn(
-              "surface-card text-left p-5 rounded-lg border cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3 font-mono",
+              "surface-card text-left p-5 rounded-lg border cursor-pointer transition-colors duration-200 flex flex-col justify-between space-y-3 font-mono",
               isActiveGoal
                 ? "bg-card/90 border-border/80 shadow-sm"
                 : "bg-card/40 border-border/30 hover:border-border/60 hover:bg-card/60"

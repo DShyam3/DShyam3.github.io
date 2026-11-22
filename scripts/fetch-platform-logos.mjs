@@ -35,6 +35,10 @@ const PLATFORMS = {
   'Apple TV+': { commons: 'Apple TV Plus Logo.svg' },
   'BBC iPlayer': { commons: 'BBC iPlayer (2021).svg' },
   'ITVX': { tmdb: 41 },
+  'NOW': { commons: 'Now logo.svg' },
+  'Paramount+': { commons: 'Paramount+ logo.svg' },
+  'Channel 4': { commons: 'Channel 4 2022.svg' },
+  'Crunchyroll': { commons: 'Crunchyroll 2024.svg' },
 };
 
 const slug = (name) =>
