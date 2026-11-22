@@ -3227,3 +3227,17 @@ A row holds exactly what the walk reads, normalised the same way the walk normal
 Rows are used for 48 hours, which allows one missed nightly run and no more. A collection with no fresh rows goes to tmdb-proxy as before, and if the read fails, every collection does.
 
 The walk still waits for the Wikidata TV spin-off lookup in All. How many film groups the walk needs depends on the spin-off groups, and walking on without them would change which cards show.
+
+### Discover answers: Skip is not Not interested — 2026-11-22
+
+"Skip these" (formerly "None of these") says no to a page of suggestions, not to having seen them. It hides a title from Coming soon and You might like for 90 days, and never from Have you already watched?. Not interested hides a title across Discover and dims it on Franchises.
+
+Precedence: Not interested outranks a skip whenever either was given; otherwise the later answer wins. The client merge and a BEFORE UPDATE trigger (`tr_watchlist_dismissed_suggestions_keep_stronger`) apply the same rule, so a stale device cannot weaken an answer. The reviewer found the gap this closes: a later skip could silently downgrade a Not interested for every device.
+
+Backfill from timestamps. Rows that share a `created_at` came from one statement (the bulk button, or a browser handover), so they are recorded as Skip. The exception is the earliest group, the first handover, which held per-title clicks, so it is kept as Not interested. A wrong skip is the costlier guess: it returns a title the owner had already refused, whereas a wrong Not interested only hides one that could have come back.
+
+Liked and didn't like are not a new thumbs signal. They are the existing personal rating (0.5 to 10). The library already prompts "Watched, rate it?" and seeds read ratings, so a second control would split one answer across two places. There were no ratings at all on 2026-11-22.
+
+Finding that set the order of the next step: of 79 collections in the parts cache on 2026-11-22, 7 released films were missing, and all 7 had been turned down one at a time. Step 1 alone therefore does not fill Have you already watched?; the whole-history step does.
+
+Closure: `ec6881fa` on main, migration `20261122192738_watchlist_dismissal_reasons`. Live check was signed out only; the signed-in owner path is open in `STATE.md`.
