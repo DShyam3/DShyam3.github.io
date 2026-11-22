@@ -425,14 +425,20 @@ export function SemanticConstellation({
       ctx.fillStyle = readHsl('--card');
       ctx.fill();
 
-      // Callout label (12px minimum per DESIGN_SYSTEM.md)
+      // Callout label (12px minimum per DESIGN_SYSTEM.md), flipped/clamped
+      // inside the canvas so labels never clip when the inspector narrows Home.
       ctx.font = `${isSelected ? '600' : '500'} 12px "Space Mono", monospace`;
       const text = `${cluster.code} ${cluster.label}`;
-      const labelX = x + nodeRadius + 7;
-      const labelY = y + 4;
+      const metrics = ctx.measureText(text);
+      const pad = 8;
+      const rightX = x + nodeRadius + 7;
+      const leftX = x - nodeRadius - 7 - metrics.width;
+      const rawLabelX =
+        rightX + metrics.width + 4 <= width - pad ? rightX : leftX;
+      const labelX = Math.max(pad, Math.min(rawLabelX, width - metrics.width - pad));
+      const labelY = Math.max(16, Math.min(y + 4, height - pad));
 
       ctx.fillStyle = readHsl('--card', 0.86);
-      const metrics = ctx.measureText(text);
       ctx.fillRect(labelX - 4, labelY - 11, metrics.width + 8, 16);
 
       ctx.fillStyle = isSelected

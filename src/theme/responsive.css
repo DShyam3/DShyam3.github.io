@@ -30,7 +30,7 @@
   .app-frame-slot { padding: .75rem var(--page-gutter); }
   .workspace-shell-grid {
     display: grid;
-    grid-template-columns: 13.25rem minmax(0, 1fr);
+    grid-template-columns: 14.5rem minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
     gap: .75rem;
   }
@@ -49,7 +49,7 @@
      the viewport after, capped at 44rem (~704px) on ultrawide displays so
      detail panes do not feel cramped next to a wide middle column. */
   .workspace-shell-grid[data-inspector="open"] {
-    grid-template-columns: 13.25rem minmax(0, 1fr) clamp(22rem, 26vw, 44rem);
+    grid-template-columns: 14.5rem minmax(0, 1fr) clamp(22rem, 26vw, 44rem);
   }
   .workspace-shell-grid[data-inspector="open"] > .workspace-right-inspector {
     display: flex;

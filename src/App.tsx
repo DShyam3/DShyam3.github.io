@@ -114,7 +114,9 @@ const AppProviders = ({ children }: { children: React.ReactNode }) => (
 // same table read Library already needed.
 const WatchlistLayout = () => (
   <WatchlistProvider>
-    <Outlet />
+    <Suspense fallback={<PageLoader />}>
+      <Outlet />
+    </Suspense>
   </WatchlistProvider>
 );
 

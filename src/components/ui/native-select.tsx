@@ -17,7 +17,10 @@ const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
     <div className={cn('relative', wrapperClassName)}>
       <select
         ref={ref}
-        className={cn('block h-11 w-full min-w-0 cursor-pointer appearance-none pl-3 pr-10', className)}
+        className={cn(
+          'block h-11 w-full min-w-0 cursor-pointer appearance-none bg-none [-webkit-appearance:none] [-moz-appearance:none] pl-3 pr-10',
+          className,
+        )}
         {...props}
       >
         {children}

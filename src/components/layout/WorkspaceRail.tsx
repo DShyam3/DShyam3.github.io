@@ -31,7 +31,7 @@ export function WorkspaceRail() {
         <p className="readout-label px-2 pb-2">
           Sections
         </p>
-        <nav aria-label="Primary workspace navigation" className="flex flex-col gap-1">
+        <nav aria-label="Primary workspace navigation" className="flex flex-col gap-0.5">
           {links.map((link, index) => {
             const active =
               location.pathname === link.to ||
@@ -90,7 +90,7 @@ export function WorkspaceRail() {
         </nav>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-border/50 space-y-2">
+      <div className="mt-2.5 pt-2.5 border-t border-border/50 space-y-1.5">
         {isAdmin && (
           <Link
             to="/dev"
