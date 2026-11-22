@@ -20,6 +20,7 @@ import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { TitleScores } from './TitleScores';
 import { libraryCategories } from '../library-categories';
 import { useTMDB } from '../useTMDB';
+import { useSchedule } from '../useSchedule';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -67,7 +68,6 @@ export function WatchlistDetailDialog({
   const instanceId = useId();
   const { claimDockedDetail, updateDockedDetail, releaseDockedDetail } = useWorkspaceInspector();
   const wasOpenRef = useRef(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   // The season the viewer picked, or null to follow the one they are on. Tied
   // to the title: News and Your Week hand one open dialog the next title, and
   // a pick on one show must not carry over to another.
@@ -78,9 +78,23 @@ export function WatchlistDetailDialog({
     [item.id],
   );
   const { askDelete, deleteDialog } = useDeleteConfirm();
-  const { loadShowEpisodes, loadItemDescription, setPersonalRating, ratingsStatus, favourites } = useWatchlist();
+  const { loadShowEpisodes, loadItemDescription, setPersonalRating, ratingsStatus, favourites, removeWatchlistItem } = useWatchlist();
+  const { removeFromScheduleByWatchlistId } = useSchedule();
+  const removeFromScheduleRef = useRef(removeFromScheduleByWatchlistId);
+  useEffect(() => {
+    removeFromScheduleRef.current = removeFromScheduleByWatchlistId;
+  }, [removeFromScheduleByWatchlistId]);
   const { getMovieDetails } = useTMDB();
   const { isAdmin } = useAuth();
+  const handleDelete = useMemo(() => {
+    if (onDelete) return onDelete;
+    if (!isAdmin) return undefined;
+    return async () => {
+      await removeWatchlistItem(item);
+      await removeFromScheduleRef.current(item);
+      onOpenChange(false);
+    };
+  }, [onDelete, isAdmin, removeWatchlistItem, item, onOpenChange]);
   const shelf = libraryShelf(item);
   const isFavourite = favourites.some(
     (candidate) =>
@@ -105,10 +119,9 @@ export function WatchlistDetailDialog({
     }
   }, [open, item, loadItemDescription]);
 
-  // Reset deleting state and the season pick when dialog opens/closes
+  // Reset the season pick when dialog closes
   useEffect(() => {
     if (!open) {
-      setIsDeleting(false);
       setSeasonPick(null);
     }
   }, [open]);
@@ -321,7 +334,7 @@ export function WatchlistDetailDialog({
             </div>
           ) : null}
 
-          {(onSchedule || onResync || onDelete) ? (
+          {(onSchedule || onResync || handleDelete) ? (
             // Two by two: the inspector and the sheet are never wide enough for
             // four in a row, and a 0-basis flex row squeezed them until the
             // labels spilled out. A last action left alone on its row (News
@@ -358,40 +371,30 @@ export function WatchlistDetailDialog({
                 </Button>
               ) : null}
 
-              {onDelete ? (
-                // Confirm and Cancel wrap inside the cell rather than spill out of it.
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  {isDeleting ? (
-                    <>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => askDelete({ name: item.title, onConfirm: onDelete })}
-                        className="gap-1 text-xs flex-auto justify-center"
-                      >
-                        Confirm
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setIsDeleting(false)}
-                        className="text-xs flex-auto justify-center"
-                      >
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsDeleting(true)}
-                      className="gap-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-1 justify-center"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </Button>
-                  )}
-                </div>
+              {handleDelete ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    askDelete({
+                      name: item.title,
+                      title: isTVShow ? 'Remove show from library' : 'Remove movie from library',
+                      confirmLabel: isTVShow ? 'Remove show' : 'Remove movie',
+                      description: (
+                        <>
+                          Remove{' '}
+                          <span className="font-medium text-foreground">&ldquo;{item.title}&rdquo;</span>{' '}
+                          from your library? This action cannot be undone.
+                        </>
+                      ),
+                      onConfirm: handleDelete,
+                    })
+                  }
+                  className="gap-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 justify-center"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {isTVShow ? 'Remove show' : 'Remove movie'}
+                </Button>
               ) : null}
             </div>
           ) : null}
@@ -420,13 +423,12 @@ export function WatchlistDetailDialog({
     upcomingReleaseDate,
     isScheduled,
     syncing,
-    isDeleting,
     onOpenChange,
     onCloseAutoFocus,
     onSchedule,
     onRemoveFromSchedule,
     onResync,
-    onDelete,
+    handleDelete,
     askDelete,
     toggleEpisodeWatched,
     toggleSeasonWatched,
