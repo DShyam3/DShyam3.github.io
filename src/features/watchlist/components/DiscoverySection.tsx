@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Check, Loader2, Plus, Search, X } from 'lucide-react';
+import { Check, EyeOff, Loader2, Plus, Search, X } from 'lucide-react';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { CardGrid } from '@/components/shared/CardGrid';
 import {
@@ -88,9 +88,11 @@ function useAddSuggestion(item: DiscoveryItem) {
   return { pending, error, detail, add, loadDetail };
 }
 
-function SuggestionActions({ item, onDismiss, actions, layout }: {
+function SuggestionActions({ item, onDismiss, onNotSeen, actions, layout }: {
   item: DiscoveryItem;
   onDismiss: () => void;
+  /** Only under HAVE YOU ALREADY WATCHED?, which asks whether you have seen it. */
+  onNotSeen?: () => void;
   actions: ReturnType<typeof useAddSuggestion>;
   layout: 'tile' | 'row';
 }) {
@@ -119,6 +121,7 @@ function SuggestionActions({ item, onDismiss, actions, layout }: {
       <div className="flex flex-wrap gap-2">
         {isAdmin && <Button onClick={() => { void actions.add(false); }} disabled={actions.pending}><Plus className="h-4 w-4" />Add to watchlist</Button>}
         {isAdmin && released && seenIt(<><Check className="h-4 w-4" />Seen it</>, { size: 'default', className: 'min-h-11 text-sm' })}
+        {onNotSeen && <Button variant="outline" onClick={onNotSeen} disabled={actions.pending}><EyeOff className="h-4 w-4" />Not seen</Button>}
         <Button variant="ghost" onClick={onDismiss} disabled={actions.pending}><X className="h-4 w-4" />Not interested</Button>
       </div>
     );
@@ -133,6 +136,11 @@ function SuggestionActions({ item, onDismiss, actions, layout }: {
         </Button>
       )}
       {isAdmin && released && seenIt(<Check className="h-4 w-4" />, { size: 'icon', className: 'h-11 w-11', label: `Add ${title} as already watched` })}
+      {onNotSeen && (
+        <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground" onClick={onNotSeen} disabled={actions.pending} aria-label={`Mark ${title} as not seen`} title="Not seen">
+          <EyeOff className="h-4 w-4" />
+        </Button>
+      )}
       <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground" onClick={onDismiss} disabled={actions.pending} aria-label={`Not interested in ${title}`} title="Not interested">
         <X className="h-4 w-4" />
       </Button>
@@ -140,7 +148,7 @@ function SuggestionActions({ item, onDismiss, actions, layout }: {
   );
 }
 
-function SuggestionTile({ item, onDismiss }: { item: DiscoveryItem; onDismiss: () => void }) {
+function SuggestionTile({ item, onDismiss, onNotSeen }: { item: DiscoveryItem; onDismiss: () => void; onNotSeen?: () => void }) {
   const { getPosterUrl } = useTMDB();
   const actions = useAddSuggestion(item);
   const [open, setOpen] = useState(false);
@@ -173,7 +181,7 @@ function SuggestionTile({ item, onDismiss }: { item: DiscoveryItem; onDismiss: (
             ) : null}
           </>
         }
-        footer={<SuggestionActions item={item} onDismiss={onDismiss} actions={actions} layout="tile" />}
+        footer={<SuggestionActions item={item} onDismiss={onDismiss} onNotSeen={onNotSeen} actions={actions} layout="tile" />}
       />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -217,7 +225,13 @@ function SuggestionTile({ item, onDismiss }: { item: DiscoveryItem; onDismiss: (
             <TrailerButton trailerKey={actions.detail?.trailer_key} title={title} />
             {actions.detail && !actions.detail.trailer_key && <p className="text-xs text-muted-foreground">No trailer available yet.</p>}
             {actions.error && <p role="alert" className="text-xs text-destructive">{actions.error}</p>}
-            <SuggestionActions item={item} onDismiss={() => { setOpen(false); onDismiss(); }} actions={actions} layout="row" />
+            <SuggestionActions
+              item={item}
+              onDismiss={() => { setOpen(false); onDismiss(); }}
+              onNotSeen={onNotSeen && (() => { setOpen(false); onNotSeen(); })}
+              actions={actions}
+              layout="row"
+            />
           </div>
         </DialogContent>
       </Dialog>
@@ -225,10 +239,21 @@ function SuggestionTile({ item, onDismiss }: { item: DiscoveryItem; onDismiss: (
   );
 }
 
-function TileGrid({ items, onDismiss }: { items: DiscoveryItem[]; onDismiss: (media: DiscoveryMedia, id: number) => void }) {
+function TileGrid({ items, onDismiss, onNotSeen }: {
+  items: DiscoveryItem[];
+  onDismiss: (media: DiscoveryMedia, id: number) => void;
+  onNotSeen?: (media: DiscoveryMedia, id: number) => void;
+}) {
   return (
     <CardGrid>
-      {items.map((item) => <SuggestionTile key={discoveryKey(item.media, item.id)} item={item} onDismiss={() => onDismiss(item.media, item.id)} />)}
+      {items.map((item) => (
+        <SuggestionTile
+          key={discoveryKey(item.media, item.id)}
+          item={item}
+          onDismiss={() => onDismiss(item.media, item.id)}
+          onNotSeen={onNotSeen && (() => onNotSeen(item.media, item.id))}
+        />
+      ))}
     </CardGrid>
   );
 }
@@ -405,7 +430,12 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
   const { addToLibrary, isAdding } = useAddToLibrary();
   const [selected, setSelected] = useState<{ id: string; category: 'Movies' | 'TV Shows' } | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OrderEntryView | null>(null);
+  const [resetFailed, setResetFailed] = useState(false);
   const comingSoon = discovery.upcoming.slice(0, 12);
+  const resetAnswers = async () => {
+    setResetFailed(false);
+    try { await discovery.resetDismissed(); } catch { setResetFailed(true); }
+  };
 
   const openEntry = (entry: OrderEntryView) => {
     if (entry.libraryId) {
@@ -459,7 +489,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
             <Button variant="outline" size="sm" onClick={discovery.retryFranchises}>Retry</Button>
           </div>
         )}
-        {!discovery.franchisesLoading && !discovery.franchisesFailed && discovery.franchises.length === 0 && discovery.likelySeen.length === 0 && (
+        {!discovery.franchisesLoading && !discovery.franchisesFailed && !discovery.likelySeenLoading && discovery.franchises.length === 0 && discovery.likelySeen.length === 0 && (
           <p className="text-sm text-muted-foreground">
             No incomplete series, spin-offs or likely seen titles found in this view.
           </p>
@@ -486,13 +516,24 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
             </Button>
           </div>
         )}
+        {discovery.likelySeenLoading && (
+          <p role="status" className="pt-2 text-sm text-muted-foreground">Finding titles you may have seen…</p>
+        )}
         {discovery.likelySeen.length > 0 && (
           <div className="space-y-3 pt-2">
             <div className="space-y-0.5">
               <h3 className="text-sm font-medium">Likely seen</h3>
-              <p className="text-xs text-muted-foreground">Recommended across titles you have watched, or widely watched on TMDB.</p>
+              <p className="text-xs text-muted-foreground">
+                {type === 'tv'
+                  ? 'Series recommended across several titles in your library, and widely watched ones.'
+                  : 'Well-known films by the directors and actors you watch most, titles recommended across several in your library, and widely watched ones.'}
+              </p>
             </div>
-            <TileGrid items={discovery.likelySeen} onDismiss={(media, id) => discovery.dismiss(media, id, 'likely_seen')} />
+            <TileGrid
+              items={discovery.likelySeen}
+              onDismiss={(media, id) => discovery.dismiss(media, id, 'likely_seen')}
+              onNotSeen={discovery.markNotSeen}
+            />
           </div>
         )}
       </section>
@@ -547,9 +588,10 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         <span>
-          Suggestions from TMDB. “Not interested” hides a title across Discover; “Skip these” hides a page of suggestions for {SKIP_DAYS} days, but not from “Have you already watched?” Both are {discovery.synced ? 'saved across your devices' : 'remembered on this browser'}.
+          Suggestions from TMDB. “Not interested” hides a title across Discover; “Skip these” hides a page of suggestions for {SKIP_DAYS} days, but not from “Have you already watched?”; “Not seen” stops a title being asked about in Likely seen. All are {discovery.synced ? 'saved across your devices' : 'remembered on this browser'}.
         </span>
-        {discovery.dismissedCount > 0 && <Button variant="ghost" onClick={() => { void discovery.resetDismissed(); }}>Reset dismissed suggestions</Button>}
+        {discovery.dismissedCount > 0 && <Button variant="ghost" onClick={() => { void resetAnswers(); }}>Reset Discover answers</Button>}
+        {resetFailed && <p role="alert" className="text-destructive">Couldn’t reset your answers. Try again.</p>}
       </div>
 
       {selectedItem && (

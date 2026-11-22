@@ -3,6 +3,7 @@ import {
   SKIP_DAYS,
   answersHandover,
   hiddenFromSuggestionKeys,
+  keySetHandover,
   mergeAnswers,
   notInterestedKeys,
   outranks,
@@ -123,5 +124,20 @@ describe('parseStoredAnswers', () => {
     expect(answers.get('movie:3')?.source).toBe('unknown');
     expect(answers.has('movie:4')).toBe(false);
     expect(answers.has('movie:5')).toBe(false);
+  });
+});
+
+describe('keySetHandover', () => {
+  it('keeps a key in the browser until a read of the table has it, and sends it once', () => {
+    const local = new Set(['movie:1', 'tv:2']);
+    expect(keySetHandover(local, new Set(['movie:1']), new Set(['tv:2']))).toEqual({ release: new Set(['movie:1']), send: [] });
+    expect(keySetHandover(local, undefined, new Set())).toEqual({
+      release: new Set(),
+      send: [{ media: 'movie', tmdb_id: 1 }, { media: 'tv', tmdb_id: 2 }],
+    });
+  });
+
+  it('releases keys that could never be written', () => {
+    expect(keySetHandover(new Set(['book:1', 'movie:1.0']), undefined, new Set()).release).toEqual(new Set(['book:1', 'movie:1.0']));
   });
 });

@@ -15,6 +15,7 @@ import {
   keepFirstSeenOrder,
   knownDiscoveryKeys,
   likelySeenConsensus,
+  takeTurns,
   weekIndex,
   type DiscoveryItem,
   type DiscoveryMedia,
@@ -45,6 +46,17 @@ import { detailRetry, detailRetryDelay, isNotFound, useTMDB } from './useTMDB';
 import { useDismissedSuggestions } from './useDismissedSuggestions';
 import { visibleLibraryFor, type LibraryType } from './library-state';
 import { tvSeedIdsOf } from './wikidata-cache-query';
+import { useNotSeen } from './useNotSeen';
+import {
+  MIN_CREDIT_VOTES,
+  historyPeople,
+  matchPerson,
+  personHistoryItems,
+  type PersonCreditEntry,
+  type PersonSearchResult,
+  type WatchedFilmCredits,
+} from './history-sources';
+import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { TMDBCollection, TMDBSearchResponse } from './tmdb-types';
 
 /** TMDB stops paging at 500; the filler never needs to go that far. */
@@ -63,6 +75,7 @@ const DISCOVER_CALLS_PER_MINUTE = 40;
  * the other's last places: pages keep at least 12 a minute, the walk 20.
  */
 const PAGE_CALLS_PER_MINUTE = 20;
+/** Also carries Likely seen's people lookups: up to 16 calls, two a person. */
 const WALK_CALLS_PER_MINUTE = 28;
 const discoverSlot = createCallPacer(DISCOVER_CALLS_PER_MINUTE, 60_000);
 const pageSlot = () => discoverSlot({ kind: 'page', limit: PAGE_CALLS_PER_MINUTE });
@@ -73,12 +86,16 @@ const walkSlot = () => discoverSlot({ kind: 'walk', limit: WALK_CALLS_PER_MINUTE
  * calls outside the pacer) waits and tries again: 5s, 20s, 40s, together
  * longer than the proxy's one-minute window.
  */
-async function request(endpoint: string, params: Record<string, string>): Promise<TMDBSearchResponse> {
+async function request<T = TMDBSearchResponse>(
+  endpoint: string,
+  params: Record<string, string>,
+  slot: () => Promise<void> = pageSlot,
+): Promise<T> {
   const query = new URLSearchParams({ endpoint, language: 'en-GB', page: '1', ...params });
   for (let failures = 0; ; failures += 1) {
-    await pageSlot();
+    await slot();
     const { data, error } = await supabase.functions.invoke(`tmdb-proxy?${query}`, { method: 'GET' });
-    if (!error) return data as TMDBSearchResponse;
+    if (!error) return data as T;
     if (!detailRetry(failures, error)) throw error;
     await new Promise((resolve) => setTimeout(resolve, detailRetryDelay(failures)));
   }
@@ -201,12 +218,15 @@ const TARGET_LIKELY_SEEN = 12;
 const AUTO_PAGE_CAP = 6;
 const AUTO_EMPTY_ROUNDS = 2;
 const AUTO_LIKELY_SEEN_PAGES = 5;
+/** How long Likely seen waits for people lookups once its other sources are in. */
+const PEOPLE_WAIT_MS = 8_000;
 
 export function useDiscovery(type: LibraryType) {
   const { watchlist, favourites, loading, ratingsStatus } = useWatchlist();
   const { getCollection, getTvSpinoffs, getFilmUniverses } = useTMDB();
   const { isAdmin } = useAuth();
   const { notInterested, hiddenFromSuggestions, dismissMany, resetDismissed, resettable, ownerSynced } = useDismissedSuggestions();
+  const { notSeen, markNotSeen, resetNotSeen, resettable: notSeenResettable, ownerSynced: notSeenSynced } = useNotSeen();
   const [collectionLimit, setCollectionLimit] = useState(COLLECTIONS_PER_BATCH);
   const [franchiseTarget, setFranchiseTarget] = useState(FRANCHISES_PER_STEP);
   const today = new Date();
@@ -587,33 +607,112 @@ export function useDiscovery(type: LibraryType) {
     [franchiseGroups],
   );
 
-  // Multi-seed consensus first, topped up with a weekly-rotating pool of
-  // widely-watched released titles so HAVE YOU ALREADY WATCHED? always has
-  // familiar titles to log or dismiss; excluded from YOU MIGHT LIKE.
-  // Shown in the order titles first turned up, so a title already on screen
-  // never moves when a later page finds a stronger match; new ones join the
-  // end.
-  // Matches lead and the pool follows. The order is only remembered once the
-  // first suggestions are in: the pool usually lands first and would
-  // otherwise keep every early place after the matches arrive.
+  // Likely seen: films by the people you watch most, multi-seed consensus,
+  // and a weekly-rotating pool of widely-watched released titles, taking
+  // turns, so HAVE YOU ALREADY WATCHED? always has familiar titles to log or
+  // answer; excluded from YOU MIGHT LIKE. Nothing shows until every source
+  // has answered, and from then on a title already on screen never moves;
+  // new ones join the end.
   const recommendationsSettled =
     (type === 'tv' || !movieRecommendations.isPending) && (type === 'movie' || !tvRecommendations.isPending);
+
+  // From the whole history: the directors and leads of the films most
+  // watched, and their best-known other films (see history-sources.ts).
+  // Credits are not in the library list, so one read fetches them; a
+  // visitor's read skips hidden and stopped titles, as their seeds do.
+  const historyFilms = useQuery({
+    queryKey: ['watchlist', 'discovery-history-films', isAdmin],
+    enabled: !loading && type !== 'tv',
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+    queryFn: async (): Promise<WatchedFilmCredits[]> => {
+      const { data, error } = await selectAllPages((from, to) => supabase
+        .from('movies')
+        .select('id, directors, top_cast, library_state', { count: 'exact' })
+        .eq('watched', true)
+        .order('id', { ascending: true })
+        .range(from, to), (row) => String(row.id));
+      if (error) throw new Error(error.message);
+      return data
+        .filter((row) => isAdmin || (row.library_state !== 'hidden' && row.library_state !== 'stopped'))
+        .map((row) => ({ directors: row.directors, top_cast: row.top_cast }));
+    },
+  });
+  const people = useMemo(
+    () => (type === 'tv' ? [] : historyPeople(historyFilms.data ?? [], week)),
+    [type, historyFilms.data, week],
+  );
+  // Two calls a person, on the walk's share: the walk reads its cache and
+  // rarely calls TMDB, and these are background work like it. Fresh for a
+  // week in an open tab, since a person's best-known films change slowly;
+  // the browser's saved copy lasts a day (query-cache-persistence.ts).
+  const personCredits = useQueries({
+    queries: people.map((person) => ({
+      queryKey: ['watchlist', 'discovery-person', person.role, person.name],
+      staleTime: 7 * 24 * 60 * 60 * 1000,
+      retry: false,
+      queryFn: async (): Promise<{ cast: PersonCreditEntry[]; crew: PersonCreditEntry[] }> => {
+        const search = await request<{ results?: PersonSearchResult[] }>(
+          'search/person', { query: person.name, include_adult: 'false' }, walkSlot,
+        );
+        const match = matchPerson(search.results ?? [], person);
+        if (!match) return { cast: [], crew: [] };
+        const credits = await request<{ cast?: PersonCreditEntry[]; crew?: PersonCreditEntry[] }>(
+          `person/${match.id}/combined_credits`, {}, walkSlot,
+        );
+        // Only what could ever be shown, so the cache stays small.
+        const notable = (entries?: PersonCreditEntry[]) =>
+          (entries ?? []).filter((entry) => entry.media_type === 'movie' && (entry.vote_count ?? 0) >= MIN_CREDIT_VOTES);
+        return { cast: notable(credits.cast), crew: notable(credits.crew) };
+      },
+    })),
+  });
+  // `personCredits` is a new array every render; this changes only when one
+  // of its results does.
+  const personCreditsVersion = personCredits.map((q) => q.dataUpdatedAt).join(',');
+  const personItems = useMemo(
+    () => takeTurns(people.map((person, i) => {
+      const credits = personCredits[i]?.data;
+      return credits ? personHistoryItems(person, credits, start) : [];
+    })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `personCreditsVersion` stands in for `personCredits`.
+    [people, start, personCreditsVersion],
+  );
+  const peopleSettled = type === 'tv' || (!historyFilms.isPending && personCredits.every((q) => !q.isPending));
+
+  // Likely seen, and YOU MIGHT LIKE with it, wait for every source, so no
+  // tile moves, or moves between the two, as a late one arrives; a failed
+  // source just adds nothing. People get `PEOPLE_WAIT_MS` past the others:
+  // after that the grid opens without the ones not back, which join its end
+  // when they are. Once open it stays open for this week, sign-in and tab.
+  const sourcesSettled = recommendationsSettled && !likelySeenPool.isPending;
+  const readyKey = `${week}:${isAdmin}:${type}`;
+  const [peopleWaitOver, setPeopleWaitOver] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sourcesSettled || peopleSettled) return;
+    const timer = setTimeout(() => setPeopleWaitOver(readyKey), PEOPLE_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [sourcesSettled, peopleSettled, readyKey]);
+  const openedFor = useRef<string | null>(null);
+  if (sourcesSettled && (peopleSettled || peopleWaitOver === readyKey)) openedFor.current = readyKey;
+  const likelySeenReady = openedFor.current === readyKey;
+  const likelySeenHidden = useMemo(() => new Set([...notInterested, ...notSeen]), [notInterested, notSeen]);
   const likelySeenOrder = useRef(new Map<string, number>());
   const likelySeen = useMemo(() => {
+    if (!likelySeenReady) return [];
+    // The three sources take turns: films by people you watch, titles
+    // recommended across several of yours, and widely watched ones.
     const curated = curateDiscovery(
-      [...likelySeenConsensus(likelySeenRecommendationItems, today), ...likelySeenPoolItems],
+      takeTurns([personItems, likelySeenConsensus(likelySeenRecommendationItems, today), likelySeenPoolItems]),
       watchlist,
       favourites,
-      notInterested,
+      likelySeenHidden,
       franchiseEntryKeys,
     );
-    // Sorted by the remembered order always; new titles are only remembered
-    // once settled, so a type switch never reshuffles tiles already shown.
-    const order = recommendationsSettled ? likelySeenOrder.current : new Map(likelySeenOrder.current);
-    const ordered = keepFirstSeenOrder(curated, (item) => discoveryKey(item.media, item.id), order);
+    const ordered = keepFirstSeenOrder(curated, (item) => discoveryKey(item.media, item.id), likelySeenOrder.current);
     return ordered.slice(0, TARGET_LIKELY_SEEN);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
-  }, [recommendationsSettled, likelySeenRecommendationItems, likelySeenPoolItems, watchlist, favourites, notInterested, franchiseEntryKeys, week]);
+  }, [likelySeenReady, personItems, likelySeenRecommendationItems, likelySeenPoolItems, watchlist, favourites, likelySeenHidden, franchiseEntryKeys, week]);
 
   const alreadyWatchedKeys = useMemo(
     () => new Set([...franchiseEntryKeys, ...likelySeen.map((item) => discoveryKey(item.media, item.id))]),
@@ -762,12 +861,12 @@ export function useDiscovery(type: LibraryType) {
     fetchNextPage: fetchNextLikelySeen,
   } = likelySeenPool;
   useEffect(() => {
-    if (!recommendationsSettled || likelySeen.length >= TARGET_LIKELY_SEEN) return;
+    if (!likelySeenReady || likelySeen.length >= TARGET_LIKELY_SEEN) return;
     if (loading || likelySeenPending || likelySeenFetchingNext || likelySeenError || !likelySeenHasNext) return;
     if (autoLikelySeenRef.current >= AUTO_LIKELY_SEEN_PAGES) return;
     autoLikelySeenRef.current += 1;
     void fetchNextLikelySeen();
-  }, [recommendationsSettled, likelySeen.length, loading, likelySeenPending, likelySeenFetchingNext, likelySeenError, likelySeenHasNext, fetchNextLikelySeen]);
+  }, [likelySeenReady, likelySeen.length, loading, likelySeenPending, likelySeenFetchingNext, likelySeenError, likelySeenHasNext, fetchNextLikelySeen]);
 
   // Page on until the grid is full: with a large library and many dismissals,
   // whole pages of popular releases can curate down to nothing.
@@ -833,7 +932,9 @@ export function useDiscovery(type: LibraryType) {
     (type !== 'movie' && tvSpinoffs.isError);
 
   return {
-    recommendations,
+    // Held back with Likely seen, so a title never shows here and then moves
+    // up into it.
+    recommendations: likelySeenReady ? recommendations : [],
     likelySeen,
     upcoming: upcomingCurated,
     franchises: shownFranchises,
@@ -848,7 +949,7 @@ export function useDiscovery(type: LibraryType) {
       if (latestBatchFailed) retryFranchises();
     },
     retryFranchises,
-    loading: loading || ratingsStatus === 'loading' || isPending,
+    loading: loading || ratingsStatus === 'loading' || isPending || !likelySeenReady,
     upcomingLoading: loading || upcoming.isPending,
     upcomingLoadingMore: upcoming.isFetchingNextPage,
     failed: isError,
@@ -866,10 +967,13 @@ export function useDiscovery(type: LibraryType) {
         if (q.isError) void q.refetch();
       }
     },
+    likelySeenLoading: !likelySeenReady,
     dismiss,
     skipMany,
-    resetDismissed,
-    dismissedCount: resettable,
-    synced: ownerSynced,
+    markNotSeen,
+    resetDismissed: async () => { await Promise.all([resetDismissed(), resetNotSeen()]); },
+    dismissedCount: resettable + notSeenResettable,
+    // Only when both tables are, so the footnote never claims more.
+    synced: ownerSynced && notSeenSynced,
   };
 }

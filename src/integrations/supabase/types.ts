@@ -3085,6 +3085,27 @@ export type Database = {
         }
         Relationships: []
       }
+      watchlist_not_seen: {
+        Row: {
+          created_at: string
+          id: number
+          media: string
+          tmdb_id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          media: string
+          tmdb_id: number
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          media?: string
+          tmdb_id?: number
+        }
+        Relationships: []
+      }
       watchlist_ratings: {
         Row: {
           episode_id: number | null

@@ -100,7 +100,7 @@ export function discoverySeeds(
 }
 
 /** One from each list in turn, keeping each list's own order. */
-function takeTurns<T>(lists: T[][]): T[] {
+export function takeTurns<T>(lists: readonly (readonly T[])[]): T[] {
   const result: T[] = [];
   const longest = Math.max(0, ...lists.map((list) => list.length));
   for (let index = 0; index < longest; index++) {

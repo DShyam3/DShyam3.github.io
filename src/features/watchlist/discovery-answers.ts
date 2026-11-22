@@ -148,3 +148,23 @@ export function parseStoredAnswers(current: unknown, legacy: unknown, now: strin
   }
   return answers;
 }
+
+/**
+ * `answersHandover` for a table that holds bare keys (Not seen): nothing to
+ * rank, so a key leaves the browser copy once a read of the table has it.
+ */
+export function keySetHandover(
+  local: ReadonlySet<string>,
+  confirmed: ReadonlySet<string> | undefined,
+  sending: ReadonlySet<string>,
+): { release: Set<string>; send: { media: DiscoveryMedia; tmdb_id: number }[] } {
+  const release = new Set<string>();
+  const send: { media: DiscoveryMedia; tmdb_id: number }[] = [];
+  for (const key of local) {
+    if (confirmed?.has(key)) { release.add(key); continue; }
+    const parsed = parseKey(key);
+    if (!parsed) { release.add(key); continue; }
+    if (!sending.has(key)) send.push({ media: parsed.media, tmdb_id: parsed.tmdbId });
+  }
+  return { release, send };
+}

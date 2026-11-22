@@ -37,6 +37,8 @@ const PUBLIC_WATCHLIST_KEYS = new Set([
   'tv-spinoffs',
   'tmdb-film-universes',
   'film-universes',
+  // A person's best-known films on TMDB, for Discover's Likely seen.
+  'discovery-person',
 ]);
 
 /**

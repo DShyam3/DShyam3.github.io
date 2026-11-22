@@ -24,6 +24,7 @@ describe('isPersistablePublicQueryKey', () => {
     expect(isPersistablePublicQueryKey(['watchlist', 'news', 'recent-episodes', 30])).toBe(true);
     expect(isPersistablePublicQueryKey(['watchlist', 'tmdb-details', 'movie', 123])).toBe(true);
     expect(isPersistablePublicQueryKey(['watchlist', 'film-universes'])).toBe(true);
+    expect(isPersistablePublicQueryKey(['watchlist', 'discovery-person', 'director', 'Christopher Nolan'])).toBe(true);
   });
 
   it('rejects private, admin-only, signed-URL, and finance query keys', () => {
@@ -34,6 +35,7 @@ describe('isPersistablePublicQueryKey', () => {
     expect(isPersistablePublicQueryKey(['watchlist', 'ratings'])).toBe(false);
     expect(isPersistablePublicQueryKey(['watchlist', 'sync-log'])).toBe(false);
     expect(isPersistablePublicQueryKey(['watchlist', 'dismissed-suggestions'])).toBe(false);
+    expect(isPersistablePublicQueryKey(['watchlist', 'not-seen'])).toBe(false);
     expect(isPersistablePublicQueryKey(['travel-journal', 'user-123', true])).toBe(false);
     expect(isPersistablePublicQueryKey(['travel-journal', 'public', true])).toBe(false);
     expect(isPersistablePublicQueryKey(['travel-photo', 'public', false, 'a.jpg'])).toBe(false);

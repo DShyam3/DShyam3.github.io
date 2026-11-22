@@ -87,6 +87,9 @@ export function useDismissedSuggestions() {
   // An answer stays in the browser copy, and so keeps hiding its title,
   // until a read of the table has it; see `answersHandover`.
   const sendingRef = useRef(new Set<string>());
+  // Writes still in flight, so a reset can wait for them: a write landing
+  // after the reset's delete would bring its rows back.
+  const writesRef = useRef(new Set<Promise<unknown>>());
   useEffect(() => {
     if (!ownerSynced || localAnswers.size === 0) return;
     const { release, send } = answersHandover(localAnswers, remoteAnswers, sendingRef.current);
@@ -104,14 +107,16 @@ export function useDismissedSuggestions() {
     for (const key of keys) sendingRef.current.add(key);
     // The table's trigger keeps whichever answer outranks the other: a skip
     // given again restarts its 90 days, and Not interested outranks a skip.
-    void supabase.from('watchlist_dismissed_suggestions').upsert(send, { onConflict: 'media,tmdb_id' })
+    const write = Promise.resolve(supabase.from('watchlist_dismissed_suggestions').upsert(send, { onConflict: 'media,tmdb_id' })
       .then(({ error }) => {
         for (const key of keys) sendingRef.current.delete(key);
         // Re-read, cancelling any read that started before this write; the
         // next pass releases what the fresh read confirms. On an error the
         // answers stay in the browser and go on the next visit.
         if (!error) void queryClient.invalidateQueries({ queryKey: DISMISSED_QUERY_KEY });
-      });
+      }));
+    writesRef.current.add(write);
+    void write.finally(() => { writesRef.current.delete(write); });
   }, [ownerSynced, localAnswers, remoteAnswers, queryClient]);
 
   // Kept in the browser first, so it holds even if the table write fails;
@@ -136,8 +141,10 @@ export function useDismissedSuggestions() {
     setLocalAnswers(new Map());
     writeAnswers(new Map());
     if (ownerSynced) {
-      await supabase.from('watchlist_dismissed_suggestions').delete().gt('id', 0);
+      await Promise.allSettled([...writesRef.current]);
+      const { error } = await supabase.from('watchlist_dismissed_suggestions').delete().gt('id', 0);
       await queryClient.invalidateQueries({ queryKey: DISMISSED_QUERY_KEY });
+      if (error) throw new Error(error.message);
     }
   };
   const resettable = localAnswers.size + (ownerSynced ? remoteAnswers?.size ?? 0 : 0);
