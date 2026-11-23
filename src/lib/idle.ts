@@ -28,8 +28,8 @@ export const prefersSavedData = (): boolean =>
 /**
  * Starts a background chunk fetch. A failure is swallowed rather than left as
  * an unhandled rejection: nothing is waiting on a warm-up, and the click that
- * needs the chunk imports it again and reports through the route's own error
- * boundary.
+ * needs the chunk imports it again. If it failed because a newer build is
+ * live, `installStaleChunkReload` reloads the page.
  */
 export const warmChunk = (load: () => Promise<unknown>): void => {
   load().catch(() => {});

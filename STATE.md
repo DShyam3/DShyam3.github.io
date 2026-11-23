@@ -26,7 +26,7 @@ Updated 2026-11-23. Branch `main` = `origin/main` (UI polish commit on top of `8
 - **Signed-in owner browser check** of Discover, steps 1–3 and dislikes: not done. Only the visitor view was checked.
 - **graphify and floorplan not refreshed for `8d8ca5fc`**: `graphify update .` and `floorplan/recent-work.json` + `build.mjs` were not run. The main checkout holds another session's unpushed local commit `ec9219d4` (docs(state)) and has diverged from `origin/main`, so it was left alone.
 - **Hosted migration name mismatch**: hosted `20261122222356 watchlist_atomic_prune` does not match repo file `20261122221500_watchlist_atomic_prune.sql`. Another session's work; not fixed here.
-- **Stale lazy chunks after a deploy**: `/dev` and other lazy routes 404 for an open tab still holding the previous index bundle (it asks for `Dev-Bh8fq8UC.js`; current is `Dev-2ZNEztG4.js`). No reload-on-`vite:preloadError` handler exists. Not fixed.
+- **No error boundary outside Finance**: App.tsx wraps routes in a bare `<Suspense>`, so a lazy page whose file fails for a reason other than a newer build (offline, a half-propagated deploy) leaves a blank page. The stale-build case itself now reloads (`src/lib/stale-chunk-reload.ts`), verified on a local production build, not yet on GitHub Pages.
 - **Wikidata nightly cache run** (`06:20Z`, 2026-11-23, `f618f259`): not verified.
 - **Revolut bank consent** in TrueLayer: renew when convenient.
 
