@@ -3277,3 +3277,18 @@ The profile is fixed with the first page and travels with the pages like the see
 Not interested and skips are not in the profile: they store no genres. That is the next plan item.
 
 Closure: `fbe288dd` on main, live via `00527d91`. No migration.
+
+### Discover answers carry their title's facts, so dislikes count — 2026-11-23
+
+Not interested and skips now store the title's TMDB genre ids, original language and release year. The taste profile can then weigh what the owner turns down, not only what they like. Rules over rows, as before; no model scores anything.
+
+Four decisions:
+
+1. **A dislike is a share, scaled by how many there are.** A genre's dislike share is set against its like share, and the dislike side is multiplied by d / (d + 20). One answer after a reset is as large a share as hundreds, so without the scale a single Not interested would name its genre as avoided. At the owner's volume it counts almost fully.
+2. **A title from this year or later does not count against its decade.** COMING SOON shows only the next six months, so turning those down says what was shown, not which decades are disliked. Genre and language still count.
+3. **The library outranks an answer.** An answer on a title in the library or favourites is left out of the profile. The title's status, rating and favourite already say more.
+4. **Facts describe the title, not the answer.** The table's trigger function (`watchlist_dismissed_suggestions_keep_stronger`) keeps the facts across later answers, so a writer without them, an old client or a franchise entry knowing only the year, never erases them. No genres is stored as null, never an empty list, so the backfill (rows whose facts are all null) cannot skip a row a client half-filled.
+
+The 1,679 existing answers were filled from TMDB by `scripts/backfill-dismissal-facts.mjs`, which writes SQL and never writes to a database: 1,666 got genres, 13 only a language or year. A rerun after the deploy filled 15 more rows that the old live client wrote in between. Hosted now holds 1,694 answers, none without facts.
+
+Closure: `8d8ca5fc` on main, migration `20261123135113_watchlist_dismissal_facts` applied to hosted on 2026-11-23. The SQL test `supabase/tests/watchlist_dismissal_facts.sql` passes against real migrations on scratch Postgres and fails against a no-op trigger. The signed-in owner check is still open in `STATE.md`.
