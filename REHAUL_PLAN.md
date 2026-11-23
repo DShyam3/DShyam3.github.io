@@ -353,8 +353,13 @@ why and where: `reason`, `source`, `answered_at` on
 hosted 2026-11-22) is shipped. So is step 2 (Likely seen from the whole
 history, and Not seen in `watchlist_not_seen`, migration `20261122201711`
 applied to hosted 2026-11-22). Step 3 (the taste profile, ordering YOU MIGHT
-LIKE) is shipped (`fbe288dd`, live via `00527d91`). The rest is below, in this order, because each step reads
-the one before.
+LIKE) is shipped (`fbe288dd`, live via `00527d91`). Answers carrying their
+title's genres, so dislikes count, are shipped: migration
+`20261123135113_watchlist_dismissal_facts` applied to hosted 2026-11-23, and
+the 1,679 existing answers filled from TMDB the same day (SQL written by
+`scripts/backfill-dismissal-facts.mjs`, which never writes to a database;
+1,666 got genres, 13 only a language or year). The rest is below, in this
+order, because each step reads the one before.
 
 Decided, with reasons:
 - **Skip is not a dislike.** "Skip these" (formerly "None of these") says no to
@@ -392,6 +397,30 @@ Decided, with reasons:
   their turns and tiles already on screen never move. The profile is fixed
   with the first page and travels with the pages, like the seeds, so a title
   added mid-visit, or leaving Discover and coming back, re-picks nothing.
+- **Dislikes are a share, not a sum.** Each value's like share less at most
+  half its dislike share. Turned-down suggestions are drawn from near the
+  owner's taste, so raw sums would mark their favourite genres down most;
+  1,679 answers would also outweigh the library. On 2026-11-22 the owner's
+  turned down titles were 24% Drama, 17% Comedy, 7% Crime.
+- **A few dislikes count for little.** A share of one answer is as large as
+  a share of hundreds, so the dislike side is scaled by d / (d + 20): one Not
+  interested after a reset would otherwise name its genre as avoided. At the
+  owner's hundreds of answers per media it counts almost fully.
+- **A title's decade counts against only before this year.** COMING SOON
+  shows only the next six months, so turning those down says what was shown,
+  not which decades are disliked: 229 of the 1,679 answers were 2026–2027
+  titles. Genre and language still count. Each dimension's parts are measured
+  against its largest value either way, so a decade barely below zero stays
+  barely below zero.
+- **The library outranks an answer.** An answer about a title in the library
+  or the favourites is left out of the profile: the title's status, rating
+  and favourite already say more.
+- **Facts describe the title, not the answer.** The table's trigger keeps
+  them across later answers, so a writer that lacks them (an old client, a
+  franchise entry, which knows only the year) never erases them. New answers
+  carry them from the tile; older rows are filled from TMDB by the backfill.
+  No genres is null, never an empty list, so the backfill (rows whose facts
+  are all null) cannot skip a row a client half-filled.
 - **Weights read the library status, not the shelf.** A series between
   seasons or waiting on a return is part-watched, not backlog.
 - **History is people, not years.** Likely seen reads the directors and leads
@@ -401,19 +430,13 @@ Decided, with reasons:
   was dropped: 70% of watched films are from 2005–2019, which the all-time
   most-voted pool already covers.
 
-1. **Answers carry genres, so dislikes count.** Not interested and skips store
-   only a title's id, so the profile cannot yet learn which genres are turned
-   down. Store genre ids, original language and year with each answer from
-   now on (a `migration`), feed them to the profile as negatives (Not
-   interested -1, skip -0.25), and backfill the 1,679 existing answers from
-   TMDB in the nightly sync, a part at a time.
-2. **Wildcards.** A few places per page of YOU MIGHT LIKE for well-rated titles
+1. **Wildcards.** A few places per page of YOU MIGHT LIKE for well-rated titles
    outside the owner's usual genres, labelled as such; answers feed the
    profile.
-3. **Seen it offers the rating.** Discover's Seen it logs the watch but asks
+2. **Seen it offers the rating.** Discover's Seen it logs the watch but asks
    nothing more, so a title logged there gets no rating unless opened in the
    library. Offer the rating where the tile was, then let it go.
-4. **Browser check, signed in as the owner**, of steps 1 to 3: Not interested
+3. **Browser check, signed in as the owner**, of steps 1 to 3 and dislikes: Not interested
    and Skip these written with their source, a skip upgraded to Not interested,
    skipped titles reappearing in Likely seen, Not seen written to
    `watchlist_not_seen`, and the taste line from the owner's whole library

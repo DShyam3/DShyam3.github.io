@@ -12,10 +12,21 @@ import {
   mergeAnswers,
   notInterestedKeys,
   parseStoredAnswers,
+  titleFacts,
   type DismissalAnswer,
   type DismissReason,
   type DismissSource,
 } from './discovery-answers';
+
+/** A title being answered, with whatever TMDB facts the caller has. */
+export interface AnswerTarget {
+  media: DiscoveryMedia;
+  id: number;
+  genre_ids?: readonly number[] | null;
+  original_language?: string | null;
+  release_date?: string | null;
+  first_air_date?: string | null;
+}
 
 const ANSWERS_KEY = 'watchlist-discovery-answers-v2';
 /** Bare keys, all Not interested; read once and folded into the list above. */
@@ -61,21 +72,32 @@ export function useDismissedSuggestions() {
       // Paged: dismissals only grow, and the Data API stops at 1,000 rows.
       const { data, error } = await selectAllPages((from, to) => supabase
         .from('watchlist_dismissed_suggestions')
-        .select('id, media, tmdb_id, reason, source, answered_at', { count: 'exact' })
+        .select('id, media, tmdb_id, reason, source, answered_at, genre_ids, original_language, release_year', { count: 'exact' })
         .order('id', { ascending: true })
         .range(from, to), (row) => String(row.id));
       if (error) throw new Error(error.message);
       // A plain array, not a Map: TanStack Query keeps an unchanged result's
       // identity only for plain data, and the handover effect below re-runs
       // whenever the result's identity changes.
-      return data.map((row): [string, DismissalAnswer] => [discoveryKey(row.media as DiscoveryMedia, row.tmdb_id), {
-        reason: isDismissReason(row.reason) ? row.reason : 'not_interested',
-        source: isDismissSource(row.source) ? row.source : 'unknown',
-        answeredAt: row.answered_at,
-      }]);
+      return data.map((row): [string, DismissalAnswer] => {
+        const facts = titleFacts({
+          genre_ids: row.genre_ids,
+          original_language: row.original_language,
+          year: row.release_year,
+        });
+        return [discoveryKey(row.media as DiscoveryMedia, row.tmdb_id), {
+          reason: isDismissReason(row.reason) ? row.reason : 'not_interested',
+          source: isDismissSource(row.source) ? row.source : 'unknown',
+          answeredAt: row.answered_at,
+          ...(facts ? { facts } : {}),
+        }];
+      });
     },
   });
   const ownerSynced = isAdmin && remote.isSuccess;
+  // Read, or failed and left to the browser copy: what Discover's taste
+  // profile waits for before it is built.
+  const answersSettled = remote.status !== 'pending';
   const remoteAnswers = useMemo(() => (remote.data ? new Map(remote.data) : undefined), [remote.data]);
   // Where both copies have a title, the stronger answer wins (see `outranks`).
   const answers = useMemo(() => mergeAnswers(remoteAnswers ?? new Map(), localAnswers), [remoteAnswers, localAnswers]);
@@ -122,7 +144,7 @@ export function useDismissedSuggestions() {
   // Kept in the browser first, so it holds even if the table write fails;
   // the effect above moves it into the table for the owner.
   const dismissMany = (
-    items: ReadonlyArray<{ media: DiscoveryMedia; id: number }>,
+    items: ReadonlyArray<AnswerTarget>,
     reason: DismissReason,
     source: DismissSource,
   ) => {
@@ -130,7 +152,10 @@ export function useDismissedSuggestions() {
     const answeredAt = new Date().toISOString();
     setLocalAnswers((prev) => {
       const next = new Map(prev);
-      for (const item of items) next.set(discoveryKey(item.media, item.id), { reason, source, answeredAt });
+      for (const item of items) {
+        const facts = titleFacts(item);
+        next.set(discoveryKey(item.media, item.id), { reason, source, answeredAt, ...(facts ? { facts } : {}) });
+      }
       writeAnswers(next);
       return next;
     });
@@ -149,7 +174,7 @@ export function useDismissedSuggestions() {
   };
   const resettable = localAnswers.size + (ownerSynced ? remoteAnswers?.size ?? 0 : 0);
 
-  return { notInterested, hiddenFromSuggestions, dismissMany, resetDismissed, resettable, ownerSynced };
+  return { answers, answersSettled, notInterested, hiddenFromSuggestions, dismissMany, resetDismissed, resettable, ownerSynced };
 }
 
 /**

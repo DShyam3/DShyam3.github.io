@@ -3032,27 +3032,36 @@ export type Database = {
         Row: {
           answered_at: string
           created_at: string
+          genre_ids: number[] | null
           id: number
           media: string
+          original_language: string | null
           reason: string
+          release_year: number | null
           source: string
           tmdb_id: number
         }
         Insert: {
           answered_at?: string
           created_at?: string
+          genre_ids?: number[] | null
           id?: never
           media: string
+          original_language?: string | null
           reason?: string
+          release_year?: number | null
           source?: string
           tmdb_id: number
         }
         Update: {
           answered_at?: string
           created_at?: string
+          genre_ids?: number[] | null
           id?: never
           media?: string
+          original_language?: string | null
           reason?: string
+          release_year?: number | null
           source?: string
           tmdb_id?: number
         }

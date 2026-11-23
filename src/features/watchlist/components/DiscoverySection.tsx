@@ -241,7 +241,7 @@ function SuggestionTile({ item, onDismiss, onNotSeen }: { item: DiscoveryItem; o
 
 function TileGrid({ items, onDismiss, onNotSeen }: {
   items: DiscoveryItem[];
-  onDismiss: (media: DiscoveryMedia, id: number) => void;
+  onDismiss: (item: DiscoveryItem) => void;
   onNotSeen?: (media: DiscoveryMedia, id: number) => void;
 }) {
   return (
@@ -250,7 +250,7 @@ function TileGrid({ items, onDismiss, onNotSeen }: {
         <SuggestionTile
           key={discoveryKey(item.media, item.id)}
           item={item}
-          onDismiss={() => onDismiss(item.media, item.id)}
+          onDismiss={() => onDismiss(item)}
           onNotSeen={onNotSeen && (() => onNotSeen(item.media, item.id))}
         />
       ))}
@@ -437,7 +437,9 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
     .filter(([media]) => type === 'all' || type === media)
     .flatMap(([media, label]) => {
       const summary = discovery.taste[media];
-      return summary ? [`${label} lean to ${[summary.genres.join(', '), summary.decade, summary.languages.join(', ')].filter(Boolean).join(' · ')}`] : [];
+      if (!summary) return [];
+      const leans = [summary.genres.join(', '), summary.decade, summary.languages.join(', ')].filter(Boolean).join(' · ');
+      return [`${label} lean to ${leans}${summary.avoids.length > 0 ? `, away from ${summary.avoids.join(' and ')}` : ''}`];
     });
   const resetAnswers = async () => {
     setResetFailed(false);
@@ -468,7 +470,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {!discovery.upcomingLoading && !discovery.upcomingLoadingMore && !discovery.upcomingFailed && comingSoon.length === 0 && (
           <p className="text-sm text-muted-foreground">Nothing new among the most popular releases of the next six months.</p>
         )}
-        {comingSoon.length > 0 && <TileGrid items={comingSoon} onDismiss={(media, id) => discovery.dismiss(media, id, 'coming_soon')} />}
+        {comingSoon.length > 0 && <TileGrid items={comingSoon} onDismiss={(item) => discovery.dismiss(item, 'coming_soon')} />}
       </section>
 
       <section className="space-y-4 min-w-0" aria-labelledby="discover-already-watched">
@@ -510,7 +512,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
                 onOpen={openEntry}
                 onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
                 onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
-                onDismiss={(entry) => discovery.dismiss(entry.mediaType, entry.tmdbId, 'franchise')}
+                onDismiss={(entry) => discovery.dismiss({ media: entry.mediaType, id: entry.tmdbId, release_date: entry.releaseDate }, 'franchise')}
                 isAdding={isAdding}
               />
             ))}
@@ -538,7 +540,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
             </div>
             <TileGrid
               items={discovery.likelySeen}
-              onDismiss={(media, id) => discovery.dismiss(media, id, 'likely_seen')}
+              onDismiss={(item) => discovery.dismiss(item, 'likely_seen')}
               onNotSeen={discovery.markNotSeen}
             />
           </div>
@@ -566,7 +568,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           </div>
         )}
         {discovery.partlyFailed && <p role="status" className="text-sm text-muted-foreground">A few suggestions couldn’t load; Show more keeps looking.</p>}
-        {discovery.recommendations.length > 0 && <TileGrid items={discovery.recommendations} onDismiss={(media, id) => discovery.dismiss(media, id, 'you_might_like')} />}
+        {discovery.recommendations.length > 0 && <TileGrid items={discovery.recommendations} onDismiss={(item) => discovery.dismiss(item, 'you_might_like')} />}
         {!discovery.loading && !discovery.loadingMore && discovery.recommendations.length === 0 && !discovery.failed && (
           <p className="text-sm text-muted-foreground">
             {discovery.hasMore
@@ -627,7 +629,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           }}
           onAddToLibrary={isAdmin ? (entry) => addToLibrary(entry) : undefined}
           onSeenIt={isAdmin ? (entry, when) => addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
-          onDismiss={(entry) => discovery.dismiss(entry.mediaType, entry.tmdbId, 'franchise')}
+          onDismiss={(entry) => discovery.dismiss({ media: entry.mediaType, id: entry.tmdbId, release_date: entry.releaseDate }, 'franchise')}
           adding={isAdding(previewEntry.key)}
         />
       )}

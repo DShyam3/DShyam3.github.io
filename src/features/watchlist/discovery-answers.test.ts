@@ -4,7 +4,9 @@ import {
   answersHandover,
   hiddenFromSuggestionKeys,
   keySetHandover,
+  titleFacts,
   mergeAnswers,
+  yearOf,
   notInterestedKeys,
   outranks,
   parseStoredAnswers,
@@ -72,9 +74,10 @@ describe('answersHandover', () => {
     const local = new Map([['movie:331', notInterested()], ['movie:330', skip()], ['tv:44217', skip(daysAgo(2))]]);
     const { release, send } = answersHandover(local, new Map(), new Set(['movie:330']));
     expect(release.size).toBe(0);
+    const noFacts = { genre_ids: null, original_language: null, release_year: null };
     expect(send).toEqual([
-      { media: 'movie', tmdb_id: 331, reason: 'not_interested', source: 'you_might_like', answered_at: daysAgo(1) },
-      { media: 'tv', tmdb_id: 44217, reason: 'skip', source: 'you_might_like', answered_at: daysAgo(2) },
+      { media: 'movie', tmdb_id: 331, reason: 'not_interested', source: 'you_might_like', answered_at: daysAgo(1), ...noFacts },
+      { media: 'tv', tmdb_id: 44217, reason: 'skip', source: 'you_might_like', answered_at: daysAgo(2), ...noFacts },
     ]);
   });
 
@@ -141,3 +144,64 @@ describe('keySetHandover', () => {
     expect(keySetHandover(new Set(['book:1', 'movie:1.0']), undefined, new Set()).release).toEqual(new Set(['book:1', 'movie:1.0']));
   });
 });
+
+describe('title facts', () => {
+  const facts = { genreIds: [27], language: 'en', year: 2015 };
+
+  it('reads what a TMDB item knows, and nothing it does not', () => {
+    expect(titleFacts({ genre_ids: [27, 0], original_language: 'en', release_date: '2015-05-01' })).toEqual({ genreIds: [27], language: 'en', year: 2015 });
+    expect(titleFacts({ first_air_date: '2019-01-01' })).toEqual({ genreIds: null, language: null, year: 2019 });
+    expect(titleFacts({ genre_ids: [], original_language: 'English', release_date: '' })).toBeUndefined();
+    // Nothing valid left is no genres, not an empty list the table would keep.
+    expect(titleFacts({ genre_ids: [0] })).toBeUndefined();
+    expect(titleFacts({ genre_ids: [0], original_language: 'en' })).toEqual({ genreIds: null, language: 'en', year: null });
+    expect(titleFacts({ year: 2015, release_date: '1999-01-01' })?.year).toBe(2015);
+  });
+
+  it('reads a year only where the table would take it', () => {
+    expect(yearOf('2015-05-01')).toBe(2015);
+    expect(yearOf(2015)).toBe(2015);
+    expect(yearOf('soon')).toBeNull();
+    expect(yearOf('')).toBeNull();
+    expect(yearOf(1869)).toBeNull();
+    expect(yearOf(2015.5)).toBeNull();
+    expect(yearOf(null)).toBeNull();
+  });
+
+  it('keeps the facts from whichever copy has them when answers merge', () => {
+    const remote = new Map([['movie:1', notInterested(daysAgo(10))]]);
+    const local = new Map([['movie:1', { ...skip(daysAgo(1)), facts }]]);
+    expect(mergeAnswers(remote, local).get('movie:1')).toEqual({ ...notInterested(daysAgo(10)), facts });
+  });
+
+  it('merges facts one by one, the winner’s first', () => {
+    const remote = new Map([['movie:1', { ...notInterested(daysAgo(10)), facts: { genreIds: null, language: null, year: 2015 } }]]);
+    const local = new Map([['movie:1', { ...skip(daysAgo(1)), facts: { genreIds: [27], language: 'en', year: 2014 } }]]);
+    expect(mergeAnswers(remote, local).get('movie:1')?.facts).toEqual({ genreIds: [27], language: 'en', year: 2015 });
+  });
+
+  it('sends facts the table lacks, and releases once it has them', () => {
+    const local = new Map([['movie:1', { ...skip(daysAgo(1)), facts }]]);
+    const { release, send } = answersHandover(local, new Map([['movie:1', notInterested(daysAgo(10))]]), new Set());
+    expect(release.size).toBe(0);
+    expect(send).toEqual([expect.objectContaining({ genre_ids: [27], original_language: 'en', release_year: 2015 })]);
+    expect(answersHandover(local, new Map([['movie:1', { ...notInterested(daysAgo(10)), facts }]]), new Set()).release).toEqual(new Set(['movie:1']));
+  });
+
+  it('sends genres a table row with only a year lacks', () => {
+    const local = new Map([['movie:1', { ...skip(daysAgo(1)), facts }]]);
+    const yearOnly = new Map([['movie:1', { ...notInterested(daysAgo(10)), facts: { genreIds: null, language: null, year: 2015 } }]]);
+    expect(answersHandover(local, yearOnly, new Set()).send).toHaveLength(1);
+    // The other way round there is nothing to add: released.
+    const localYearOnly = new Map([['movie:1', { ...skip(daysAgo(1)), facts: { genreIds: null, language: null, year: 2015 } }]]);
+    expect(answersHandover(localYearOnly, new Map([['movie:1', { ...notInterested(daysAgo(10)), facts }]]), new Set()).release).toEqual(new Set(['movie:1']));
+  });
+
+  it('keeps facts saved in the browser, and drops ones it cannot read', () => {
+    const stored = [['movie:1', { ...skip(), facts }], ['movie:2', { ...skip(), facts: { genreIds: 'x', language: 'English', year: 'soon' } }]];
+    const answers = parseStoredAnswers(stored, null, daysAgo(0));
+    expect(answers.get('movie:1')?.facts).toEqual(facts);
+    expect(answers.get('movie:2')?.facts).toBeUndefined();
+  });
+});
+

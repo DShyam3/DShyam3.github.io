@@ -42,17 +42,17 @@ import {
 import { POSTER_BASE } from './components/franchise/EntryList';
 import { createCallPacer } from './call-pacer';
 import { fetchCachedCollections } from './collection-parts-query';
-import type { DismissSource } from './discovery-answers';
+import { yearOf, type DismissSource } from './discovery-answers';
 import { detailRetry, detailRetryDelay, isNotFound, useTMDB } from './useTMDB';
-import { useDismissedSuggestions } from './useDismissedSuggestions';
+import { useDismissedSuggestions, type AnswerTarget } from './useDismissedSuggestions';
 import { visibleLibraryFor, type LibraryType } from './library-state';
 import { tvSeedIdsOf } from './wikidata-cache-query';
 import { useNotSeen } from './useNotSeen';
 import {
   buildTasteProfiles,
-  libraryTasteTitles,
   tasteScore,
   tasteSummary,
+  tasteTitles,
   type TasteProfile,
 } from './taste-profile';
 import { languageDisplayName } from './language-groups';
@@ -234,7 +234,7 @@ const AUTO_LIKELY_SEEN_PAGES = 5;
 /** How well a suggestion fits a taste profile (taste-profile.ts). */
 const fitFor = (profile: TasteProfile) => (item: DiscoveryItem) => tasteScore(profile, {
   genre_ids: item.genre_ids,
-  year: Number(discoveryDate(item).slice(0, 4)) || null,
+  year: yearOf(discoveryDate(item)),
   original_language: item.original_language,
 });
 
@@ -245,7 +245,7 @@ export function useDiscovery(type: LibraryType) {
   const { watchlist, favourites, loading, ratingsStatus } = useWatchlist();
   const { getCollection, getTvSpinoffs, getFilmUniverses } = useTMDB();
   const { isAdmin } = useAuth();
-  const { notInterested, hiddenFromSuggestions, dismissMany, resetDismissed, resettable, ownerSynced } = useDismissedSuggestions();
+  const { answers, answersSettled, notInterested, hiddenFromSuggestions, dismissMany, resetDismissed, resettable, ownerSynced } = useDismissedSuggestions();
   const { notSeen, markNotSeen, resetNotSeen, resettable: notSeenResettable, ownerSynced: notSeenSynced } = useNotSeen();
   const [collectionLimit, setCollectionLimit] = useState(COLLECTIONS_PER_BATCH);
   const [franchiseTarget, setFranchiseTarget] = useState(FRANCHISES_PER_STEP);
@@ -266,9 +266,9 @@ export function useDiscovery(type: LibraryType) {
   // carried with the pages like the seeds. A visitor's comes from the titles
   // they can see.
   const liveTaste = useMemo(
-    () => buildTasteProfiles(libraryTasteTitles(watchlist, favourites, isAdmin, today)),
+    () => buildTasteProfiles(tasteTitles(watchlist, favourites, answers, isAdmin, today)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
-    [watchlist, favourites, isAdmin, week],
+    [watchlist, favourites, isAdmin, answers, week],
   );
   const movieSeedsRef = useRef(movieSeeds);
   const tvSeedsRef = useRef(tvSeeds);
@@ -288,9 +288,10 @@ export function useDiscovery(type: LibraryType) {
     // isAdmin in the key: pages seeded as a visitor (no scores) must not be
     // what the owner gets after signing in.
     queryKey: ['watchlist', 'discovery', 'recommendations', 'movie', week, isAdmin],
-    // Ratings decide the first seeds (8 and up lead, under 6 never seed), so
-    // the first page waits for them rather than freezing without them.
-    enabled: !loading && ratingsStatus !== 'loading' && type !== 'tv',
+    // Ratings decide the first seeds (8 and up lead, under 6 never seed), and
+    // ratings and answers both shape the taste the pages keep, so the first
+    // page waits for them rather than freezing without them.
+    enabled: !loading && ratingsStatus !== 'loading' && answersSettled && type !== 'tv',
     staleTime: 60 * 60 * 1000,
     retry: false,
     initialPageParam: { page: 0, seeds: null, taste: null } as PageParam,
@@ -307,7 +308,7 @@ export function useDiscovery(type: LibraryType) {
 
   const tvRecommendations = useInfiniteQuery({
     queryKey: ['watchlist', 'discovery', 'recommendations', 'tv', week, isAdmin],
-    enabled: !loading && ratingsStatus !== 'loading' && type !== 'movie',
+    enabled: !loading && ratingsStatus !== 'loading' && answersSettled && type !== 'movie',
     staleTime: 60 * 60 * 1000,
     retry: false,
     initialPageParam: { page: 0, seeds: null, taste: null } as PageParam,
@@ -762,9 +763,10 @@ export function useDiscovery(type: LibraryType) {
     [franchiseEntryKeys, likelySeen],
   );
 
-  const dismiss = (media: DiscoveryMedia, id: number, source: DismissSource) => dismissMany([{ media, id }], 'not_interested', source);
+  // A tile passes itself, so its genres, language and year go with the answer.
+  const dismiss = (target: AnswerTarget, source: DismissSource) => dismissMany([target], 'not_interested', source);
   // "Skip these" under YOU MIGHT LIKE: no to this page, for now.
-  const skipMany = (items: ReadonlyArray<{ media: DiscoveryMedia; id: number }>) => dismissMany(items, 'skip', 'you_might_like');
+  const skipMany = (items: ReadonlyArray<AnswerTarget>) => dismissMany(items, 'skip', 'you_might_like');
 
   const activeQueries = useMemo(
     () => (type === 'movie'

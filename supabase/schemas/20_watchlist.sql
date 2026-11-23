@@ -1338,22 +1338,29 @@ CREATE TABLE IF NOT EXISTS "public"."watchlist_dismissed_suggestions" (
     "reason" "text" DEFAULT 'not_interested' NOT NULL,
     "source" "text" DEFAULT 'unknown' NOT NULL,
     "answered_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "genre_ids" integer[],
+    "original_language" "text",
+    "release_year" smallint,
     CONSTRAINT "watchlist_dismissed_suggestions_media_check" CHECK (("media" = ANY (ARRAY['movie'::"text", 'tv'::"text"]))),
     CONSTRAINT "watchlist_dismissed_suggestions_tmdb_id_check" CHECK (("tmdb_id" > 0)),
     CONSTRAINT "watchlist_dismissed_suggestions_reason_check" CHECK (("reason" = ANY (ARRAY['not_interested'::"text", 'skip'::"text"]))),
     CONSTRAINT "watchlist_dismissed_suggestions_source_check" CHECK (("source" = ANY (ARRAY['coming_soon'::"text", 'you_might_like'::"text", 'likely_seen'::"text", 'franchise'::"text", 'unknown'::"text"]))),
+    CONSTRAINT "watchlist_dismissed_suggestions_original_language_check" CHECK (("original_language" IS NULL OR "original_language" ~ '^[a-z]{2,3}$')),
+    CONSTRAINT "watchlist_dismissed_suggestions_release_year_check" CHECK (("release_year" IS NULL OR "release_year" BETWEEN 1870 AND 2100)),
+    CONSTRAINT "watchlist_dismissed_suggestions_genre_ids_check" CHECK (("genre_ids" IS NULL OR "cardinality"("genre_ids") > 0)),
     CONSTRAINT "watchlist_dismissed_suggestions_media_tmdb_id_key" UNIQUE ("media", "tmdb_id")
 );
 
 ALTER TABLE "public"."watchlist_dismissed_suggestions" OWNER TO "postgres";
 
 COMMENT ON TABLE "public"."watchlist_dismissed_suggestions" IS
-    'TMDB titles the owner marked "Not interested" on Watchlist News discovery. Identity is media + tmdb_id because TMDB film and show ids can collide. Public read so the public page hides the same suggestions; writes are admin only. reason: not_interested hides the title everywhere, skip (bulk "Skip these", formerly "None of these") hides it from suggestion lists for 90 days, a window the client applies. source: where the answer was given, unknown for rows from before it was recorded. answered_at: when the current answer was given; unlike created_at it moves when the answer changes.';
+    'TMDB titles the owner marked "Not interested" on Watchlist News discovery. Identity is media + tmdb_id because TMDB film and show ids can collide. Public read so the public page hides the same suggestions; writes are admin only. reason: not_interested hides the title everywhere, skip (bulk "Skip these", formerly "None of these") hides it from suggestion lists for 90 days, a window the client applies. source: where the answer was given, unknown for rows from before it was recorded. answered_at: when the current answer was given; unlike created_at it moves when the answer changes. genre_ids, original_language, release_year: the title''s TMDB genre ids, original language and release year when the writer knew them; kept across later answers.';
 
 ALTER TABLE "public"."watchlist_dismissed_suggestions" ENABLE ROW LEVEL SECURITY;
 
--- Public read, like the rest of the watchlist: a TMDB id and a media type,
--- nothing private. Writes are admin only: insert, update (an upsert changing the
+-- Public read, like the rest of the watchlist: a TMDB id and a media type, the
+-- answer, and the title's public TMDB genres, language and year; nothing
+-- private. Writes are admin only: insert, update (an upsert changing the
 -- answer) and delete.
 CREATE POLICY "Public Read Access" ON "public"."watchlist_dismissed_suggestions" FOR SELECT TO "anon", "authenticated" USING (true);
 
@@ -1380,7 +1387,11 @@ GRANT ALL ON TABLE "public"."watchlist_dismissed_suggestions" TO "service_role";
 -- already merges this way; the table agrees so the rule holds for any writer.
 -- Rank: not_interested outranks skip. The row keeps its current answer when the
 -- incoming reason ranks lower, or ranks equal and is older. Equal rank and
--- equal time takes the incoming row.
+-- equal time takes the incoming row. The title's facts (genre_ids,
+-- original_language, release_year) describe the title, not the answer, so a
+-- write never loses them: a null incoming fact keeps the stored one, and facts
+-- arriving with a weaker answer are still stored while the stronger answer
+-- (reason, source, answered_at) is kept.
 CREATE OR REPLACE FUNCTION "public"."watchlist_dismissed_suggestions_keep_stronger"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SECURITY INVOKER
@@ -1390,8 +1401,14 @@ DECLARE
   old_rank integer := CASE OLD.reason WHEN 'not_interested' THEN 2 ELSE 1 END;
   new_rank integer := CASE NEW.reason WHEN 'not_interested' THEN 2 ELSE 1 END;
 BEGIN
+  NEW.genre_ids := COALESCE(NEW.genre_ids, OLD.genre_ids);
+  NEW.original_language := COALESCE(NEW.original_language, OLD.original_language);
+  NEW.release_year := COALESCE(NEW.release_year, OLD.release_year);
   IF new_rank < old_rank OR (new_rank = old_rank AND NEW.answered_at < OLD.answered_at) THEN
-    RETURN OLD;
+    NEW.reason := OLD.reason;
+    NEW.source := OLD.source;
+    NEW.answered_at := OLD.answered_at;
+    RETURN NEW;
   END IF;
   RETURN NEW;
 END;

@@ -11,11 +11,52 @@ export type DismissReason = 'not_interested' | 'skip';
 /** Where the answer was given; `unknown` for answers older than the column. */
 export type DismissSource = 'coming_soon' | 'you_might_like' | 'likely_seen' | 'franchise' | 'unknown';
 
+/**
+ * What TMDB says about the title an answer is about, when the answer knew:
+ * a tile does, a franchise entry knows only its year. It describes the
+ * title, not the answer, so it is kept across later answers.
+ */
+export interface TitleFacts {
+  genreIds: number[] | null;
+  language: string | null;
+  year: number | null;
+}
+
+/** A year from a TMDB date or a stored year, if it is one the table accepts. */
+export function yearOf(value: string | number | null | undefined): number | null {
+  const year = typeof value === 'number' ? value : typeof value === 'string' && /^\d{4}/.test(value) ? Number(value.slice(0, 4)) : Number.NaN;
+  return Number.isInteger(year) && year >= 1870 && year <= 2100 ? year : null;
+}
+
+/** A title's facts from a TMDB item or a stored row, or undefined when it says nothing. */
+export function titleFacts(item: {
+  genre_ids?: readonly number[] | null;
+  original_language?: string | null;
+  release_date?: string | null;
+  first_air_date?: string | null;
+  year?: number | null;
+}): TitleFacts | undefined {
+  const ids = Array.isArray(item.genre_ids) ? item.genre_ids.filter((id) => Number.isInteger(id) && id > 0) : [];
+  const genreIds = ids.length > 0 ? ids : null;
+  const language = typeof item.original_language === 'string' && /^[a-z]{2,3}$/.test(item.original_language) ? item.original_language : null;
+  const year = yearOf(item.year ?? (item.release_date || item.first_air_date));
+  return genreIds || language || year ? { genreIds, language, year } : undefined;
+}
+
+/** Whether `stored` has every fact `known` has, so sending `known` adds nothing. */
+const hasFacts = (stored: TitleFacts | undefined, known: TitleFacts | undefined) => !known || Boolean(
+  stored
+  && (!known.genreIds || stored.genreIds)
+  && (!known.language || stored.language)
+  && (known.year == null || stored.year != null),
+);
+
 export interface DismissalAnswer {
   reason: DismissReason;
   source: DismissSource;
   /** ISO time the current answer was given; a later answer replaces it. */
   answeredAt: string;
+  facts?: TitleFacts;
 }
 
 /** Answers by `media:tmdbId` key. */
@@ -27,6 +68,9 @@ export interface DismissalRow {
   reason: DismissReason;
   source: DismissSource;
   answered_at: string;
+  genre_ids: number[] | null;
+  original_language: string | null;
+  release_year: number | null;
 }
 
 export const SKIP_DAYS = 90;
@@ -55,12 +99,24 @@ export function outranks(next: DismissalAnswer, current: DismissalAnswer): boole
   return byReason !== 0 ? byReason > 0 : timeOf(next) > timeOf(current);
 }
 
-/** Per key, the answer that outranks the other (see `outranks`); on a tie, `a`'s. */
+const mergeFacts = (first: TitleFacts | undefined, second: TitleFacts | undefined): TitleFacts | undefined => {
+  if (!first || hasFacts(first, second)) return first ?? second;
+  return { genreIds: first.genreIds ?? second!.genreIds, language: first.language ?? second!.language, year: first.year ?? second!.year };
+};
+
+/**
+ * Per key, the answer that outranks the other (see `outranks`); on a tie,
+ * `a`'s. Each of the title's facts comes from whichever copy has it, the
+ * winner's first, as the table's trigger keeps them.
+ */
 export function mergeAnswers(a: DismissalAnswers, b: DismissalAnswers): Map<string, DismissalAnswer> {
   const merged = new Map(a);
   for (const [key, answer] of b) {
     const current = merged.get(key);
-    if (!current || outranks(answer, current)) merged.set(key, answer);
+    if (!current) { merged.set(key, answer); continue; }
+    const [winner, other] = outranks(answer, current) ? [answer, current] : [current, answer];
+    const facts = mergeFacts(winner.facts, other.facts);
+    merged.set(key, facts === winner.facts ? winner : { ...winner, facts });
   }
   return merged;
 }
@@ -85,7 +141,7 @@ export function hiddenFromSuggestionKeys(answers: DismissalAnswers, now: number)
 }
 
 /** The title a key names, only if the key is exactly as `discoveryKey` writes it. */
-function parseKey(key: string): { media: DiscoveryMedia; tmdbId: number } | null {
+export function parseKey(key: string): { media: DiscoveryMedia; tmdbId: number } | null {
   const [media, id] = key.split(':');
   const tmdbId = Number(id);
   if ((media !== 'movie' && media !== 'tv') || !Number.isInteger(tmdbId) || tmdbId <= 0) return null;
@@ -113,11 +169,23 @@ export function answersHandover(
   const send: DismissalRow[] = [];
   for (const [key, answer] of local) {
     const inTable = confirmed?.get(key);
-    if (inTable && !outranks(answer, inTable)) { release.add(key); continue; }
+    // Released once the table has this answer or a stronger one, and every
+    // fact about the title this copy knows.
+    if (inTable && !outranks(answer, inTable) && hasFacts(inTable.facts, answer.facts)) { release.add(key); continue; }
     const parsed = parseKey(key);
     if (!parsed) { release.add(key); continue; }
     if (!sending.has(key)) {
-      send.push({ media: parsed.media, tmdb_id: parsed.tmdbId, reason: answer.reason, source: answer.source, answered_at: answer.answeredAt });
+      send.push({
+        media: parsed.media,
+        tmdb_id: parsed.tmdbId,
+        reason: answer.reason,
+        source: answer.source,
+        answered_at: answer.answeredAt,
+        // Null leaves what the table has: the trigger keeps stored facts.
+        genre_ids: answer.facts?.genreIds ?? null,
+        original_language: answer.facts?.language ?? null,
+        release_year: answer.facts?.year ?? null,
+      });
     }
   }
   return { release, send };
@@ -139,10 +207,14 @@ export function parseStoredAnswers(current: unknown, legacy: unknown, now: strin
       if (!Array.isArray(entry) || typeof entry[0] !== 'string') continue;
       const answer = entry[1] as Partial<DismissalAnswer> | null;
       if (!answer || !isDismissReason(answer.reason) || typeof answer.answeredAt !== 'string' || Number.isNaN(Date.parse(answer.answeredAt))) continue;
+      const facts = answer.facts && typeof answer.facts === 'object'
+        ? titleFacts({ genre_ids: answer.facts.genreIds, original_language: answer.facts.language, year: answer.facts.year })
+        : undefined;
       answers.set(entry[0], {
         reason: answer.reason,
         source: isDismissSource(answer.source) ? answer.source : 'unknown',
         answeredAt: answer.answeredAt,
+        ...(facts ? { facts } : {}),
       });
     }
   }
