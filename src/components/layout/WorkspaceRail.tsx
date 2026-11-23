@@ -25,8 +25,9 @@ export function WorkspaceRail() {
   return (
     <aside
       aria-label="Workspace sections"
-      className="workspace-left-rail flex-col justify-between rounded-2xl border border-border/60 bg-card/65 p-3 app-scroll overflow-y-auto min-h-0"
+      className="workspace-left-rail flex-col rounded-2xl border border-border/60 bg-card/65 overflow-hidden min-h-0"
     >
+      <div className="flex-1 min-h-0 overflow-y-auto app-scroll p-3 flex flex-col justify-between">
       <div className="space-y-1">
         <p className="readout-label px-2 pb-2">
           Sections
@@ -177,6 +178,7 @@ export function WorkspaceRail() {
             ⌘K
           </kbd>
         </button>
+      </div>
       </div>
     </aside>
   );

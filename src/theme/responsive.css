@@ -204,7 +204,7 @@ html :is(a, button, input, select, textarea, :where([tabindex]:not([tabindex="-1
   box-shadow: var(--tw-shadow, 0 0 transparent);
 }
 /* Background backing keeps the ring visible on filled buttons too. */
-html :is(a, button, input, select, textarea, :where([tabindex]:not([tabindex="-1"])), [role="combobox"]):focus-visible {
+html :is(a, button, input:not([cmdk-input]), select, textarea, :where([tabindex]:not([tabindex="-1"])), [role="combobox"]):focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: -4px;
   box-shadow: inset 0 0 0 4px hsl(var(--background)), var(--tw-shadow, 0 0 transparent);
@@ -216,7 +216,7 @@ html :is(a:not(.ui-button), input[type="checkbox"], input[type="radio"], [role="
   box-shadow: var(--tw-shadow, 0 0 transparent);
 }
 /* Larger display: a heavier outline, still drawn inside the control. */
-html[data-display="larger"] :is(a, button, input, select, textarea, :where([tabindex]:not([tabindex="-1"])), [role="combobox"]):focus-visible {
+html[data-display="larger"] :is(a, button, input:not([cmdk-input]), select, textarea, :where([tabindex]:not([tabindex="-1"])), [role="combobox"]):focus-visible {
   outline-width: 3px;
   outline-offset: -5px;
 }

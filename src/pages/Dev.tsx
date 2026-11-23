@@ -484,7 +484,7 @@ export default function Dev() {
                   {historyEndpoints.length === 0 ? (
                     <p className="text-sm text-muted-foreground">{historyQuery.isPending ? 'Loading…' : 'No endpoints recorded in this range.'}</p>
                   ) : (
-                    <div className="app-scroll overflow-x-auto">
+                    <div className="app-scroll overflow-x-auto overflow-y-hidden overscroll-y-auto">
                       <table className="w-full text-left text-xs font-mono">
                         <thead className="border-b border-border/60 text-muted-foreground">
                           <tr>
@@ -527,7 +527,7 @@ export default function Dev() {
                 {historyRows.length === 0 ? (
                   <p className="text-sm text-muted-foreground">{historyQuery.isPending ? 'Loading…' : 'No calls recorded in this range.'}</p>
                 ) : (
-                  <div className="app-scroll overflow-x-auto">
+                  <div className="app-scroll overflow-x-auto overflow-y-hidden overscroll-y-auto">
                     <table className="w-full text-left text-xs font-mono">
                       <thead className="border-b border-border/60 text-muted-foreground">
                         <tr>
@@ -567,7 +567,7 @@ export default function Dev() {
                 {sessionSamples.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No calls captured in this tab yet.</p>
                 ) : (
-                  <div className="app-scroll overflow-x-auto">
+                  <div className="app-scroll overflow-x-auto overflow-y-hidden overscroll-y-auto">
                     <table className="w-full text-left text-xs font-mono">
                       <thead className="border-b border-border/60 text-muted-foreground">
                         <tr>

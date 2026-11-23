@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Check, EyeOff, Loader2, Plus, Search, X } from 'lucide-react';
 import { Button, type ButtonProps } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CardGrid } from '@/components/shared/CardGrid';
 import {
   Dialog,
@@ -131,19 +132,34 @@ function SuggestionActions({ item, onDismiss, onNotSeen, actions, layout }: {
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-1 border-t px-2 py-1.5">
       {isAdmin && (
-        <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => { void actions.add(false); }} disabled={actions.pending} aria-label={`Add ${title} to watchlist`} title="Add to watchlist">
-          <Plus className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => { void actions.add(false); }} disabled={actions.pending} aria-label={`Add ${title} to watchlist`}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Add to watchlist</TooltipContent>
+        </Tooltip>
       )}
       {isAdmin && released && seenIt(<Check className="h-4 w-4" />, { size: 'icon', className: 'h-11 w-11', label: `Add ${title} as already watched` })}
       {onNotSeen && (
-        <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground" onClick={onNotSeen} disabled={actions.pending} aria-label={`Mark ${title} as not seen`} title="Not seen">
-          <EyeOff className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground" onClick={onNotSeen} disabled={actions.pending} aria-label={`Mark ${title} as not seen`}>
+              <EyeOff className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Not seen</TooltipContent>
+        </Tooltip>
       )}
-      <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground" onClick={onDismiss} disabled={actions.pending} aria-label={`Not interested in ${title}`} title="Not interested">
-        <X className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground" onClick={onDismiss} disabled={actions.pending} aria-label={`Not interested in ${title}`}>
+            <X className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Not interested</TooltipContent>
+      </Tooltip>
     </div>
   );
 }

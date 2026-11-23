@@ -1,8 +1,9 @@
 # State
 
-Updated 2026-11-23. `origin/main` has `8d8ca5fc` and this close-out, pushed from worktree `.claude/worktrees/discover-answers` (branch `discover-dislikes`). The main checkout is behind: it holds another session's unpushed `ec9219d4`.
+Updated 2026-11-23. Branch `main` = `origin/main` (UI polish commit on top of `8d8ca5fc`).
 
 ## Closed
+- **UI polish**: Excluded `[cmdk-input]` from global inset `:focus-visible` ring (`src/theme/responsive.css`); clipped `WorkspaceRail` scrollbar inside `rounded-2xl` card (`src/components/layout/WorkspaceRail.tsx`); changed `.about-timeline-grid` `align-items` to `stretch` (`src/pages/Index.css`); replaced native `title` tooltips on `DiscoverySection` & `WatchedWhenMenu` with Radix `Tooltip` (`DiscoverySection.tsx`, `WatchedWhenMenu.tsx`); added `overflow-y-hidden overscroll-y-auto` to `Dev` history table wrappers (`src/pages/Dev.tsx`) so vertical wheel/trackpad scrolling chains to the dialog body.
 - **Discover as taste data, step 4: dislikes count** (`8d8ca5fc`, "feat(watchlist): Discover answers carry genres, so dislikes count in the taste profile"). Deployed to GitHub Pages, run `45188378499`, success, 2026-11-23; live bundle `index-cncDFdgj.js` has the code.
   - Migration `20261123135113_watchlist_dismissal_facts` applied to hosted `yvtiybyuifkiwyrnjebe` on 2026-11-23.
   - Backfill: 1,679 existing answers filled from TMDB (1,666 with genres, 13 with only language or year). A rerun after the deploy filled 15 more rows the old live client wrote in between. Hosted: 1,694 answers, 0 without facts.
@@ -10,16 +11,15 @@ Updated 2026-11-23. `origin/main` has `8d8ca5fc` and this close-out, pushed from
 - **Discover steps 1–3** (answers store why and where; Likely seen and Not seen; taste profile ordering YOU MIGHT LIKE): `ec6881fa`, `fc16742f`, `fbe288dd` (live via `00527d91`). Migrations `20261122192738` and `20261122201711` applied to hosted. Signed-in owner check still open (below).
 - **Watchlist atomic prune & cron sync** (`1a69f6d8`): atomic TV prune RPCs, cron sync unit tests, Phone News switches, up-next cleanup. Hosted migration version mismatch still open (below).
 
-## Checks (2026-11-23, on `8d8ca5fc` after rebasing onto `origin/main`)
+## Checks (2026-11-23, on UI polish commit)
 | Check | Result |
 |---|---|
 | `npm run lint` | 0 errors, 0 warnings |
-| `npm run typecheck` | pass |
-| `npm run build` | pass |
-| `npx vitest run` | 129 files / 3,027 tests pass |
+| `npm run typecheck` & `npm run build` | pass |
+| `npx vitest run` | 129 files / 3,011 tests pass (pre-rebase UI polish); 3,027 tests pass on `8d8ca5fc` |
 | `yes \| npx --yes impeccable detect src/` | 0 anti-patterns |
 | SQL test `supabase/tests/watchlist_dismissal_facts.sql` | pass on scratch Postgres with real migrations; fails against a no-op trigger |
-| `npm run typecheck:functions` | not run (no `supabase/functions` change in `8d8ca5fc`) |
+| `npm run typecheck:functions` | not run (no `supabase/functions` change) |
 | Live check, signed out only | YOU MIGHT LIKE reads "films lean to Action, Adventure, Comedy · 2010s · English; series lean to Drama, Adventure, Action · 2020s · English." No "away from" line, correct for the data |
 
 ## Still open (not verified)

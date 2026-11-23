@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import {
@@ -89,7 +90,6 @@ export function WatchedWhenMenu({
       size={size}
       disabled={disabled}
       aria-label={label}
-      title={label}
       className={cn('min-h-10 gap-2 text-xs', className)}
     >
       {children}
@@ -175,7 +175,16 @@ export function WatchedWhenMenu({
 
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
-      <DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
+      {label ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+      ) : (
+        <DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
+      )}
       <DropdownMenuContent align="start" className="min-w-52">
         {picking ? (
           dateForm
