@@ -11,6 +11,7 @@ import { useSiteWarmup } from '@/hooks/useSiteWarmup';
 import { useRouteMeta } from '@/hooks/useRouteMeta';
 import { attachPublicQueryPersistence } from '@/lib/query-cache-persistence';
 import { PageLoader } from '@/components/layout/PageLoader';
+import { RouteErrorBoundary } from '@/components/layout/RouteErrorBoundary';
 import { FinanceRoute, FinanceSession } from '@/features/finance/FinanceSession';
 
 import { WatchlistProvider } from './features/watchlist/WatchlistContext';
@@ -166,6 +167,8 @@ const App = () => {
             <RouteMetaManager />
             <DisplayModeProvider>
             <AppProviders>
+              {/* A page that fails to render shows why, not a blank screen. */}
+              <RouteErrorBoundary>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
@@ -197,6 +200,7 @@ const App = () => {
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
+              </RouteErrorBoundary>
               {showOpening && <OpeningSequence onComplete={handleOpeningComplete} />}
             </AppProviders>
             </DisplayModeProvider>
