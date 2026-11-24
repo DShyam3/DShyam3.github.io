@@ -62,4 +62,23 @@ describe('groupByLanguage', () => {
     expect(groups[0].cartoons.map((i) => i.id)).toEqual([1]);
     expect(groups[0].tvShows.map((i) => i.id)).toEqual([2]);
   });
+
+  it('keeps singleton languages separate when requested and labels only missing languages as unknown', () => {
+    const items: TestItem[] = [
+      { id: 1, original_language: 'es', mediaType: 'movie' },
+      { id: 2, original_language: 'fr', mediaType: 'movie' },
+      { id: 3, original_language: null, mediaType: 'tv' },
+    ];
+
+    const groups = groupByLanguage(items, (item) => item, {
+      minGroupSize: 1,
+      otherLabel: 'Language unknown',
+    });
+
+    expect(groups.map((group) => [group.label, group.items.map((item) => item.id), group.defaultCollapsed])).toEqual([
+      ['French', [2], true],
+      ['Spanish', [1], true],
+      ['Language unknown', [3], true],
+    ]);
+  });
 });

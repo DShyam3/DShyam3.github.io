@@ -157,11 +157,15 @@ export default function WatchlistFavourites() {
 
   const favouriteGroups = useMemo(
     () =>
-      groupByLanguage(filteredFavourites, (fav) => ({
-        original_language: fav.facts.original_language,
-        genre_ids: fav.facts.genre_ids,
-        mediaType: fav.media_type,
-      })),
+      groupByLanguage(
+        filteredFavourites,
+        (fav) => ({
+          original_language: fav.facts.original_language,
+          genre_ids: fav.facts.genre_ids,
+          mediaType: fav.media_type,
+        }),
+        { minGroupSize: 1, otherLabel: 'Language unknown' },
+      ),
     [filteredFavourites],
   );
 

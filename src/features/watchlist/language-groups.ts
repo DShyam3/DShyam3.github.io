@@ -48,6 +48,8 @@ export interface GroupByLanguageOptions {
   minGroupSize?: number;
   /** Sections with fewer than this many items start collapsed. Defaults to 4. */
   collapseThreshold?: number;
+  /** Heading for items with no known language or below minGroupSize. */
+  otherLabel?: string;
 }
 
 function isAnimated(meta: LanguageGroupMeta): boolean {
@@ -67,6 +69,7 @@ export function groupByLanguage<T>(
 ): LanguageGroup<T>[] {
   const minGroupSize = options.minGroupSize ?? 2;
   const collapseThreshold = options.collapseThreshold ?? 4;
+  const otherLabel = options.otherLabel ?? 'Other';
 
   const byLang = new Map<string, T[]>();
   const otherItems: T[] = [];
@@ -129,7 +132,7 @@ export function groupByLanguage<T>(
   );
 
   if (otherItems.length > 0) {
-    groups.push(buildGroup('other', 'Other', otherItems));
+    groups.push(buildGroup('other', otherLabel, otherItems));
   }
 
   return groups;
