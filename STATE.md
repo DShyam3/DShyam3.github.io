@@ -1,8 +1,13 @@
 # State
 
-Updated 2026-11-23. Branch `discover-dislikes`. main = origin/main at `70cf978f`. This worktree is on the same commit, with STATE.md the only uncommitted file (this close-out).
+Updated 2026-11-23. Branch `discover-dislikes`. main = origin/main at `1609776b`. Uncommitted wildcard work in this worktree (see Closed); nothing committed or pushed.
 
 ## Closed
+- **Wildcards** (in the tree, not committed, not pushed, not live). Files: `src/features/watchlist/wildcards.ts` and `wildcards.test.ts` (new); `discovery.ts` and `discovery.test.ts`; `useDiscovery.ts`; `taste-profile.ts`; `components/DiscoverySection.tsx`.
+  - Some YOU MIGHT LIKE tiles are well-loved titles from a genre outside the usual, labelled `Wildcard · <Genre>`. At most one per five other tiles on screen.
+  - Verified on a local production build at localhost:5173, signed out only: "Beauty and the Beast — Wildcard · Family" showed as 1 of 7 tiles; the dialog gave the reason; dismissing a regular tile kept the wildcard, a new suggestion took the freed place, no new wildcard came in, and the answer was stored with facts.
+  - Reviewed by `reviewer` (Opus): allowance creep, a vanishing tile, series-only genres, empty pages. All fixed with tests. Not re-reviewed after the fixes.
+  - Decisions in `REHAUL_HISTORY.md` ("Wildcards: well-loved titles outside the usual genres" — 2026-11-23).
 - **Route error screen** (`70cf978f`, deployed in run `45275294640`). `src/components/layout/RouteErrorBoundary.tsx`, its test (4 tests), and `src/App.tsx` wrap the top-level Suspense/Routes.
   - A page outside Finance that fails to render shows a full-screen message, not a blank page. A file that did not load reads "This page could not load. Check your connection, then reload the page." Any other render error reads "This page ran into a problem."
   - Buttons: Reload page, and Back to home away from `/`. A path change clears it. Does not use AppShell, because the docked Watchlist detail would throw a second time.
@@ -16,18 +21,19 @@ Updated 2026-11-23. Branch `discover-dislikes`. main = origin/main at `70cf978f`
 - **UI polish** (`734971af`, `ce7706cb`): command-input focus ring, rail scrollbar, timeline alignment, tooltips, dev table scroll.
 - **Watchlist atomic prune & cron sync** (`1a69f6d8`): atomic TV prune RPCs, cron sync tests, Phone News switches, up-next cleanup.
 
-## Checks (2026-11-23, `70cf978f`)
+## Checks (2026-11-23, `1609776b` plus uncommitted wildcard work)
 | Check | Result |
 |---|---|
 | `npm run lint` | 0 errors, 0 warnings |
 | `npm run typecheck` | pass |
-| `npx vitest run` | 131 files / 3,041 tests pass |
+| `npx vitest run` | 132 files / 3,061 tests pass |
 | `npm run build` | pass |
 | `yes \| npx --yes impeccable detect src/` | 0 anti-patterns |
 | `npm run typecheck:functions` | not run (no `supabase/functions` change) |
 | SQL test `supabase/tests/watchlist_dismissal_facts.sql` | pass on scratch Postgres with real migrations; fails against a no-op trigger (`8d8ca5fc`) |
 
 ## Still open (not verified)
+- **Wildcards, not shipped**: uncommitted in this worktree. Not committed, pushed or deployed. Signed-in owner not checked. Reviewer's fixes not re-reviewed. The local check was signed out only.
 - **Route error screen on Pages**: live but not seen triggered there; only on a local production build.
 - **Stale-chunk reload on GitHub Pages**: verified locally only. The `70cf978f` deploy was the first after `4c0439d7`, but no tab from the old build was open to observe it. Check on the next deploy after `70cf978f`, in a tab opened before that deploy.
 - **FinanceHostBoundary** (`src/features/finance/FinanceSession.tsx`) renders AppShell in its fallback. It can throw a second time the same way if Finance fails while a Watchlist detail is docked. Pre-existing, not fixed.
@@ -37,9 +43,8 @@ Updated 2026-11-23. Branch `discover-dislikes`. main = origin/main at `70cf978f`
 - **Revolut bank consent** in TrueLayer: renew when convenient.
 
 ## Next
-1. **Wildcards** (REHAUL_PLAN, Discover item 1): a few well-rated titles outside usual genres per page of YOU MIGHT LIKE, labelled as such.
-2. **Seen it offers the rating** (REHAUL_PLAN, Discover item 2): Discover's Seen it asks for the rating where the tile was.
-3. **Browser check signed in as the owner** (REHAUL_PLAN, Discover item 3): steps 1–3 and dislikes.
+1. **Seen it offers the rating** (REHAUL_PLAN, Discover item 1): Discover's Seen it asks for the rating where the tile was.
+2. **Browser check signed in as the owner** (REHAUL_PLAN, Discover item 2): steps 1–3 and dislikes.
 
 ## Blockers
-- Item 3 needs the owner's signed-in session; no agent can perform it.
+- Item 2 needs the owner's signed-in session; no agent can perform it.

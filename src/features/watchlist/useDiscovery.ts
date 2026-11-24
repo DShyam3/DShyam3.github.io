@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWatchlist } from './useWatchlist';
 import {
   SEEDS_PER_PAGE,
+  admitWildcards,
   curateDiscovery,
   discoveryDate,
   discoveryKey,
@@ -66,6 +67,7 @@ import {
   type WatchedFilmCredits,
 } from './history-sources';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
+import { wildcardQuery, type WildcardQuery } from './wildcards';
 import type { TMDBCollection, TMDBSearchResponse } from './tmdb-types';
 
 /** TMDB stops paging at 500; the filler never needs to go that far. */
@@ -76,12 +78,14 @@ const MAX_PAGES = 200;
  * fetches by itself waits its turn here; the rest of the minute stays free for
  * the owner's adds, "Seen it" and searches, which do not.
  */
-const DISCOVER_CALLS_PER_MINUTE = 40;
+const DISCOVER_CALLS_PER_MINUTE = 42;
 /**
  * How those are shared. Franchises lead the page, so the collection walk has
  * the larger share; with many dismissals the other sections can page for
  * minutes without adding a tile. Each share is a ceiling, so neither can take
- * the other's last places: pages keep at least 12 a minute, the walk 20.
+ * the other's last places: pages keep at least 14 a minute, the walk 22.
+ * Fourteen is the first page in All, so it goes at once even while the walk
+ * takes its whole share.
  */
 const PAGE_CALLS_PER_MINUTE = 20;
 /** Also carries Likely seen's people lookups: up to 16 calls, two a person. */
@@ -118,6 +122,7 @@ interface Source {
   kind: DiscoveryItem['kind'];
   seedKey?: string;
   shortReason?: string;
+  wildcard?: boolean;
 }
 
 interface Loaded { items: DiscoveryItem[]; failed: boolean }
@@ -135,7 +140,15 @@ async function load(sources: Source[]): Promise<Loaded> {
     const data = await request(source.endpoint, source.params);
     return (data.results ?? [])
       .filter((row) => !(row as { adult?: boolean }).adult)
-      .map((row): DiscoveryItem => ({ ...row, media: source.media, reason: source.reason, kind: source.kind, seedKey: source.seedKey, shortReason: source.shortReason }));
+      .map((row): DiscoveryItem => ({
+        ...row,
+        media: source.media,
+        reason: source.reason,
+        kind: source.kind,
+        seedKey: source.seedKey,
+        shortReason: source.shortReason,
+        ...(source.wildcard ? { wildcard: true } : {}),
+      }));
   }));
   if (results.length > 0 && results.every((result) => result.status === 'rejected')) {
     throw new Error('Failed to load suggestions');
@@ -168,9 +181,28 @@ function loadNext(q: PagedSource) {
 /**
  * One page of suggestions for one media type (`movie` or `tv`). Pages walk
  * that media type's seed list four at a time; once it runs out, they continue
- * with TMDB's most-voted titles of that media type, page by page.
+ * with TMDB's most-voted titles of that media type, page by page. A page
+ * also asks for its wildcards while a genre outside the usual has yet to have
+ * its turn this visit (`wildcardQuery`).
  */
-function sourcesForMediaPage(seeds: DiscoverySeed[], page: number, media: DiscoveryMedia): Source[] {
+function sourcesForMediaPage(seeds: DiscoverySeed[], page: number, media: DiscoveryMedia, wildcard: WildcardQuery | null): Source[] {
+  return [...seedSources(seeds, page, media), ...(wildcard ? [wildcardSource(wildcard, media)] : [])];
+}
+
+function wildcardSource(query: WildcardQuery, media: DiscoveryMedia): Source {
+  return {
+    endpoint: `discover/${media}`,
+    params: query.params,
+    media,
+    reason: `A wildcard: one of the best-loved ${query.name} ${media === 'movie' ? 'films' : 'series'}, outside the genres you usually watch`,
+    shortReason: `Wildcard · ${query.name}`,
+    kind: 'recommendation',
+    seedKey: `wildcard:${media}`,
+    wildcard: true,
+  };
+}
+
+function seedSources(seeds: DiscoverySeed[], page: number, media: DiscoveryMedia): Source[] {
   const slice = seeds.slice(page * SEEDS_PER_PAGE, (page + 1) * SEEDS_PER_PAGE);
   if (slice.length > 0) {
     return slice.map((seed) => ({
@@ -213,11 +245,12 @@ export interface DiscoveryFranchiseGroup {
 // - HAVE YOU ALREADY WATCHED? walks the library's film collections in a fixed
 //   order, most recently touched first, a batch at a time, until it has
 //   enough with something unanswered; Show more asks for six more. It takes
-//   up to WALK_CALLS_PER_MINUTE, never fewer than 20. A collection
+//   up to WALK_CALLS_PER_MINUTE, never fewer than 22. A collection
 //   is kept for a day, so the walk is paid for once a day (about 200 calls
 //   at most); a fresh cached one skips the queue.
 // - Every other section's pages share PAGE_CALLS_PER_MINUTE, never fewer
-//   than 12; each section's first page (12 calls in All) goes at once.
+//   than 14, so the sections' first pages (14 calls in All, two of them
+//   YOU MIGHT LIKE's wildcards) go at once.
 // - COMING SOON pages until its grid is full, at most 10 pages (20 calls).
 // - YOU MIGHT LIKE and Likely seen page until full, at most 6 and 5 pages
 //   automatically per visit; Show more is the owner's own call.
@@ -298,7 +331,7 @@ export function useDiscovery(type: LibraryType) {
     queryFn: async ({ pageParam }): Promise<SuggestionPage> => {
       const pageSeeds = pageParam.seeds ?? movieSeedsRef.current;
       const pageTaste = pageParam.taste ?? liveTasteRef.current.movie;
-      const loaded = await load(sourcesForMediaPage(pageSeeds, pageParam.page, 'movie'));
+      const loaded = await load(sourcesForMediaPage(pageSeeds, pageParam.page, 'movie', wildcardQuery(pageTaste, 'movie', pageParam.page, week)));
       return { ...loaded, seeds: pageSeeds, taste: pageTaste };
     },
     getNextPageParam: (lastPage, _pages, lastParam): PageParam | undefined => (
@@ -315,7 +348,7 @@ export function useDiscovery(type: LibraryType) {
     queryFn: async ({ pageParam }): Promise<SuggestionPage> => {
       const pageSeeds = pageParam.seeds ?? tvSeedsRef.current;
       const pageTaste = pageParam.taste ?? liveTasteRef.current.tv;
-      const loaded = await load(sourcesForMediaPage(pageSeeds, pageParam.page, 'tv'));
+      const loaded = await load(sourcesForMediaPage(pageSeeds, pageParam.page, 'tv', wildcardQuery(pageTaste, 'tv', pageParam.page, week)));
       return { ...loaded, seeds: pageSeeds, taste: pageTaste };
     },
     getNextPageParam: (lastPage, _pages, lastParam): PageParam | undefined => (
@@ -861,15 +894,12 @@ export function useDiscovery(type: LibraryType) {
     movie: new Map(),
     tv: new Map(),
   });
-  const recommendations = useMemo(
-    () =>
-      keepFirstSeenOrder(
-        curateDiscovery(recommendationItems, watchlist, favourites, hiddenFromSuggestions, alreadyWatchedKeys),
-        (item) => discoveryKey(item.media, item.id),
-        recommendationsOrderByType.current[type],
-      ),
-    [recommendationItems, watchlist, favourites, hiddenFromSuggestions, alreadyWatchedKeys, type],
-  );
+  const recommendations = useMemo(() => {
+    const keyOf = (item: DiscoveryItem) => discoveryKey(item.media, item.id);
+    const seen = recommendationsOrderByType.current[type];
+    const curated = curateDiscovery(recommendationItems, watchlist, favourites, hiddenFromSuggestions, alreadyWatchedKeys);
+    return keepFirstSeenOrder(admitWildcards(curated, keyOf, seen), keyOf, seen);
+  }, [recommendationItems, watchlist, favourites, hiddenFromSuggestions, alreadyWatchedKeys, type]);
   const upcomingCurated = useMemo(
     () => curateDiscovery([...upcomingFranchiseItems, ...upcomingItems], watchlist, favourites, hiddenFromSuggestions),
     [upcomingFranchiseItems, upcomingItems, watchlist, favourites, hiddenFromSuggestions],

@@ -20,6 +20,9 @@ export const GENRE_NAMES: Readonly<Record<number, string>> = {
   27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Science Fiction',
   10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western',
   10763: 'News', 10764: 'Reality', 10766: 'Soap', 10767: 'Talk',
+  // Series genres that are two film genres in one: never in a profile, which
+  // maps them onto these, but a wildcard is asked for by them.
+  10759: 'Action & Adventure', 10765: 'Sci-Fi & Fantasy', 10768: 'War & Politics',
 };
 /** Series genres that are two film genres in one, or a film genre renamed. */
 const SERIES_GENRES: Readonly<Record<number, readonly number[]>> = {
@@ -282,8 +285,16 @@ export interface TasteSummary {
 
 /** At least this share of the weight before a decade or language is named. */
 const SUMMARY_MIN_SHARE = 0.1;
-/** How far below zero a genre must be before the summary says you avoid it. */
-const SUMMARY_MIN_DISLIKE = 0.02;
+/** How far below zero a genre must be before the profile counts as turned away from it. */
+const AVOID_MIN_DISLIKE = 0.02;
+
+/** Genres the profile is turned away from, most first. */
+export function avoidedGenres(profile: TasteProfile): number[] {
+  return [...profile.genre]
+    .filter(([, value]) => value <= -AVOID_MIN_DISLIKE)
+    .sort(([a, x], [b, y]) => x - y || a - b)
+    .map(([id]) => id);
+}
 
 /**
  * The profile in words: its three strongest named genres, its strongest
@@ -296,11 +307,9 @@ export function tasteSummary(profile: TasteProfile, languageName: (code: string)
   const genres = top(profile.genre, 3).map((id) => GENRE_NAMES[id]).filter((name): name is string => Boolean(name));
   const [decade] = top(profile.decade, 1, SUMMARY_MIN_SHARE);
   const languages = top(profile.language, 2, SUMMARY_MIN_SHARE).map(languageName);
-  const avoids = [...profile.genre]
-    .filter(([, value]) => value <= -SUMMARY_MIN_DISLIKE)
-    .sort(([a, x], [b, y]) => x - y || a - b)
+  const avoids = avoidedGenres(profile)
     .slice(0, 2)
-    .map(([id]) => GENRE_NAMES[id])
+    .map((id) => GENRE_NAMES[id])
     .filter((name): name is string => Boolean(name));
   if (genres.length === 0) return null;
   return { genres, decade: decade != null ? `${decade}s` : null, languages, avoids };

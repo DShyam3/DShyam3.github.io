@@ -430,13 +430,10 @@ Decided, with reasons:
   was dropped: 70% of watched films are from 2005–2019, which the all-time
   most-voted pool already covers.
 
-1. **Wildcards.** A few places per page of YOU MIGHT LIKE for well-rated titles
-   outside the owner's usual genres, labelled as such; answers feed the
-   profile.
-2. **Seen it offers the rating.** Discover's Seen it logs the watch but asks
+1. **Seen it offers the rating.** Discover's Seen it logs the watch but asks
    nothing more, so a title logged there gets no rating unless opened in the
    library. Offer the rating where the tile was, then let it go.
-3. **Browser check, signed in as the owner**, of steps 1 to 3 and dislikes: Not interested
+2. **Browser check, signed in as the owner**, of steps 1 to 3 and dislikes: Not interested
    and Skip these written with their source, a skip upgraded to Not interested,
    skipped titles reappearing in Likely seen, Not seen written to
    `watchlist_not_seen`, and the taste line from the owner's whole library

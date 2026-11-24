@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { curateDiscovery, discoverySeeds, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, likelySeenConsensus, type DiscoveryItem } from './discovery';
+import { admitWildcards, curateDiscovery, discoverySeeds, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, likelySeenConsensus, type DiscoveryItem } from './discovery';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -398,3 +398,68 @@ describe('interleaveFreshBySeed with a score', () => {
   });
 });
 
+
+describe('wildcards on a page of suggestions', () => {
+  const rec = (id: number, seedKey: string, extra: Partial<DiscoveryItem> = {}) =>
+    makeDiscoveryItem({ id, kind: 'recommendation', seedKey, release_date: '2010-01-01', ...extra });
+  const wild = (id: number) => rec(id, 'wildcard:movie', { wildcard: true, vote_count: 0 });
+
+  it('takes two wildcards a page, each one more turn after the seeds', () => {
+    const items = [
+      ...[1, 2, 3, 4].map((id) => rec(id, 'movie:a')),
+      ...[5, 6, 7, 8].map((id) => rec(id, 'movie:b')),
+      ...[90, 91, 92, 93].map(wild),
+    ];
+    expect(interleaveBySeed(items).map((item) => item.id)).toEqual([1, 5, 90, 2, 6, 91, 3, 7, 4, 8]);
+  });
+
+  it('keeps TMDB’s order for wildcards when seeds are ranked by fit', () => {
+    const items = [rec(1, 'movie:a', { vote_count: 1 }), rec(2, 'movie:a', { vote_count: 9 }), wild(90), { ...wild(91), vote_count: 50 }];
+    const fit = (entry: DiscoveryItem) => entry.vote_count ?? 0;
+    expect(interleaveFreshBySeed(items, new Set(), fit).map((item) => item.id)).toEqual([2, 90, 1, 91]);
+  });
+
+  it('never counts a wildcard as a seed agreeing on a title', () => {
+    const items = [rec(10, 'movie:a'), { ...wild(10), seedKey: 'wildcard:movie' }];
+    expect(likelySeenConsensus(items, new Date(2026, 10, 18), 2)).toEqual([]);
+  });
+});
+
+describe('admitWildcards', () => {
+  type Tile = { key: string; wildcard?: boolean };
+  const keyOf = (tile: Tile) => tile.key;
+  const others = (n: number, from = 0): Tile[] => Array.from({ length: n }, (_, i) => ({ key: `movie:${from + i}` }));
+  const wild = (key: string): Tile => ({ key, wildcard: true });
+  /** What keepFirstSeenOrder records once a list is shown. */
+  const show = (tiles: Tile[], seen: Map<string, number>) => keepFirstSeenOrder(tiles, keyOf, seen);
+
+  it('lets in one wildcard for every five other titles on screen, in the list’s order', () => {
+    expect(admitWildcards([...others(4), wild('w1')], keyOf, new Map())).toHaveLength(4);
+    const shown = admitWildcards([wild('w1'), ...others(10), wild('w2'), wild('w3')], keyOf, new Map());
+    expect(shown.filter((tile) => tile.wildcard).map(keyOf)).toEqual(['w1', 'w2']);
+  });
+
+  it('keeps a wildcard once shown when other tiles are answered, and lets no new one in', () => {
+    const seen = new Map<string, number>();
+    expect(show(admitWildcards([...others(5), wild('w1')], keyOf, seen), seen).map(keyOf)).toContain('w1');
+    // Four of the five are answered and leave the list.
+    expect(admitWildcards([...others(1), wild('w1'), wild('w2')], keyOf, seen).map(keyOf)).toEqual(['movie:0', 'w1']);
+  });
+
+  it('does not let wildcards creep up as other tiles are answered page after page', () => {
+    const seen = new Map<string, number>();
+    let screen: Tile[] = [];
+    for (let page = 0; page < 10; page++) {
+      // Each page brings five new others and four wildcards; every other tile is answered.
+      const pageTiles = [...others(5, page * 10), ...[0, 1, 2, 3].map((i) => wild(`w${page}-${i}`))];
+      screen = show(admitWildcards([...screen, ...pageTiles], keyOf, seen), seen).filter((tile) => tile.wildcard);
+    }
+    expect(screen.filter((tile) => tile.wildcard)).toHaveLength(1);
+  });
+
+  it('keeps a title shown as a seed’s suggestion when it comes back as a wildcard', () => {
+    const seen = new Map<string, number>();
+    show(admitWildcards([...others(2), { key: 'x' }], keyOf, seen), seen);
+    expect(admitWildcards([...others(2), wild('x')], keyOf, seen).map(keyOf)).toEqual(['movie:0', 'movie:1', 'x']);
+  });
+});

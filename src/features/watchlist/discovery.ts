@@ -12,6 +12,8 @@ export interface DiscoveryItem extends TMDBSearchItem {
   seedKey?: string;
   /** A tile-length reason, "Like Arcane"; `reason` is the full sentence. */
   shortReason?: string;
+  /** A well-loved title outside the usual genres (wildcards.ts), not a seed's. */
+  wildcard?: boolean;
 }
 export const discoveryKey = (media: DiscoveryMedia, id: number) => `${media}:${id}`;
 export const discoveryDate = (item: DiscoveryItem) => item.release_date || item.first_air_date || '';
@@ -110,10 +112,13 @@ export function takeTurns<T>(lists: readonly (readonly T[])[]): T[] {
 }
 
 export const MAX_SUGGESTIONS_PER_SEED = 4;
+/** Wildcards on one page of suggestions for one media: a few, not a seed's share. */
+export const WILDCARDS_PER_PAGE = 2;
 
 /**
  * Round-robin across seeds, keeping each seed's own order, and capping each
- * non-filler seed so one prolific show cannot dominate the grid.
+ * non-filler seed so one prolific show cannot dominate the grid. A page's
+ * wildcards are one more turn, capped at `WILDCARDS_PER_PAGE`.
  */
 export function interleaveBySeed(
   items: DiscoveryItem[],
@@ -124,7 +129,8 @@ export function interleaveBySeed(
     const key = item.seedKey ?? '';
     const existing = groups.get(key);
     if (existing) {
-      if (key.startsWith('filler:') || maxPerSeed <= 0 || existing.length < maxPerSeed) {
+      const cap = item.wildcard ? WILDCARDS_PER_PAGE : maxPerSeed;
+      if (key.startsWith('filler:') || cap <= 0 || existing.length < cap) {
         existing.push(item);
       }
     } else {
@@ -146,7 +152,9 @@ export function interleaveBySeed(
  * seed's four be four known titles, and with a large library whole pages came
  * to nothing. With `score`, each seed's titles are ordered best first before
  * the cap, so a seed offers its four best fits rather than TMDB's first four;
- * seeds keep their turns, and ties keep TMDB's order.
+ * seeds keep their turns, and ties keep TMDB's order. Wildcards keep TMDB's
+ * order, most voted first: they are chosen for being outside the profile, so
+ * ranking them by it would pick the ones nearest the usual genres.
  */
 export function interleaveFreshBySeed(
   items: DiscoveryItem[],
@@ -158,7 +166,7 @@ export function interleaveFreshBySeed(
   const seedOrder = new Map<string, number>();
   for (const item of fresh) if (!seedOrder.has(item.seedKey ?? '')) seedOrder.set(item.seedKey ?? '', seedOrder.size);
   const ranked = fresh
-    .map((item, index) => ({ item, index, seed: seedOrder.get(item.seedKey ?? '')!, fit: score(item) }))
+    .map((item, index) => ({ item, index, seed: seedOrder.get(item.seedKey ?? '')!, fit: item.wildcard ? 0 : score(item) }))
     .sort((a, b) => a.seed - b.seed || b.fit - a.fit || a.index - b.index)
     .map(({ item }) => item);
   return interleaveBySeed(ranked);
@@ -175,6 +183,39 @@ export function keepFirstSeenOrder<T>(items: readonly T[], keyOf: (item: T) => s
     if (!seen.has(key)) seen.set(key, seen.size);
   }
   return [...items].sort((a, b) => (seen.get(keyOf(a)) ?? 0) - (seen.get(keyOf(b)) ?? 0));
+}
+
+/** One wildcard for every this many other suggestions on screen; see `admitWildcards`. */
+export const SUGGESTIONS_PER_WILDCARD = 5;
+
+/**
+ * Keeps wildcards to a few places in a list: a new one comes in only while
+ * there are `SUGGESTIONS_PER_WILDCARD` other titles in the list for every
+ * wildcard in it. A large library already holds most of what seeds suggest,
+ * while a page's wildcards are rarely in it, so without this they would fill
+ * the grid. A title already shown (`seen`, as `keepFirstSeenOrder` keeps it)
+ * always stays, so answering one tile never takes another away, even one
+ * that came back as a wildcard after first showing as a seed's suggestion.
+ * New wildcards come in in the list's order.
+ */
+export function admitWildcards<T extends { wildcard?: boolean }>(
+  items: readonly T[],
+  keyOf: (item: T) => string,
+  seen: ReadonlyMap<string, number>,
+): T[] {
+  let others = 0;
+  let shown = 0;
+  for (const item of items) {
+    if (!item.wildcard) others += 1;
+    else if (seen.has(keyOf(item))) shown += 1;
+  }
+  let room = Math.floor(others / SUGGESTIONS_PER_WILDCARD) - shown;
+  return items.filter((item) => {
+    if (!item.wildcard || seen.has(keyOf(item))) return true;
+    if (room <= 0) return false;
+    room -= 1;
+    return true;
+  });
 }
 
 /**
@@ -300,7 +341,7 @@ export function likelySeenConsensus(
   const groups = new Map<string, { item: DiscoveryItem; seeds: Set<string> }>();
 
   for (const item of items) {
-    if (item.kind !== 'recommendation' || !item.seedKey || item.seedKey.startsWith('filler:')) continue;
+    if (item.kind !== 'recommendation' || !item.seedKey || item.seedKey.startsWith('filler:') || item.wildcard) continue;
     const date = discoveryDate(item).slice(0, 10);
     if (!date || date > todayIso) continue;
     const key = discoveryKey(item.media, item.id);

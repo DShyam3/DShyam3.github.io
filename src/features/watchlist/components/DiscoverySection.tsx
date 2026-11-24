@@ -181,7 +181,8 @@ function SuggestionTile({ item, onDismiss, onNotSeen }: { item: DiscoveryItem; o
         subtitle={metaLine(item)}
         meta={
           <>
-            {item.kind === 'recommendation' ? (
+            {/* A wildcard is labelled like a franchise release: it is not a seed's suggestion. */}
+            {item.kind === 'recommendation' && !item.wildcard ? (
               <span className="truncate text-xs text-muted-foreground" title={item.reason}>
                 {item.shortReason ?? item.reason}
               </span>
