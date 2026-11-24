@@ -1279,16 +1279,35 @@ export function DotMatrixGlobe({
         emitHover(code, dotKey);
     }, [emitHover, requestDraw, viewMode]);
 
-    /** Select whatever is under a point: shared by a mouse click and a tap. */
+    /** Select whatever is under a mouse click. */
     const selectAtPoint = useCallback((clientX: number, clientY: number) => {
         const { code, dotKey } = countryAtPoint(clientX, clientY);
         if (!code) return;
 
-        // A tap has no hover pass before it, so light up the country as well as
-        // selecting it -- otherwise the map would jump with nothing highlighted.
         setHover(code, dotKey);
         onCountryClick?.(code, countryNames[code] ?? code);
     }, [countryAtPoint, countryNames, onCountryClick, setHover]);
+
+    /**
+     * Touch has no hover pass, so a first tap previews the country or hex
+     * (highlighting it and updating the readout) without opening the popup.
+     * Tapping the same target again opens it; tapping ocean clears the preview.
+     */
+    const touchAtPoint = useCallback((clientX: number, clientY: number) => {
+        const { code, dotKey } = countryAtPoint(clientX, clientY);
+        if (!code) {
+            setHover(null, null);
+            return;
+        }
+        const alreadyPreviewed = viewMode === 'cities'
+            ? dotKey !== null && dotKey === dragRef.current.hoveredDotKey && code === hoveredCountryRef.current
+            : code === hoveredCountryRef.current;
+        if (alreadyPreviewed) {
+            onCountryClick?.(code, countryNames[code] ?? code);
+            return;
+        }
+        setHover(code, dotKey);
+    }, [countryAtPoint, countryNames, onCountryClick, setHover, viewMode]);
 
     // Mouse events
     useEffect(() => {
@@ -1415,12 +1434,12 @@ export function DotMatrixGlobe({
             // would select whatever is under the finger, and after a tap it
             // would select a second time; the touch has been read here already.
             if (gesture !== 'scroll' && e.cancelable) e.preventDefault();
-            if (!wasDragging || !touch) return;
+            if (e.type === 'touchcancel' || !wasDragging || !touch) return;
             const dx = touch.clientX - dragRef.current.startX;
             const dy = touch.clientY - dragRef.current.startY;
             if (Math.sqrt(dx * dx + dy * dy) > 5) return;
 
-            selectAtPoint(touch.clientX, touch.clientY);
+            touchAtPoint(touch.clientX, touch.clientY);
         };
 
         const canvas = canvasRef.current;
@@ -1440,7 +1459,7 @@ export function DotMatrixGlobe({
                 canvas.removeEventListener('touchcancel', handleTouchEnd);
             }
         };
-    }, [activeTier, mode, selectAtPoint, requestDraw]);
+    }, [activeTier, mode, touchAtPoint, requestDraw]);
 
     const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
         if (!activeTier) return;

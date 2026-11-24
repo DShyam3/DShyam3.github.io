@@ -12,6 +12,7 @@ import { useState, useCallback, useMemo, useEffect, useRef, useSyncExternalStore
 import { CONTINENT_ORDER } from '@/features/travel/continents';
 import { useContinentMap } from '@/features/travel/useContinentMap';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useMediaQuery } from '@/hooks/use-media-query';
 import { FlagStrip } from '@/components/shared/FlagStrip';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { Globe, MapPin, Search, X, Loader2, ChevronDown } from 'lucide-react';
@@ -55,6 +56,7 @@ function useStackedLayout() {
 
 const TravelContent = () => {
     const isMobile = useIsMobile();
+    const canHover = useMediaQuery('(hover: hover) and (pointer: fine)');
     const { isAdmin } = useAuth();
     const { target, selectTarget, resetTarget, setDockedDetail } = useWorkspaceInspector();
     const journal = useTravelJournal();
@@ -311,7 +313,7 @@ const TravelContent = () => {
     );
 
     const tooltipText = useMemo(() => {
-        if (!hovered) return selectedCountry ? `${selectedCountry.name.toUpperCase()} · SELECTED` : isMobile ? 'TAP TO EXPLORE' : 'HOVER TO EXPLORE';
+        if (!hovered) return selectedCountry ? `${selectedCountry.name.toUpperCase()} · SELECTED` : canHover ? 'HOVER TO EXPLORE' : 'TAP TO EXPLORE';
         if (viewMode === 'cities' && hoveredCities.length > 0) {
             return hoveredCities.map(c => c.city_name).join(', ').toUpperCase();
         }
@@ -321,7 +323,7 @@ const TravelContent = () => {
         return visitedCodes.includes(hovered.code)
             ? `${hovered.name.toUpperCase()} - VISITED`
             : hovered.name.toUpperCase();
-    }, [hovered, viewMode, hoveredCities, visitedCodes, isMobile, selectedCountry]);
+    }, [hovered, viewMode, hoveredCities, visitedCodes, canHover, selectedCountry]);
 
     // Group SOVEREIGN visited countries by continent
     const byContinent = useMemo(() => {
@@ -776,6 +778,21 @@ const TravelContent = () => {
                                             className="travel-tooltip-flag"
                                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                         />
+                                    )}
+                                    {hovered && !canHover && (
+                                        <button
+                                            type="button"
+                                            className="travel-tooltip-open t-press"
+                                            onClick={() => {
+                                                const countryName = allCountries.find(c => c.code === hovered.code)?.name
+                                                    ?? visitedCountries.find(c => c.country_code === hovered.code)?.country_name
+                                                    ?? hovered.name;
+                                                handleCountryClick(hovered.code, countryName);
+                                            }}
+                                            aria-label={`Open ${hovered.name}`}
+                                        >
+                                            Open
+                                        </button>
                                     )}
                                 </div>
 

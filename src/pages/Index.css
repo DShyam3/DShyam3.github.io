@@ -328,8 +328,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   /* centred */
-  gap: 10px;
+  gap: 8px 10px;
   min-height: 26px;
   margin-bottom: 2px;
 }
@@ -341,6 +342,48 @@
   border-radius: 2px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
+}
+
+.travel-tooltip-open {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--muted) / 0.35);
+  color: hsl(var(--foreground));
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 140ms ease-out, border-color 140ms ease-out;
+}
+
+.travel-tooltip-open:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .travel-tooltip-open:hover {
+    background: hsl(var(--muted) / 0.65);
+    border-color: hsl(var(--border));
+  }
+}
+
+@media (pointer: coarse) {
+  .travel-tooltip-open::after {
+    content: '';
+    position: absolute;
+    inset: -11px -8px;
+  }
 }
 
 /* ─── View Mode Toggle ──────────────────────────────────────────────── */
