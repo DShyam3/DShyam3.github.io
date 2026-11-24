@@ -1,21 +1,34 @@
 # State
 
-Updated 2026-11-24. Branch `main` on top of `e030d81d` ("Seen it offers the rating"). Also updated hosted `finance_settings` payday schedule for Dhyan (`monthly_date`, day `29`).
+Updated 2026-11-24. origin/main at `666dd03a` (Travel map touch preview, another session), after `e030d81d` (Seen it offers the rating). The main checkout is clean at `666dd03a`.
 
 ## Closed (recent)
-- **Travel map touch preview** (`src/components/dot-matrix/DotMatrixGlobe.tsx`, `src/features/travel/TravelPage.tsx`, `src/pages/Index.css`): first touch tap previews the country (or hex in Cities mode) in the readout bar without opening the inspector drawer; tapping the same target again or tapping the `Open` button opens it; tapping ocean clears the preview. Mouse/trackpad keeps hover + single-click. Prompt gated on `(hover: hover) and (pointer: fine)` so iPads show `TAP TO EXPLORE`. Checks green (`lint`, `typecheck`, `build`, `impeccable detect src/`); not yet verified on real iPad hardware.
-- **Seen it offers the rating** (`e030d81d`, on `origin/main`): Seen it on a Discover tile keeps the tile in place and asks for the rating; verified on local Supabase stack only, not yet seen on live site or checked as owner.
-- **Wildcards** (`12e24973`, pushed, deployed in run `45474511099`). Some YOU MIGHT LIKE tiles are well-loved titles from a genre outside the usual, labelled `Wildcard · <Genre>`, at most one per five other tiles. Live bundle grep only. Signed-out local production check only. Decision in `REHAUL_HISTORY.md` (2026-11-23).
-- **Route error screen** (`70cf978f`, deployed in run `45275294640`). A page outside Finance that fails to render shows a full-screen message. Verified on a local production build only; live bundle contains the messages.
-- **Hosted migration name match** (`70cf978f`, no database change). `20261122221500_watchlist_atomic_prune.sql` renamed to `20261122222356_watchlist_atomic_prune.sql` to match hosted history (md5 of statements matched).
-- **Stale-chunk reload** (`4c0439d7`, deploy run `45240037699`). Verified locally only.
-- **Discover dislikes count** (`8d8ca5fc`, deploy run `45188378499`). Migration `20261123135113_watchlist_dismissal_facts` applied to hosted; 1,694 answers, 0 without facts. Decision in `REHAUL_HISTORY.md`.
+- **Travel map touch preview** (`666dd03a`, pushed by another session; its deploy was still running when this was written). First touch tap previews the country (or hex in Cities mode) in the readout bar without opening the drawer; a second tap or `Open` opens it; tapping ocean clears it. That session also reports updating the hosted `finance_settings` payday schedule (`monthly_date`, day `29`); not verified here.
+- **Seen it offers the rating** (`e030d81d`, pushed to main; Pages run `45482255622` succeeded; live entry bundle `/assets/index-DoJocr5-.js` contains "Seen it — rate the show?" and the "Skip: " label, checked by curl grep). Seen it on a Discover tile keeps the tile in place and asks for the rating. Rating or skipping lets it go and the next tile takes its place. Verified on the LOCAL Supabase stack only (`npm run dev:test`, port 5173, signed in as the seeded local test admin, tmdb-proxy served locally). Not seen on the live site. Not checked as the owner. Reviewer (Opus) fixes not re-reviewed.
+- **Wildcards** (`12e24973`, deployed run `45474511099`). Some YOU MIGHT LIKE tiles are well-loved titles from a genre outside the usual, labelled `Wildcard · <Genre>`, at most one per five other tiles. Live bundle grep only. Signed-out local production check only. Decision in `REHAUL_HISTORY.md` (2026-11-23).
+- **Route error screen** (`70cf978f`, run `45275294640`). A page outside Finance that fails to render shows a full-screen message. Local production build only.
+- **Hosted migration name match** (`70cf978f`, no database change). `20261122221500_watchlist_atomic_prune.sql` renamed to `20261122222356_watchlist_atomic_prune.sql` to match hosted history.
+- **Stale-chunk reload** (`4c0439d7`, run `45240037699`). Verified locally only.
+- **Discover dislikes count** (`8d8ca5fc`, run `45188378499`). Migration `20261123135113_watchlist_dismissal_facts` applied to hosted. Decision in `REHAUL_HISTORY.md`.
 - **Discover steps 1–3** (`ec6881fa`, `fc16742f`, `fbe288dd`, live via `00527d91`). Migrations `20261122192738` and `20261122201711` applied to hosted.
 - **Watchlist atomic prune and cron sync** (`1a69f6d8`), UI polish (`734971af`, `ce7706cb`).
 
+## Checks (2026-11-24, on the tree that became `e030d81d`)
+| Check | Result |
+|---|---|
+| `npm run lint` | 0 errors, 0 warnings |
+| `npm run typecheck` | pass |
+| `npm run build` | pass |
+| `yes \| npx --yes impeccable detect src/` | 0 anti-patterns |
+| `impeccable` against running `/watchlist` | 3 reported (header blinking cursor, 2 nested cards) on the signed-out Following panel. Not from this change |
+| `npx vitest run` | 132 files / 3,066 tests pass in 7 runs. One earlier run had 2 failing tests that did not reproduce; names not captured. Recorded as flaky and unexplained, unverified |
+| `npm run typecheck:functions` | not run (no `supabase/functions` change) |
+| `npm run ship-check` | not run |
+| `graphify update .`, floorplan refresh / recent-work / build | run in the main checkout at `666dd03a` |
+
 ## Still open (not verified)
-- **Travel map touch preview**: pushed to `main`; needs real iPad hardware check (tap-to-preview, second-tap-to-open, `Open` button hit target, ocean tap to clear, and trackpad hover).
-- **Seen it offers the rating**: on `origin/main`; not seen on the live site; reviewer fixes not re-reviewed.
+- **Seen it offers the rating**: not seen on the live site; not checked as the owner; reviewer fixes not re-reviewed.
+- **Travel map touch preview**: needs a real iPad check (tap to preview, second tap to open, `Open` hit target, ocean tap to clear, trackpad hover). Reported by the session that built it.
 - **Wildcards**: not seen in a browser on the live site, not checked signed in as the owner. Reviewer fixes not re-reviewed.
 - **Route error screen on Pages**: live, but not seen triggered there.
 - **Stale-chunk reload on GitHub Pages**: verified locally only. Needs a tab opened before a deploy, observed after it.
@@ -27,8 +40,7 @@ Updated 2026-11-24. Branch `main` on top of `e030d81d` ("Seen it offers the rati
 - **Revolut bank consent** in TrueLayer: renew when convenient.
 
 ## Next
-1. **Commit and ship "Seen it offers the rating"** when the owner says so. Fetch origin first; check for peer sessions on this tree.
-2. **Signed-in owner browser check** (REHAUL_PLAN Discover item 1): steps 1–3, dislikes, the taste line from the whole library, and Seen it's rating offer on a Discover tile.
+1. **Signed-in owner browser check** (REHAUL_PLAN Discover item 1): steps 1–3, dislikes, the taste line from the whole library, and Seen it's rating offer on a Discover tile.
 
 ## Blockers
-- Item 2 needs the owner's signed-in session; no agent can perform it.
+- Item 1 needs the owner's signed-in session; no agent can perform it.
