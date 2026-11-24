@@ -33,6 +33,9 @@ export function isLibraryState(value: string, category: string): value is Librar
 const isoDay = (day: Date) =>
   `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
 
+/** Every personal score, 0.5 to 10 in halves, as the pickers offer them. */
+export const PERSONAL_RATING_SCORES: readonly number[] = Array.from({ length: 20 }, (_, index) => (index + 1) / 2);
+
 export function isValidPersonalRating(value: number | null): boolean {
   return value === null || (Number.isFinite(value) && value >= 0.5 && value <= 10 && Number.isInteger(value * 2));
 }

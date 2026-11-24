@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { PERSONAL_RATING_SCORES } from '../library-state';
 
 interface PersonalRatingProps {
   label: string;
@@ -16,7 +17,6 @@ interface PersonalRatingProps {
   showLabel?: boolean;
 }
 
-const SCORES = Array.from({ length: 20 }, (_, index) => (index + 1) / 2);
 
 /** A personal score. Empty is unrated, never zero. */
 export function PersonalRating({ label, value, onChange, prompt, onSkip, autoFocus, showLabel = true }: PersonalRatingProps) {
@@ -82,7 +82,7 @@ export function PersonalRating({ label, value, onChange, prompt, onSkip, autoFoc
             </PopoverTrigger>
             <PopoverContent align="end" collisionPadding={12} className="w-72 max-w-[calc(100vw-24px)] space-y-2 p-2">
               <div className="grid grid-cols-5 gap-1">
-                {SCORES.map((score) => (
+                {PERSONAL_RATING_SCORES.map((score) => (
                   <button
                     key={score}
                     type="button"

@@ -30,6 +30,7 @@ import { EntryPreviewDialog } from './franchise/EntryPreviewDialog';
 import { FranchiseCard } from './franchise/FranchiseCard';
 import { useAddToLibrary } from './franchise/useAddToLibrary';
 import { PersonalRating } from './PersonalRating';
+import { RateWatchedEntry } from './RateWatchedEntry';
 import { PlatformBadge } from './PlatformLogo';
 import { PosterCard } from './PosterCard';
 import { TrailerButton } from './TrailerButton';
@@ -617,7 +618,12 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
 
   return (
     <div className="ultrawide-discover-grid">
-      {isAdmin && <div style={{ gridColumn: '1 / -1' }}><DiscoverAddSearch type={type} /></div>}
+      {isAdmin && (
+        <div className="space-y-2" style={{ gridColumn: '1 / -1' }}>
+          <DiscoverAddSearch type={type} />
+          <RateWatchedEntry type={type} />
+        </div>
+      )}
       <section className="space-y-4 min-w-0" aria-labelledby="discover-coming-soon">
         <div className="space-y-1">
           <h2 id="discover-coming-soon"><DotMatrixText text="COMING SOON" size="sm" /></h2>
