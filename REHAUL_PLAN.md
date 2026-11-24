@@ -166,7 +166,6 @@ calculator scenario; the wider pass below remains open.
 | Item | Why it is open |
 |---|---|
 | Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only. Bills calendar, Forecast, recurring Paid and the Student Loan "You borrowed" figure were checked on the local stack on 2026-10-24, with test rows deleted after: tick, untick, due-day edit, Forecast at 375px, and an empty-date draw left out. Not checked: the early-payment button (its 7-day window cannot open for a monthly bill on 24 October; unit-tested only), and the wider live signed-in flows. Live Tax & Income and a synthetic calculator scenario with negative benefits cash impact render correctly; a 375px viewport has no document overflow. The category-rules loading error is cleared after migration and loader deployment, verified in a fresh signed-in tab on 2026-10-30. Light-theme smoke check passed at 1440px and dark was restored; the full cross-theme pass remains open |
-| Transactions below 1024px or 720px tall | The list keeps a pane capped to the measured card height (16rem floor) so the inspector stacked under it stays in reach. Open the inspector as a sheet on selection, then drop the cap |
 | Real devices | iPhone Safari toolbar and keyboard, iPad split view, Larger mode, 200% zoom. The pin rule re-measures on resize through `ResizeObserver`, which a hidden preview pane pauses, so only the on-load measurement is verified |
 | Watchlist episode dialog | Deliberate split panes; audit their heights on short and narrow screens on their own |
 | Further consolidation | Where a finance hero repeats its first section's figure, keep one. Audit each pair; remove nothing without a home for every figure and action |
@@ -434,41 +433,33 @@ Decided, with reasons:
    and Skip these written with their source, a skip upgraded to Not interested,
    skipped titles reappearing in Likely seen, Not seen written to
    `watchlist_not_seen`, the taste line from the owner's whole library
-   (hidden titles included), and Seen it's rating offer on a Discover tile. Only the
-   signed-out view has been checked.
+   (hidden titles included), Seen it's rating offer on a Discover tile, and the
+   Rate what you’ve watched queue (its count per tab, order, number keys, S, 0 as 10,
+   skips kept and ordered last on reopen). Only the signed-out view has been checked.
+2. **Rate what you’ve watched — open choices for the owner.** Built
+   (`rating-queue.ts`, `RateWatchedEntry.tsx`), verified on the local stack only.
+   Three calls were made provisionally, to confirm or change:
+   - Series are asked only once `Completed`, `Caught up` or `Stopped watching`, not
+     mid-season.
+   - Hidden titles are never asked.
+   - Skips are kept per browser, not synced like Discover's other answers.
 
 ### Watchlist Diary, Franchises, import and public ratings — what is left
 
-Built in the tree on `claude/eloquent-johnson-xdjc53`; not merged to
-main, not deployed, migration not applied. Decisions are in `REHAUL_HISTORY.md`
-under 2026-11-18.
+Merged to main, deployed, and migration `20261118190243_watchlist_tracking` applied to hosted. Decisions are in `REHAUL_HISTORY.md` under 2026-11-18.
 
-1. **Deploy order, fixed.** Apply migration `20261118190243_watchlist_tracking`
-   to hosted (after the three migrations already applied on 2026-11-17 and
-   2026-11-18), then deploy `watchlist-cron-sync` and `tmdb-proxy`, then merge to
-   main. The client and the sync read and write the new columns: deploying either
-   first breaks the library read or every nightly sync.
-2. **Public ratings.** `watchlist_ratings` becomes publicly readable, writes stay
-   admin-only (`(SELECT public.is_admin())`). Committed: the policy in
-   migration `20261118190243`, the client in `bf1f2db`; checked on a scratch
-   Postgres only. Applying the migration publishes every existing rating.
-3. **Browser verification of every new screen.** None has been run: Diary (both
+1. **Browser verification of every new screen.** None has been run: Diary (both
    tabs), Franchises, the import review, the Paused label, the Mark as watched
    date menu, the IMDb / RT / Metacritic scores, and the public rating read, plus the signed-in admin
    checks.
-4. **OMDb key and backfill.** Add `OMDB_API_KEY` as an Edge Function secret
-   (free tier: 1,000 requests a day); without it the sync skips scores. Scores
-   (at most 300 OMDb lookups per nightly part) and film collections then fill
-   in over the nightly sync parts; Franchises and the scores stay incomplete
-   until they have.
-5. **Trakt export format**: check the importer's parsing against a real Trakt
+2. **Trakt export format**: check the importer's parsing against a real Trakt
    export. It was written against the documented shape.
-6. **Trakt watched-movies date.** `last_watched_at` is the latest play, not the
+3. **Trakt watched-movies date.** `last_watched_at` is the latest play, not the
    first. Confirm the importer uses it that way before trusting dates on films
    watched more than once.
-7. **Favourites as a flag** and the other open items under "Watchlist News and
+4. **Favourites as a flag** and the other open items under "Watchlist News and
    Library" above still stand.
-10. **Cron sync, what is still open.** The episode upsert and season-delete fixes
+5. **Cron sync, what is still open.** The episode upsert and season-delete fixes
     (`261065c4`, `f99bbc8a`) and the watched-or-rated guard on every season and
     episode delete (`837670f8`) are live in `watchlist-cron-sync` v28 (2026-11-22,
     deployed from this branch; on main after the push). The owner approved the
@@ -482,7 +473,7 @@ under 2026-11-18.
     migration (`migration` agent); optional. (c) Only the helpers in
     `supabase/functions/_shared/owner-data.ts` are unit-tested
     (`owner-data.test.ts`, run by `npm run test:functions`); the function is not.
-11. **Browser check of Discover order** on the signed-in owner's data: not run.
+6. **Browser check of Discover order** on the signed-in owner's data: not run.
     The walk stall ("18 of 218") was fixed in `48bdbdcf`. The order check on the
     owner's data has not been re-run.
 
