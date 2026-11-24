@@ -21,6 +21,14 @@
     backface-visibility: hidden;
 }
 
+.dot-matrix-clock-number {
+    font-family: var(--font-body, 'Space Mono', monospace);
+    font-size: 0.82em;
+    font-weight: 700;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+}
+
 .dot-matrix-digit-front {
     position: relative;
     z-index: 2;

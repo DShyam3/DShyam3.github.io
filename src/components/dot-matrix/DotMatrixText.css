@@ -10,6 +10,16 @@
   transition: transform 0.2s ease, color 0.2s ease;
 }
 
+/* Doto's tiny digit dots lose their shape in navigation and labels. Numeric
+   runs use the site's data face while the surrounding lettering stays Doto. */
+.dot-matrix-number {
+  font-family: var(--font-body, 'Space Mono', monospace);
+  font-size: max(0.82em, 0.75rem);
+  font-weight: 700;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .dot-matrix-text-ui {
   font-size: 0.9375rem; /* 15px: Doto optical equivalent of 12px mono */
   font-weight: 600;

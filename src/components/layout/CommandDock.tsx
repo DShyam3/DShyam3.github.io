@@ -242,7 +242,7 @@ export function CommandDock() {
               <CommandList id={listId} aria-label="Results">
                 {filteredLinks.length > 0 ? (
                   <CommandGroup
-                    heading={<span className="readout-label">Sections ({filteredLinks.length})</span>}
+                    heading={<span className="readout-label"><DotMatrixText text={`Sections (${filteredLinks.length})`} size="ui" /></span>}
                     className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-1.5"
                   >
                     {filteredLinks.map((link) => {
@@ -275,7 +275,7 @@ export function CommandDock() {
                   </CommandGroup>
                 ) : (
                   <div role="presentation" className="space-y-2">
-                    <p className="readout-label">Sections (0)</p>
+                    <p className="readout-label"><DotMatrixText text="Sections (0)" size="ui" /></p>
                     <p className="text-xs text-muted-foreground px-1">No section matches.</p>
                   </div>
                 )}
@@ -285,7 +285,7 @@ export function CommandDock() {
                     <CommandGroup
                       heading={
                         <span className="block space-y-1">
-                          <span className="readout-label block">Records ({recordHits.length})</span>
+                          <span className="readout-label block"><DotMatrixText text={`Records (${recordHits.length})`} size="ui" /></span>
                           {recordsFailed ? (
                             <span className="block text-xs normal-case tracking-normal text-destructive px-1">
                               Could not load some records.
@@ -328,7 +328,7 @@ export function CommandDock() {
                     </CommandGroup>
                   ) : (
                     <div role="presentation" className="space-y-2">
-                      <p className="readout-label">Records (0)</p>
+                      <p className="readout-label"><DotMatrixText text="Records (0)" size="ui" /></p>
                       {recordsFailed ? (
                         <p className="text-xs text-destructive px-1">
                           Could not load some records.
@@ -343,7 +343,7 @@ export function CommandDock() {
 
                 {quickActions.length > 0 ? (
                   <CommandGroup
-                    heading={<span className="readout-label">Quick actions ({quickActions.length})</span>}
+                    heading={<span className="readout-label"><DotMatrixText text={`Quick actions (${quickActions.length})`} size="ui" /></span>}
                     className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-1.5"
                   >
                     {quickActions.map((action) => {

@@ -30,6 +30,10 @@ theme toggle and the menu. The social links sit in the menu panel below 700px.
 
 From 768px wide, a left rail lists the numbered sections, with a Display toggle
 (Standard or Larger) and a Search button. A search bar sits above the footer.
+Numbers in shared dot-matrix labels, command-menu counts, travel itinerary
+headings and the footer clock use the site's clear data typeface while the
+surrounding lettering keeps its dot-matrix look. The travel counts on Home use
+the same numeric typeface.
 
 From 1280px wide and 600px tall, a selected record opens in an inspector column
 to the right of the page. The column widens on large screens, so its details have

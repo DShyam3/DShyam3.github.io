@@ -1152,7 +1152,7 @@
 }
 
 .fact-card-figure {
-  font-family: var(--font-matrix);
+  font-family: var(--font-body);
   font-size: 2.25rem;
   font-weight: 700;
   line-height: 1;

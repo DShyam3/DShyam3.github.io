@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { BedDouble, ChevronDown, Plane, Ticket, TrainFront } from 'lucide-react';
 import { formatDayMonth } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
+import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { groupByYear } from './journal-flights';
 import type { TravelItinerary } from './journal-types';
 
@@ -53,7 +54,7 @@ export function ItineraryLog({ items, selectedId, onSelect, open, onOpenChange }
     </button>
     {/* Groups, not sections: a decade of years would otherwise be a decade of landmarks. */}
     {open && <div id={id} className="space-y-3 border-t border-border/60 p-1.5">{groups.map(group => <div key={group.year} role="group" aria-labelledby={`${id}-${group.year}`}>
-      <h4 id={`${id}-${group.year}`} className="readout-label px-2 pb-1 pt-2">{group.year} · {group.items.length}</h4>
+      <h4 id={`${id}-${group.year}`} className="readout-label px-2 pb-1 pt-2"><DotMatrixText text={`${group.year} · ${group.items.length}`} size="ui" /></h4>
       <ItineraryRows items={group.items} selectedId={selectedId} onSelect={onSelect} withYear={group.year === 'Undated'} />
     </div>)}</div>}
   </div>;

@@ -16,7 +16,7 @@ const DotMatrixDigit = ({
   isFlipping: boolean;
 }) => {
   return (
-    <span className={`dot-matrix-digit-wrapper ${isFlipping ? 'flipping' : ''}`}>
+    <span className={`dot-matrix-digit-wrapper ${char === ':' ? '' : 'dot-matrix-clock-number'} ${isFlipping ? 'flipping' : ''}`}>
       <span className="dot-matrix-digit dot-matrix-digit-front">
         {isFlipping ? prevChar : char}
       </span>
@@ -28,8 +28,8 @@ const DotMatrixDigit = ({
 /**
  * The footer clock.
  *
- * The digits are Doto, the same face as the words either side of them, and
- * not the hand-drawn dot grid this used to build out of `charPatterns`. That
+ * The digits use the site's readable numeric face; the punctuation stays
+ * Doto. This is not the hand-drawn dot grid this used to build out of `charPatterns`. That
  * grid could only be sized in whole pixels -- a dot is a div, and a
  * fractional one smears under its own border-radius -- so it could not follow
  * the text as the footer face and the root size grew, and it read as a blur
