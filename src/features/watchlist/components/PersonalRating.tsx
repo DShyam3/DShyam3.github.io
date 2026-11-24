@@ -10,12 +10,16 @@ interface PersonalRatingProps {
   /** Shown in place of the label as a highlighted, easy-to-skip line. */
   prompt?: string;
   onSkip?: () => void;
+  /** Moves focus to Rate when it appears, for a prompt that replaced what had focus. */
+  autoFocus?: boolean;
+  /** False where the prompt or label is already shown beside it, as on a Discover tile. */
+  showLabel?: boolean;
 }
 
 const SCORES = Array.from({ length: 20 }, (_, index) => (index + 1) / 2);
 
 /** A personal score. Empty is unrated, never zero. */
-export function PersonalRating({ label, value, onChange, prompt, onSkip }: PersonalRatingProps) {
+export function PersonalRating({ label, value, onChange, prompt, onSkip, autoFocus, showLabel = true }: PersonalRatingProps) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -42,12 +46,21 @@ export function PersonalRating({ label, value, onChange, prompt, onSkip }: Perso
   return (
     <div className="space-y-1" onClick={(event) => event.stopPropagation()}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className={cn('text-xs', prompt ? 'font-medium text-primary' : 'text-muted-foreground')}>
-          {prompt ?? label}
-        </span>
+        {showLabel && (
+          <span className={cn('text-xs', prompt ? 'font-medium text-primary' : 'text-muted-foreground')}>
+            {prompt ?? label}
+          </span>
+        )}
         <div className="flex items-center gap-1">
           {prompt && onSkip && (
-            <Button type="button" variant="ghost" size="sm" className="min-h-11 text-xs" onClick={onSkip}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="min-h-11 text-xs"
+              onClick={onSkip}
+              aria-label={showLabel ? undefined : `Skip: ${label}`}
+            >
               Skip
             </Button>
           )}
@@ -56,6 +69,7 @@ export function PersonalRating({ label, value, onChange, prompt, onSkip }: Perso
               <button
                 type="button"
                 disabled={saving}
+                autoFocus={autoFocus}
                 aria-label={value == null ? `${label}: Rate` : `${label}: ${value}/10`}
                 className="inline-flex h-9 min-h-9 min-w-9 items-center justify-center rounded-full border border-border bg-background px-2.5 text-xs text-foreground disabled:opacity-50"
               >

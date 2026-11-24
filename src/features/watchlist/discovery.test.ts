@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { admitWildcards, curateDiscovery, discoverySeeds, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, likelySeenConsensus, type DiscoveryItem } from './discovery';
+import { admitWildcards, curateDiscovery, discoverySeeds, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, keepHeldInPlace, likelySeenConsensus, type DiscoveryItem } from './discovery';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -331,6 +331,38 @@ describe('keepFirstSeenOrder', () => {
     keepFirstSeenOrder([{ id: 'a' }, { id: 'b' }, { id: 'c' }], key, seen);
     expect(keepFirstSeenOrder([{ id: 'c' }, { id: 'a' }], key, seen).map(key)).toEqual(['a', 'c']);
     expect(keepFirstSeenOrder([{ id: 'd' }, { id: 'b' }, { id: 'c' }], key, seen).map(key)).toEqual(['b', 'c', 'd']);
+  });
+});
+
+describe('keepHeldInPlace', () => {
+  const key = (item: { id: string }) => item.id;
+  const ids = (...list: string[]) => list.map((id) => ({ id }));
+
+  it('puts a held tile back where it was once its title leaves the list', () => {
+    const held = [{ item: { id: 'b' }, after: ['a'] }];
+    expect(keepHeldInPlace(ids('a', 'c', 'd'), held, key).map(key)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('does not double a held tile still in the list', () => {
+    const held = [{ item: { id: 'b' }, after: ['a'] }];
+    expect(keepHeldInPlace(ids('a', 'b', 'c'), held, key).map(key)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('closes up before a held tile when a tile ahead of it goes', () => {
+    // `c` was held after `a` and `b`; `b` has since gone.
+    const held = [{ item: { id: 'c' }, after: ['a', 'b'] }];
+    expect(keepHeldInPlace(ids('a', 'd', 'e'), held, key).map(key)).toEqual(['a', 'c', 'd', 'e']);
+  });
+
+  it('keeps one held tile after another', () => {
+    const held = [{ item: { id: 'c' }, after: ['a', 'b'] }, { item: { id: 'b' }, after: ['a'] }];
+    expect(keepHeldInPlace(ids('a', 'd'), held, key).map(key)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('puts a held tile first when nothing before it is still shown', () => {
+    const held = [{ item: { id: 'z' }, after: ['x', 'y'] }];
+    expect(keepHeldInPlace(ids('a', 'b'), held, key).map(key)).toEqual(['z', 'a', 'b']);
+    expect(keepHeldInPlace([], held, key).map(key)).toEqual(['z']);
   });
 });
 

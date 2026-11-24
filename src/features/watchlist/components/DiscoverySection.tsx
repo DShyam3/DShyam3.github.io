@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, EyeOff, Loader2, Plus, Search, X } from 'lucide-react';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -17,7 +17,7 @@ import { useTMDB } from '../useTMDB';
 import type { TMDBResult } from '../useTMDB';
 import { newItemFromDetails } from '../new-item';
 import { findExistingTitle } from '../existing-title';
-import { discoveryDate, discoveryKey, type DiscoveryItem, type DiscoveryMedia } from '../discovery';
+import { discoveryDate, discoveryKey, keepHeldInPlace, type DiscoveryItem, type DiscoveryMedia, type HeldTile } from '../discovery';
 import { SKIP_DAYS } from '../discovery-answers';
 import { useDiscovery, type DiscoveryFranchiseGroup } from '../useDiscovery';
 import { discoveryAddPayload } from '../discovery-add';
@@ -29,6 +29,7 @@ import { EntryList } from './franchise/EntryList';
 import { EntryPreviewDialog } from './franchise/EntryPreviewDialog';
 import { FranchiseCard } from './franchise/FranchiseCard';
 import { useAddToLibrary } from './franchise/useAddToLibrary';
+import { PersonalRating } from './PersonalRating';
 import { PlatformBadge } from './PlatformLogo';
 import { PosterCard } from './PosterCard';
 import { TrailerButton } from './TrailerButton';
@@ -76,22 +77,29 @@ function useAddSuggestion(item: DiscoveryItem) {
     setDetail(data);
     return data;
   };
-  const run = async (action: () => Promise<void>, failure: string) => {
+  const run = async <T,>(action: () => Promise<T>, failure: string): Promise<T | undefined> => {
     setPending(true); setError('');
-    try { await action(); } catch { setError(failure); } finally { setPending(false); }
+    try { return await action(); } catch { setError(failure); return undefined; } finally { setPending(false); }
   };
-  const add = (watched: boolean, watchedWhen?: WatchedWhen) => run(async () => {
+  /**
+   * The title as the library stores it once it is there (added, or already
+   * there under that title); null if the add failed or the same add is
+   * already in flight.
+   */
+  const add = async (watched: boolean, watchedWhen?: WatchedWhen): Promise<string | null> => (await run(async () => {
     const data = await fetchDetail();
-    await addWatchlistItem(discoveryAddPayload(item, data, watched), { watchedWhen, seasons: data.seasons });
+    const payload = discoveryAddPayload(item, data, watched);
     // The library refresh removes this suggestion once the save succeeds.
-  }, 'Could not add this title. Please try again.');
+    return (await addWatchlistItem(payload, { watchedWhen, seasons: data.seasons })) ? payload.title : null;
+  }, 'Could not add this title. Please try again.')) ?? null;
   const loadDetail = () => run(async () => { await fetchDetail(); }, 'Could not load details. Try again.');
   return { pending, error, detail, add, loadDetail };
 }
 
-function SuggestionActions({ item, onDismiss, onNotSeen, actions, layout }: {
+function SuggestionActions({ item, onDismiss, onSeen, onNotSeen, actions, layout }: {
   item: DiscoveryItem;
   onDismiss: () => void;
+  onSeen: (when: WatchedWhen) => void;
   /** Only under HAVE YOU ALREADY WATCHED?, which asks whether you have seen it. */
   onNotSeen?: () => void;
   actions: ReturnType<typeof useAddSuggestion>;
@@ -110,7 +118,7 @@ function SuggestionActions({ item, onDismiss, onNotSeen, actions, layout }: {
       releaseDate={date || undefined}
       releaseText={item.media === 'tv' ? 'On each episode\'s air date' : undefined}
       disabled={actions.pending}
-      onPick={(when) => { void actions.add(true, when); }}
+      onPick={onSeen}
       variant="outline"
       {...style}
     >
@@ -164,25 +172,71 @@ function SuggestionActions({ item, onDismiss, onNotSeen, actions, layout }: {
   );
 }
 
-function SuggestionTile({ item, onDismiss, onNotSeen }: { item: DiscoveryItem; onDismiss: () => void; onNotSeen?: () => void }) {
+function SuggestionTile({ item, onDismiss, onNotSeen, onHold, onRelease }: {
+  item: DiscoveryItem;
+  onDismiss: () => void;
+  onNotSeen?: () => void;
+  /** Keeps the tile in its place once its title joins the library, until `onRelease`. */
+  onHold: () => void;
+  onRelease: () => void;
+}) {
   const { getPosterUrl } = useTMDB();
+  const { watchlist, setPersonalRating, ratingsStatus } = useWatchlist();
   const actions = useAddSuggestion(item);
   const [open, setOpen] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  // Logged with Seen it: the tile offers the rating in place of its actions,
+  // and goes once rated or skipped. `title` is the library's, for finding
+  // the row the way the add matched it.
+  const [logged, setLogged] = useState<{ title: string; focus: boolean } | null>(null);
+  const posterRef = useRef<HTMLButtonElement>(null);
   const title = titleOf(item);
   const poster = item.poster_path && !imageFailed ? getPosterUrl(item.poster_path) : null;
   const openDetail = () => { setOpen(true); if (!actions.detail) void actions.loadDetail(); };
+  const category = item.media === 'movie' ? 'Movies' : 'TV Shows';
+  const libraryItem = logged
+    ? watchlist.find((row) => row.category === category && (row.tmdb_id === item.id || row.title.toLowerCase() === logged.title.toLowerCase()))
+    : undefined;
+  // Only once the scores are in: until then an unrated title may only look
+  // unrated, and a save onto a failed read would leave every other title
+  // looking unrated too.
+  const offer = !!logged && ratingsStatus === 'ready' && !!libraryItem && libraryItem.personal_rating == null;
+  const prompt = item.media === 'movie' ? 'Watched — rate it?' : 'Seen it — rate the show?';
+  const letGo = () => { setLogged(null); onRelease(); };
+  // Nothing to offer for good: the scores failed to load, or the title
+  // already has one (a library row found by its title).
+  useEffect(() => {
+    if (logged && (ratingsStatus === 'failed' || libraryItem?.personal_rating != null)) letGo();
+  });
+  const seen = async (when: WatchedWhen) => {
+    // The Seen it menu's item, drawn outside the tile, holds focus until the save lands.
+    const picked = document.activeElement;
+    onHold();
+    setOpen(false);
+    const stored = await actions.add(true, when);
+    if (stored === null) { onRelease(); return; }
+    // Rate takes focus only from a control this tile is about to take away,
+    // never from somewhere the owner has moved on to.
+    const active = document.activeElement;
+    setLogged({
+      title: stored,
+      focus: !active || active === document.body || active === picked || !!posterRef.current?.closest('article')?.contains(active),
+    });
+  };
   return (
     <>
       <PosterCard
         title={title}
         poster={poster}
         onOpen={openDetail}
+        cardRef={posterRef}
         subtitle={metaLine(item)}
         meta={
           <>
             {/* A wildcard is labelled like a franchise release: it is not a seed's suggestion. */}
-            {item.kind === 'recommendation' && !item.wildcard ? (
+            {offer ? (
+              <span className="truncate text-xs font-medium text-primary">{prompt}</span>
+            ) : item.kind === 'recommendation' && !item.wildcard ? (
               <span className="truncate text-xs text-muted-foreground" title={item.reason}>
                 {item.shortReason ?? item.reason}
               </span>
@@ -198,7 +252,33 @@ function SuggestionTile({ item, onDismiss, onNotSeen }: { item: DiscoveryItem; o
             ) : null}
           </>
         }
-        footer={<SuggestionActions item={item} onDismiss={onDismiss} onNotSeen={onNotSeen} actions={actions} layout="tile" />}
+        footer={logged ? (
+          // One row, the height of the actions it replaces; the prompt is in the meta line.
+          <div className="flex shrink-0 items-center gap-1 border-t px-2 py-1.5">
+            {offer && libraryItem ? (
+              <PersonalRating
+                label={`Your rating of ${title}`}
+                value={libraryItem.personal_rating}
+                onChange={async (rating) => { await setPersonalRating(libraryItem, rating); letGo(); }}
+                prompt={prompt}
+                showLabel={false}
+                onSkip={letGo}
+                autoFocus={logged.focus}
+              />
+            ) : (
+              <>
+                <span role="status" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                  {ratingsStatus === 'loading' ? 'Loading your ratings…' : 'Saving…'}
+                </span>
+                <Button type="button" variant="ghost" size="sm" className="min-h-11 text-xs" onClick={letGo} aria-label={`Skip rating ${title}`}>
+                  Skip
+                </Button>
+              </>
+            )}
+          </div>
+        ) : (
+          <SuggestionActions item={item} onDismiss={onDismiss} onSeen={(when) => { void seen(when); }} onNotSeen={onNotSeen} actions={actions} layout="tile" />
+        )}
       />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -242,13 +322,16 @@ function SuggestionTile({ item, onDismiss, onNotSeen }: { item: DiscoveryItem; o
             <TrailerButton trailerKey={actions.detail?.trailer_key} title={title} />
             {actions.detail && !actions.detail.trailer_key && <p className="text-xs text-muted-foreground">No trailer available yet.</p>}
             {actions.error && <p role="alert" className="text-xs text-destructive">{actions.error}</p>}
-            <SuggestionActions
-              item={item}
-              onDismiss={() => { setOpen(false); onDismiss(); }}
-              onNotSeen={onNotSeen && (() => { setOpen(false); onNotSeen(); })}
-              actions={actions}
-              layout="row"
-            />
+            {!logged && (
+              <SuggestionActions
+                item={item}
+                onDismiss={() => { setOpen(false); onDismiss(); }}
+                onSeen={(when) => { void seen(when); }}
+                onNotSeen={onNotSeen && (() => { setOpen(false); onNotSeen(); })}
+                actions={actions}
+                layout="row"
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -256,22 +339,82 @@ function SuggestionTile({ item, onDismiss, onNotSeen }: { item: DiscoveryItem; o
   );
 }
 
-function TileGrid({ items, onDismiss, onNotSeen }: {
+const tileKey = (item: DiscoveryItem) => discoveryKey(item.media, item.id);
+
+/**
+ * A grid of suggestion tiles, with `heading` above it while it has any. It
+ * stays mounted when `items` empties, so a tile still offering its rating
+ * outlives the last of the others.
+ */
+function TileGrid({ items, type = 'all', onDismiss, onNotSeen, heading, className }: {
   items: DiscoveryItem[];
+  /** The tab: a held tile of the other media waits out of sight. */
+  type?: LibraryType;
   onDismiss: (item: DiscoveryItem) => void;
   onNotSeen?: (media: DiscoveryMedia, id: number) => void;
+  heading?: ReactNode;
+  className?: string;
 }) {
+  // A tile logged with Seen it leaves `items` as its title joins the library;
+  // it is held where it was while it offers the rating.
+  const [held, setHeld] = useState<HeldTile<DiscoveryItem>[]>([]);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const refocus = useRef<{ key: string; index: number } | null>(null);
+  // A held tile of the other media is let go on a tab change: hidden, its
+  // tile would unmount and forget it was asking. Filtered here too for the
+  // render before that lands.
+  useEffect(() => {
+    const ofType = (entry: HeldTile<DiscoveryItem>) => type === 'all' || entry.item.media === type;
+    setHeld((current) => (current.every(ofType) ? current : current.filter(ofType)));
+  }, [type]);
+  const shown = keepHeldInPlace(items, held.filter((entry) => type === 'all' || entry.item.media === type), tileKey);
+  // A release can come from an earlier render's callback (a save that
+  // failed after a wait); it reads the lists as they are now.
+  const latest = useRef({ items, shown });
+  useLayoutEffect(() => { latest.current = { items, shown }; });
+  const placeOf = (list: readonly DiscoveryItem[], key: string) => Math.max(0, list.findIndex((candidate) => tileKey(candidate) === key));
+  const hold = (item: DiscoveryItem) => {
+    const key = tileKey(item);
+    const after = shown.slice(0, placeOf(shown, key)).map(tileKey);
+    setHeld((current) => (current.some((entry) => tileKey(entry.item) === key) ? current : [...current, { item, after }]));
+  };
+  const release = (item: DiscoveryItem) => {
+    const key = tileKey(item);
+    // A tile still in `items` (its save failed) stays, and keeps its focus.
+    if (!latest.current.items.some((candidate) => tileKey(candidate) === key)) {
+      refocus.current = { key, index: placeOf(latest.current.shown, key) };
+    }
+    setHeld((current) => (current.some((entry) => tileKey(entry.item) === key) ? current.filter((entry) => tileKey(entry.item) !== key) : current));
+  };
+  // A released tile takes its focus with it: hand focus to the tile now in
+  // its place. Saving a rating re-renders the grid once before the release
+  // lands, so this waits for the render the tile is gone from.
+  useEffect(() => {
+    const pending = refocus.current;
+    if (!pending || shown.some((item) => tileKey(item) === pending.key)) return;
+    refocus.current = null;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const cards = gridRef.current?.querySelectorAll('article');
+    if (!cards?.length) return;
+    cards[Math.min(pending.index, cards.length - 1)].querySelector<HTMLElement>('button')?.focus();
+  });
+  if (shown.length === 0) return null;
   return (
-    <CardGrid>
-      {items.map((item) => (
-        <SuggestionTile
-          key={discoveryKey(item.media, item.id)}
-          item={item}
-          onDismiss={() => onDismiss(item)}
-          onNotSeen={onNotSeen && (() => onNotSeen(item.media, item.id))}
-        />
-      ))}
-    </CardGrid>
+    <div ref={gridRef} className={className}>
+      {heading}
+      <CardGrid>
+        {shown.map((item) => (
+          <SuggestionTile
+            key={tileKey(item)}
+            item={item}
+            onDismiss={() => onDismiss(item)}
+            onNotSeen={onNotSeen && (() => onNotSeen(item.media, item.id))}
+            onHold={() => hold(item)}
+            onRelease={() => release(item)}
+          />
+        ))}
+      </CardGrid>
+    </div>
   );
 }
 
@@ -545,8 +688,13 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {discovery.likelySeenLoading && (
           <p role="status" className="pt-2 text-sm text-muted-foreground">Finding titles you may have seen…</p>
         )}
-        {discovery.likelySeen.length > 0 && (
-          <div className="space-y-3 pt-2">
+        <TileGrid
+          items={discovery.likelySeen}
+          type={type}
+          onDismiss={(item) => discovery.dismiss(item, 'likely_seen')}
+          onNotSeen={discovery.markNotSeen}
+          className="space-y-3 pt-2"
+          heading={
             <div className="space-y-0.5">
               <h3 className="text-sm font-medium">Likely seen</h3>
               <p className="text-xs text-muted-foreground">
@@ -555,13 +703,8 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
                   : 'Well-known films by the directors and actors you watch most, titles recommended across several in your library, and widely watched ones.'}
               </p>
             </div>
-            <TileGrid
-              items={discovery.likelySeen}
-              onDismiss={(item) => discovery.dismiss(item, 'likely_seen')}
-              onNotSeen={discovery.markNotSeen}
-            />
-          </div>
-        )}
+          }
+        />
       </section>
 
       <section className="space-y-4" aria-labelledby="discover-might-like">
@@ -585,7 +728,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           </div>
         )}
         {discovery.partlyFailed && <p role="status" className="text-sm text-muted-foreground">A few suggestions couldn’t load; Show more keeps looking.</p>}
-        {discovery.recommendations.length > 0 && <TileGrid items={discovery.recommendations} onDismiss={(item) => discovery.dismiss(item, 'you_might_like')} />}
+        <TileGrid items={discovery.recommendations} type={type} onDismiss={(item) => discovery.dismiss(item, 'you_might_like')} />
         {!discovery.loading && !discovery.loadingMore && discovery.recommendations.length === 0 && !discovery.failed && (
           <p className="text-sm text-muted-foreground">
             {discovery.hasMore

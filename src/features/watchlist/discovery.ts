@@ -185,6 +185,39 @@ export function keepFirstSeenOrder<T>(items: readonly T[], keyOf: (item: T) => s
   return [...items].sort((a, b) => (seen.get(keyOf(a)) ?? 0) - (seen.get(keyOf(b)) ?? 0));
 }
 
+/** A tile kept on screen after its title has left the list. */
+export interface HeldTile<T> {
+  item: T;
+  /** The keys of the tiles before it when it was held, nearest last. */
+  after: readonly string[];
+}
+
+/**
+ * `items` with each held tile that has left them put back after the nearest
+ * tile that was before it and is still shown (first if none is), so a title
+ * logged with Seen it stays where it was while it offers the rating, and
+ * the list closes up around it as it would around any tile. Held tiles go
+ * back nearest the start first, so one can follow another. One still in
+ * `items` is not doubled.
+ */
+export function keepHeldInPlace<T>(items: readonly T[], held: readonly HeldTile<T>[], keyOf: (item: T) => string): T[] {
+  const out = [...items];
+  const present = new Set(items.map(keyOf));
+  for (const { item, after } of [...held].sort((a, b) => a.after.length - b.after.length)) {
+    const key = keyOf(item);
+    if (present.has(key)) continue;
+    const position = new Map(out.map((candidate, index) => [keyOf(candidate), index]));
+    let at = 0;
+    for (let index = after.length - 1; index >= 0; index -= 1) {
+      const found = position.get(after[index]);
+      if (found !== undefined) { at = found + 1; break; }
+    }
+    out.splice(at, 0, item);
+    present.add(key);
+  }
+  return out;
+}
+
 /** One wildcard for every this many other suggestions on screen; see `admitWildcards`. */
 export const SUGGESTIONS_PER_WILDCARD = 5;
 

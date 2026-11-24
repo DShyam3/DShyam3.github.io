@@ -430,14 +430,12 @@ Decided, with reasons:
   was dropped: 70% of watched films are from 2005–2019, which the all-time
   most-voted pool already covers.
 
-1. **Seen it offers the rating.** Discover's Seen it logs the watch but asks
-   nothing more, so a title logged there gets no rating unless opened in the
-   library. Offer the rating where the tile was, then let it go.
-2. **Browser check, signed in as the owner**, of steps 1 to 3 and dislikes: Not interested
+1. **Browser check, signed in as the owner**, of steps 1 to 3 and dislikes: Not interested
    and Skip these written with their source, a skip upgraded to Not interested,
    skipped titles reappearing in Likely seen, Not seen written to
-   `watchlist_not_seen`, and the taste line from the owner's whole library
-   (hidden titles included). Only the signed-out view has been checked.
+   `watchlist_not_seen`, the taste line from the owner's whole library
+   (hidden titles included), and Seen it's rating offer on a Discover tile. Only the
+   signed-out view has been checked.
 
 ### Watchlist Diary, Franchises, import and public ratings — what is left
 
