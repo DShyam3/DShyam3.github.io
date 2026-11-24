@@ -338,9 +338,9 @@ brands, in portrait and landscape.
   below, with the page gutter as its inset. Nested vertical scrollers are
   limited to deliberate sibling panes (Travel's list, the Transactions
   inspector, Updates from 1280px, the holiday tracker from 1024px) and
-  temporary overlays. A capped list inside a scrolling page is not one; the
-  one exception left is the Transactions list below 1024×720, capped to the
-  measured card height until its inspector opens as a sheet.
+  temporary overlays. A capped list inside a scrolling page is not one, and
+  none remains. The Transactions inspector is a sibling pane from 1024px wide
+  at any height, and a bottom sheet below 1024px wide.
 - The shell's right inspector column, from 1280×600, is
   `clamp(19.5rem, 20vw, 32rem)`. At Standard size that is fixed below 1560px,
   a fifth of the window after, and capped from 2560px; at Larger (125% root)

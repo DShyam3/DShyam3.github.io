@@ -58,6 +58,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useReviewShortcuts } from '@/features/finance/useReviewShortcuts';
+import { useMediaQuery } from '@/hooks/use-media-query';
+import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer';
 import { useMerchantLogos } from '@/features/finance/useMerchantLogos';
 import { MerchantAvatar } from '@/features/finance/components/MerchantAvatar';
 import { StatementImportDialog } from '@/features/finance/components/StatementImportDialog';
@@ -83,6 +85,14 @@ export {
   groupTransactionsByDate,
 } from './transactions-tab-helpers';
 
+/**
+ * Wide enough for the details to sit beside the list in their own sticky,
+ * bounded pane (responsive.css, .tx-inspector-pane: keep the two equal).
+ * Width only: a short laptop window still has room for both side by side,
+ * and a sheet there would cost an open and a close for every row reviewed.
+ */
+const TX_ROOMY_QUERY = '(min-width: 1024px)';
+
 interface TransactionsTabProps {
   transactions: MockTransaction[];
   onUpdateTransactions: (updated: MockTransaction[]) => void;
@@ -105,6 +115,22 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 }) => {
   // Navigation & UI States
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
+  // Roomy, the details sit in a pane beside the list. Otherwise they open in
+  // a bottom sheet for the row the owner opens -- a click, Enter, or a link
+  // from Home. Focus and J/K only move the highlight, so the review loop never
+  // throws a sheet up; Enter opens the highlighted row.
+  const roomy = useMediaQuery(TX_ROOMY_QUERY);
+  const [sheetFor, setSheetFor] = useState<string | null>(null);
+  const openTx = useCallback((id: string) => {
+    setSelectedTxId(id);
+    setSheetFor(id);
+  }, []);
+  // Moving the highlight (focus, J/K) forgets which row a sheet was opened
+  // for, so a later resize or K back to it never throws a sheet up.
+  const moveHighlight = useCallback((id: string | null) => {
+    setSelectedTxId(id);
+    setSheetFor(null);
+  }, []);
   const { askDelete, deleteDialog } = useDeleteConfirm();
   // One shared read for the whole list; rows look their merchant up in it.
   const merchantLogos = useMerchantLogos();
@@ -145,6 +171,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   const selectedTx = useMemo(() => {
     return transactions.find(t => t.id === selectedTxId) || null;
   }, [transactions, selectedTxId]);
+  const sheetOpen = !roomy && !!selectedTx && sheetFor === selectedTx.id;
 
   // Rows are not loaded yet on a cold visit, so `tx` waits for the ledger
   // before acting on it; the scroll effect below then brings the row into
@@ -152,10 +179,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   const linkedTxId = searchParams.get('tx');
   useEffect(() => {
     if (linkedTxId && transactions.length === 0) return;
-    if (linkedTxId && transactions.some(t => t.id === linkedTxId)) setSelectedTxId(linkedTxId);
+    if (linkedTxId && transactions.some(t => t.id === linkedTxId)) openTx(linkedTxId);
     if (!searchParams.toString()) return;
     setSearchParams({}, { replace: true });
-  }, [linkedTxId, transactions, searchParams, setSearchParams]);
+  }, [linkedTxId, transactions, searchParams, setSearchParams, openTx]);
 
   // If selected transaction gets deleted/disappears, reset selection
   useEffect(() => {
@@ -373,6 +400,43 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
   const listRef = useRef<HTMLDivElement | null>(null);
 
+  // The sheet's row's place in the list while it is open, and its content,
+  // for what happens the moment it closes.
+  const sheetPlace = useRef({ open: false, index: 0 });
+  const sheetContentRef = useRef<HTMLDivElement | null>(null);
+  const sheetCloseRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    const place = sheetPlace.current;
+    const content = sheetContentRef.current;
+    if (sheetOpen) {
+      if (!place.open) {
+        place.open = true;
+        content?.removeAttribute('inert');
+        // Reopened while still sliding away, the sheet keeps its content and
+        // Radix does not focus into it again; the way out stands in.
+        if (content && !content.contains(document.activeElement)) sheetCloseRef.current?.focus();
+      }
+      const at = selectedTxId ? orderedIds.indexOf(selectedTxId) : -1;
+      if (at >= 0) place.index = at;
+      return;
+    }
+    if (!place.open) return;
+    place.open = false;
+    const active = document.activeElement;
+    // Sliding away, the sheet takes no more keys or taps (Enter must not
+    // press its Mark Reviewed), and focus leaves it now, not once it has gone.
+    content?.setAttribute('inert', '');
+    if (active && active !== document.body && !content?.contains(active)) return;
+    // The highlighted row; if it has left the list (reviewed under a Pending
+    // filter, or deleted), the one now in its place.
+    const id = selectedTxId && orderedIds.includes(selectedTxId)
+      ? selectedTxId
+      : orderedIds[Math.min(place.index, orderedIds.length - 1)];
+    if (!id) return;
+    if (id !== selectedTxId) setSelectedTxId(id);
+    listRef.current?.querySelector<HTMLElement>(`[data-tx-row="${id}"]`)?.focus();
+  }, [sheetOpen, selectedTxId, orderedIds]);
+
   const selectAllFiltered = useCallback(() => {
     setSelectedTxIds(new Set(filteredTransactions.map(tx => tx.id)));
   }, [filteredTransactions]);
@@ -399,7 +463,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   useReviewShortcuts({
     orderedIds,
     focusedId: selectedTxId,
-    setFocusedId: setSelectedTxId,
+    setFocusedId: moveHighlight,
+    open: openTx,
     toggleReviewed: handleToggleReviewSingle,
     toggleSelected: toggleSelectedById,
     selectAll: selectAllFiltered,
@@ -463,6 +528,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     deleteTransactions([id]);
     if (selectedTxId === id) {
       setSelectedTxId(null);
+      setSheetFor(null);
     }
   };
 
@@ -552,10 +618,342 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     document.body.removeChild(link);
   };
 
+  // The selected transaction's details: in a sticky pane beside the list when
+  // roomy, in a bottom sheet otherwise.
+  // Held for the sheet's exit, which a delete would otherwise empty at once.
+  const lastDetails = useRef<React.ReactNode>(null);
+  const details = selectedTx ? (
+    <div className="space-y-6">
+      {/* Detail Panel Header */}
+      <div className="flex items-center justify-between pb-4 border-b border-border/20">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-semibold">
+          <FileText className="h-4 w-4 text-primary" />
+          <span>REGULAR TRANSACTION</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {/* Review Button */}
+          <Button
+            size="sm"
+            variant={selectedTx.isReviewed ? "default" : "outline"}
+            onClick={() => handleToggleReviewSingle(selectedTx.id)}
+            className={cn(
+              "h-7 rounded-lg text-xs flex items-center gap-1 border font-medium",
+              selectedTx.isReviewed
+                ? "bg-positive/10 text-positive border-positive/20 hover:bg-positive/20"
+                : "border-primary/15 text-muted-foreground hover:bg-primary/5"
+            )}
+          >
+            <Check className="h-3 w-3" />
+            <span>{selectedTx.isReviewed ? 'Reviewed' : 'Mark Reviewed'}</span>
+          </Button>
+
+          {/* Delete Button */}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => handleDeleteSingle(selectedTx.id)}
+            className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Title & Amount inline editor */}
+      <div className="space-y-2">
+        {reimbursedTransactionIds.has(selectedTx.id) && (
+          <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-xs text-positive">Matched to a confirmed payslip reimbursement.</p>
+        )}
+        <Input
+          value={selectedTx.name}
+          onChange={e => updateSelectedField('name', e.target.value)}
+          className="text-lg font-bold bg-transparent border-transparent hover:border-border/40 focus:border-border/60 p-0 h-auto focus-visible:ring-0 text-foreground cursor-text"
+        />
+
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <span className="text-sm text-muted-foreground font-mono">£</span>
+          <Input
+            type="number"
+            value={Math.abs(selectedTx.amount).toString()}
+            onChange={e => {
+              const val = parseFloat(e.target.value) || 0;
+              const multiplier = selectedTx.amount < 0 ? -1 : 1;
+              updateSelectedField('amount', val * multiplier);
+            }}
+            className="text-2xl font-mono font-semibold bg-transparent border-transparent hover:border-border/40 focus:border-border/60 p-0 h-auto w-32 focus-visible:ring-0 text-foreground cursor-text"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => updateSelectedField('amount', -selectedTx.amount)}
+            className={cn(
+              "h-7 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors font-mono",
+              selectedTx.amount < 0
+                ? "bg-positive/10 text-positive border-positive/30 hover:bg-positive/20"
+                : "bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20"
+            )}
+          >
+            {selectedTx.amount < 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            <span>{selectedTx.amount < 0 ? '+ Income / Gain' : '- Spending / Expense'}</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Details Form Grid */}
+      <div className="space-y-4 pt-2 font-mono">
+        {/* Category */}
+        <div className="grid grid-cols-3 items-center gap-4">
+          <Label className="text-xs text-muted-foreground font-mono">Category</Label>
+          <div className="col-span-2">
+            <Select
+              value={selectedTx.category}
+              onValueChange={(val) => updateSelectedField('category', val)}
+            >
+              <SelectTrigger className="h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent className="max-h-64 overflow-y-auto bg-card border-border/40 z-50 font-mono">
+                {allCategoryOptions.map(opt => (
+                  <SelectItem key={opt.id} value={opt.name} className="text-xs font-mono">
+                    <span className="text-xs text-muted-foreground mr-1.5">[{opt.group}]</span>
+                    {opt.name}
+                  </SelectItem>
+                ))}
+                <SelectItem value="Other" className="text-xs font-mono">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Category Rule Helper */}
+        {(() => {
+          const merchantCandidate = (selectedTx.merchant || resolveMerchant(selectedTx.name).label || selectedTx.name).trim();
+          if (!merchantCandidate || !selectedTx.category) return null;
+          const activeRule = categoryRules.find(r => matchesCategoryRule(selectedTx, r));
+          const ruleMatchesSameCategory = activeRule && activeRule.category.toLowerCase() === selectedTx.category.toLowerCase();
+          const quickImpact = calculateRuleImpact(transactions, {
+            merchant_pattern: merchantCandidate,
+            category: selectedTx.category,
+          });
+
+          return (
+            <div className="surface-card bg-muted/15 border border-border/40 rounded-lg p-2.5 space-y-1.5 text-xs font-mono">
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span className="flex items-center gap-1 font-semibold text-foreground">
+                  <Sparkles className="h-3 w-3 text-primary" />
+                  Category rule
+                </span>
+                {activeRule && (
+                  <Badge variant="outline" className="text-xs h-4 font-mono px-1 border-primary/30 text-primary">
+                    Active
+                  </Badge>
+                )}
+              </div>
+
+              {ruleMatchesSameCategory ? (
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground pt-0.5">
+                  <span>
+                    Pattern <strong className="text-foreground font-medium">"{activeRule.merchant_pattern}"</strong> maps to {activeRule.category}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setRulesInitialPattern(activeRule.merchant_pattern);
+                      setRulesInitialCategory(activeRule.category);
+                      setIsRulesDialogOpen(true);
+                    }}
+                    className="h-6 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Edit
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-1.5 pt-0.5">
+                  <p className="text-xs text-muted-foreground">
+                    {quickImpact.unmodifiedCount > 0
+                      ? `Always assign "${selectedTx.category}" to ${quickImpact.unmodifiedCount} matching transaction${quickImpact.unmodifiedCount === 1 ? '' : 's'}?`
+                      : `Always assign "${selectedTx.category}" for future "${merchantCandidate}" transactions?`}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={async () => {
+                      await saveCategoryRule({
+                        merchant_pattern: merchantCandidate,
+                        category: selectedTx.category,
+                      });
+                    }}
+                    className="w-full h-7 rounded text-xs font-mono flex items-center justify-center gap-1.5 border border-border/50"
+                  >
+                    <Sparkles className="h-3 w-3 text-primary" />
+                    <span>Always for this merchant</span>
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Account */}
+        <div className="grid grid-cols-3 items-center gap-4">
+          <Label className="text-xs text-muted-foreground font-mono">Account</Label>
+          <div className="col-span-2">
+            <Select
+              value={selectedTx.bankAccountId || selectedTx.accountId || 'none'}
+              onValueChange={(val) => {
+                const targetId = val === 'none' ? undefined : val;
+                onUpdateTransactions(transactions.map(tx => {
+                  if (tx.id === selectedTx.id) {
+                    return { ...tx, bankAccountId: targetId, accountId: targetId };
+                  }
+                  return tx;
+                }));
+              }}
+            >
+              <SelectTrigger className="h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
+                <SelectValue placeholder="No account linked" />
+              </SelectTrigger>
+              <SelectContent className="bg-card border-border/40 z-50 font-mono">
+                <SelectItem value="none" className="text-xs font-mono">No account linked</SelectItem>
+                {bankAccounts.map(acc => (
+                  <SelectItem key={acc.id} value={acc.id} className="text-xs font-mono">
+                    <span className="mr-1">{acc.emoji || (acc.type === 'credit' ? '💳' : '🏦')}</span>
+                    {acc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Goal */}
+        <div className="grid grid-cols-3 items-center gap-4">
+          <Label className="text-xs text-muted-foreground font-mono">Savings Goal</Label>
+          <div className="col-span-2">
+            <Select
+              value={selectedTx.goalId || 'none'}
+              onValueChange={(val) => updateSelectedField('goalId', val === 'none' ? undefined : val)}
+            >
+              <SelectTrigger className="h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
+                <SelectValue placeholder="Link to savings goal" />
+              </SelectTrigger>
+              <SelectContent className="bg-card border-border/40 z-50 font-mono">
+                <SelectItem value="none" className="text-xs font-mono">No goal linked</SelectItem>
+                {goals.map(g => (
+                  <SelectItem key={g.id} value={g.id} className="text-xs font-mono">
+                    {/* The goal's own emoji, as the transaction row
+                        shows it -- a hardcoded target made every goal
+                        in the picker look identical. */}
+                    {g.emoji || '🎯'} {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground font-mono">Notes</Label>
+          <Textarea
+            placeholder="Add notes about this transaction..."
+            value={selectedTx.notes || ''}
+            onChange={e => updateSelectedField('notes', e.target.value || undefined)}
+            className="min-h-[80px] bg-background/50 border-border/40 rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus-visible:ring-primary/45"
+          />
+        </div>
+
+        {/* Tags */}
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground font-mono">Tags</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {(selectedTx.tags || []).map(tag => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 text-xs bg-muted/30 text-foreground border border-border/30 px-2 py-0.5 rounded-sm font-mono"
+              >
+                <Tag className="h-2 w-2 text-muted-foreground" />
+                <span>{tag}</span>
+                <button
+                  onClick={() => handleRemoveTag(tag)}
+                  className="hover:text-destructive font-bold ml-0.5"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <Input
+              placeholder="+ Add tag (Enter)"
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  handleAddTag(e.currentTarget.value);
+                  e.currentTarget.value = '';
+                }
+              }}
+              className="h-6 w-24 bg-background/30 border-border/40 rounded-lg text-xs font-mono px-2 py-0"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Similar Transactions */}
+      <div className="pt-4 border-t border-border/20 space-y-3 font-mono">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">
+            Similar Transactions
+          </h4>
+          <span className="text-xs text-muted-foreground font-mono font-semibold">
+            {similarTransactionsInfo.monthLabel}: {formatGBP(similarTransactionsInfo.monthlySum)} ({similarTransactionsInfo.overallCount})
+          </span>
+        </div>
+
+        <div className="space-y-1.5">
+          {similarTransactionsInfo.list.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic py-1 font-mono">
+              No previous transactions found for this merchant.
+            </p>
+          ) : (
+            similarTransactionsInfo.list.map(match => (
+              <div key={match.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/20 border border-border/20">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-semibold text-foreground block">
+                    {new Date(match.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    {getAccountInfo(match.bankAccountId)?.name || 'Credit Card'}
+                    {match.category && (
+                      <>
+                        <span>·</span>
+                        <span className="text-primary">{match.category}</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+                <span className={cn(
+                  "text-xs font-mono font-semibold",
+                  match.amount < 0 ? "text-positive" : "text-destructive"
+                )}>
+                  {match.amount < 0 ? '+' : '-'}{formatGBP(Math.abs(match.amount))}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
+  useEffect(() => {
+    if (details) lastDetails.current = details;
+  });
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
+    <div className={cn('grid grid-cols-1 gap-6 items-start w-full', roomy && 'grid-cols-3')}>
       {/* LEFT SECTION: TRANSACTIONS LIST */}
-      <div className="lg:col-span-2 flex flex-col space-y-4">
+      <div className={cn('flex flex-col space-y-4', roomy && 'col-span-2')}>
         {/* TOOLBAR: Search, Filter, Sort, Batch Actions */}
         <div className="surface-card bg-card/50 border border-border/40 rounded-lg p-4 space-y-3 hover:border-border/80 transition-colors">
           <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -853,10 +1251,9 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </Button>
             </div>
           ) : (
-            /* Roomy, the list flows in the card's scroll beside a sticky
-               inspector; constrained, it keeps its own capped pane
-               (responsive.css, .tx-list-pane). */
-            <div ref={listRef} className="tx-list-pane space-y-6">
+            /* The list flows in the card's scroll; its details sit in a sticky
+               pane beside it when roomy, or open in a sheet (see `roomy`). */
+            <div ref={listRef} className="space-y-6">
               {/* Select All Bar */}
               <div className="flex items-center px-4 py-1.5 border-b border-border/20 text-xs text-muted-foreground font-semibold">
                 <div className="flex items-center gap-3">
@@ -925,9 +1322,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                           tabIndex={0}
                           aria-label={`${tx.name}, ${formatGBP(Math.abs(tx.amount))}, ${tx.isReviewed ? 'reviewed' : 'needs review'}${reimbursedTransactionIds.has(tx.id) ? ', reimbursed through payroll' : ''}`}
                           aria-pressed={isSelected}
-                          onFocus={(event) => { if (event.target === event.currentTarget) setSelectedTxId(tx.id); }}
+                          onFocus={(event) => { if (event.target === event.currentTarget) moveHighlight(tx.id); }}
                           onKeyDown={(event) => {
-                            if (event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); setSelectedTxId(tx.id); }
+                            // Enter or Space opens the highlighted row: J/K may
+                            // have moved the highlight past the row with focus.
+                            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openTx(selectedTxId ?? tx.id); }
                           }}
                           className={cn(
                             "flex items-center p-2.5 rounded-lg border border-transparent transition-all cursor-pointer select-none font-mono",
@@ -939,7 +1338,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                               ? "bg-card/90 border-border/70 shadow-sm ring-1 ring-primary/40"
                               : "bg-card/40 hover:bg-card/60 hover:border-border/40"
                           )}
-                          onClick={() => setSelectedTxId(tx.id)}
+                          onClick={() => openTx(tx.id)}
                         >
                           {/* Left Elements */}
                           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1040,347 +1439,59 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         </div>
       </div>
 
-      {/* RIGHT SECTION: TRANSACTION DETAILS PANEL */}
-      <div className="tx-inspector-pane flex flex-col space-y-4">
-        <div className="surface-card bg-card/50 border border-border/40 rounded-lg p-5 hover:border-border/80 transition-colors">
-          {selectedTx ? (
-            <div className="space-y-6">
-              {/* Detail Panel Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-border/20">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-semibold">
-                  <FileText className="h-4 w-4 text-primary" />
-                  <span>REGULAR TRANSACTION</span>
+      {/* RIGHT SECTION: TRANSACTION DETAILS PANEL. Roomy, a sticky pane beside
+          the list; otherwise the details open in a bottom sheet (below). */}
+      {roomy ? (
+        <div className="tx-inspector-pane flex flex-col space-y-4">
+          <div className="surface-card bg-card/50 border border-border/40 rounded-lg p-5 hover:border-border/80 transition-colors">
+            {details ?? (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="p-3 bg-muted/20 rounded-lg border border-border/30">
+                  <FileText className="h-7 w-7 text-muted-foreground/50" />
                 </div>
-                <div className="flex items-center gap-1">
-                  {/* Review Button */}
-                  <Button
-                    size="sm"
-                    variant={selectedTx.isReviewed ? "default" : "outline"}
-                    onClick={() => handleToggleReviewSingle(selectedTx.id)}
-                    className={cn(
-                      "h-7 rounded-lg text-xs flex items-center gap-1 border font-medium",
-                      selectedTx.isReviewed
-                        ? "bg-positive/10 text-positive border-positive/20 hover:bg-positive/20"
-                        : "border-primary/15 text-muted-foreground hover:bg-primary/5"
-                    )}
-                  >
-                    <Check className="h-3 w-3" />
-                    <span>{selectedTx.isReviewed ? 'Reviewed' : 'Mark Reviewed'}</span>
-                  </Button>
-
-                  {/* Delete Button */}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDeleteSingle(selectedTx.id)}
-                    className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-foreground font-mono">No transaction selected</h3>
+                  <p className="text-xs text-muted-foreground max-w-xs mx-auto font-mono">
+                    Select any transaction from the list on the left to review details, change tags, link goals or view transaction history.
+                  </p>
                 </div>
               </div>
-
-              {/* Title & Amount inline editor */}
-              <div className="space-y-2">
-                {reimbursedTransactionIds.has(selectedTx.id) && (
-                  <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-xs text-positive">Matched to a confirmed payslip reimbursement.</p>
-                )}
-                <Input
-                  value={selectedTx.name}
-                  onChange={e => updateSelectedField('name', e.target.value)}
-                  className="text-lg font-bold bg-transparent border-transparent hover:border-border/40 focus:border-border/60 p-0 h-auto focus-visible:ring-0 text-foreground cursor-text"
-                />
-
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <span className="text-sm text-muted-foreground font-mono">£</span>
-                  <Input
-                    type="number"
-                    value={Math.abs(selectedTx.amount).toString()}
-                    onChange={e => {
-                      const val = parseFloat(e.target.value) || 0;
-                      const multiplier = selectedTx.amount < 0 ? -1 : 1;
-                      updateSelectedField('amount', val * multiplier);
-                    }}
-                    className="text-2xl font-mono font-semibold bg-transparent border-transparent hover:border-border/40 focus:border-border/60 p-0 h-auto w-32 focus-visible:ring-0 text-foreground cursor-text"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => updateSelectedField('amount', -selectedTx.amount)}
-                    className={cn(
-                      "h-7 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors font-mono",
-                      selectedTx.amount < 0
-                        ? "bg-positive/10 text-positive border-positive/30 hover:bg-positive/20"
-                        : "bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20"
-                    )}
-                  >
-                    {selectedTx.amount < 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    <span>{selectedTx.amount < 0 ? '+ Income / Gain' : '- Spending / Expense'}</span>
-                  </Button>
-                </div>
-              </div>
-
-              {/* Details Form Grid */}
-              <div className="space-y-4 pt-2 font-mono">
-                {/* Category */}
-                <div className="grid grid-cols-3 items-center gap-4">
-                  <Label className="text-xs text-muted-foreground font-mono">Category</Label>
-                  <div className="col-span-2">
-                    <Select
-                      value={selectedTx.category}
-                      onValueChange={(val) => updateSelectedField('category', val)}
-                    >
-                      <SelectTrigger className="h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-64 overflow-y-auto bg-card border-border/40 z-50 font-mono">
-                        {allCategoryOptions.map(opt => (
-                          <SelectItem key={opt.id} value={opt.name} className="text-xs font-mono">
-                            <span className="text-xs text-muted-foreground mr-1.5">[{opt.group}]</span>
-                            {opt.name}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="Other" className="text-xs font-mono">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Category Rule Helper */}
-                {(() => {
-                  const merchantCandidate = (selectedTx.merchant || resolveMerchant(selectedTx.name).label || selectedTx.name).trim();
-                  if (!merchantCandidate || !selectedTx.category) return null;
-                  const activeRule = categoryRules.find(r => matchesCategoryRule(selectedTx, r));
-                  const ruleMatchesSameCategory = activeRule && activeRule.category.toLowerCase() === selectedTx.category.toLowerCase();
-                  const quickImpact = calculateRuleImpact(transactions, {
-                    merchant_pattern: merchantCandidate,
-                    category: selectedTx.category,
-                  });
-
-                  return (
-                    <div className="surface-card bg-muted/15 border border-border/40 rounded-lg p-2.5 space-y-1.5 text-xs font-mono">
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span className="flex items-center gap-1 font-semibold text-foreground">
-                          <Sparkles className="h-3 w-3 text-primary" />
-                          Category rule
-                        </span>
-                        {activeRule && (
-                          <Badge variant="outline" className="text-xs h-4 font-mono px-1 border-primary/30 text-primary">
-                            Active
-                          </Badge>
-                        )}
-                      </div>
-
-                      {ruleMatchesSameCategory ? (
-                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground pt-0.5">
-                          <span>
-                            Pattern <strong className="text-foreground font-medium">"{activeRule.merchant_pattern}"</strong> maps to {activeRule.category}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setRulesInitialPattern(activeRule.merchant_pattern);
-                              setRulesInitialCategory(activeRule.category);
-                              setIsRulesDialogOpen(true);
-                            }}
-                            className="h-6 px-1.5 text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            Edit
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-1.5 pt-0.5">
-                          <p className="text-xs text-muted-foreground">
-                            {quickImpact.unmodifiedCount > 0
-                              ? `Always assign "${selectedTx.category}" to ${quickImpact.unmodifiedCount} matching transaction${quickImpact.unmodifiedCount === 1 ? '' : 's'}?`
-                              : `Always assign "${selectedTx.category}" for future "${merchantCandidate}" transactions?`}
-                          </p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onClick={async () => {
-                              await saveCategoryRule({
-                                merchant_pattern: merchantCandidate,
-                                category: selectedTx.category,
-                              });
-                            }}
-                            className="w-full h-7 rounded text-xs font-mono flex items-center justify-center gap-1.5 border border-border/50"
-                          >
-                            <Sparkles className="h-3 w-3 text-primary" />
-                            <span>Always for this merchant</span>
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Account */}
-                <div className="grid grid-cols-3 items-center gap-4">
-                  <Label className="text-xs text-muted-foreground font-mono">Account</Label>
-                  <div className="col-span-2">
-                    <Select
-                      value={selectedTx.bankAccountId || selectedTx.accountId || 'none'}
-                      onValueChange={(val) => {
-                        const targetId = val === 'none' ? undefined : val;
-                        onUpdateTransactions(transactions.map(tx => {
-                          if (tx.id === selectedTx.id) {
-                            return { ...tx, bankAccountId: targetId, accountId: targetId };
-                          }
-                          return tx;
-                        }));
-                      }}
-                    >
-                      <SelectTrigger className="h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
-                        <SelectValue placeholder="No account linked" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-card border-border/40 z-50 font-mono">
-                        <SelectItem value="none" className="text-xs font-mono">No account linked</SelectItem>
-                        {bankAccounts.map(acc => (
-                          <SelectItem key={acc.id} value={acc.id} className="text-xs font-mono">
-                            <span className="mr-1">{acc.emoji || (acc.type === 'credit' ? '💳' : '🏦')}</span>
-                            {acc.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Goal */}
-                <div className="grid grid-cols-3 items-center gap-4">
-                  <Label className="text-xs text-muted-foreground font-mono">Savings Goal</Label>
-                  <div className="col-span-2">
-                    <Select
-                      value={selectedTx.goalId || 'none'}
-                      onValueChange={(val) => updateSelectedField('goalId', val === 'none' ? undefined : val)}
-                    >
-                      <SelectTrigger className="h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
-                        <SelectValue placeholder="Link to savings goal" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-card border-border/40 z-50 font-mono">
-                        <SelectItem value="none" className="text-xs font-mono">No goal linked</SelectItem>
-                        {goals.map(g => (
-                          <SelectItem key={g.id} value={g.id} className="text-xs font-mono">
-                            {/* The goal's own emoji, as the transaction row
-                                shows it -- a hardcoded target made every goal
-                                in the picker look identical. */}
-                            {g.emoji || '🎯'} {g.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Notes */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground font-mono">Notes</Label>
-                  <Textarea
-                    placeholder="Add notes about this transaction..."
-                    value={selectedTx.notes || ''}
-                    onChange={e => updateSelectedField('notes', e.target.value || undefined)}
-                    className="min-h-[80px] bg-background/50 border-border/40 rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus-visible:ring-primary/45"
-                  />
-                </div>
-
-                {/* Tags */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground font-mono">Tags</Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(selectedTx.tags || []).map(tag => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 text-xs bg-muted/30 text-foreground border border-border/30 px-2 py-0.5 rounded-sm font-mono"
-                      >
-                        <Tag className="h-2 w-2 text-muted-foreground" />
-                        <span>{tag}</span>
-                        <button
-                          onClick={() => handleRemoveTag(tag)}
-                          className="hover:text-destructive font-bold ml-0.5"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                    <Input
-                      placeholder="+ Add tag (Enter)"
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          handleAddTag(e.currentTarget.value);
-                          e.currentTarget.value = '';
-                        }
-                      }}
-                      className="h-6 w-24 bg-background/30 border-border/40 rounded-lg text-xs font-mono px-2 py-0"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Similar Transactions */}
-              <div className="pt-4 border-t border-border/20 space-y-3 font-mono">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">
-                    Similar Transactions
-                  </h4>
-                  <span className="text-xs text-muted-foreground font-mono font-semibold">
-                    {similarTransactionsInfo.monthLabel}: {formatGBP(similarTransactionsInfo.monthlySum)} ({similarTransactionsInfo.overallCount})
-                  </span>
-                </div>
-
-                <div className="space-y-1.5">
-                  {similarTransactionsInfo.list.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic py-1 font-mono">
-                      No previous transactions found for this merchant.
-                    </p>
-                  ) : (
-                    similarTransactionsInfo.list.map(match => (
-                      <div key={match.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/20 border border-border/20">
-                        <div className="space-y-0.5">
-                          <span className="text-xs font-semibold text-foreground block">
-                            {new Date(match.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </span>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            {getAccountInfo(match.bankAccountId)?.name || 'Credit Card'}
-                            {match.category && (
-                              <>
-                                <span>·</span>
-                                <span className="text-primary">{match.category}</span>
-                              </>
-                            )}
-                          </span>
-                        </div>
-                        <span className={cn(
-                          "text-xs font-mono font-semibold",
-                          match.amount < 0 ? "text-positive" : "text-destructive"
-                        )}>
-                          {match.amount < 0 ? '+' : '-'}{formatGBP(Math.abs(match.amount))}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
-              <div className="p-3 bg-muted/20 rounded-lg border border-border/30">
-                <FileText className="h-7 w-7 text-muted-foreground/50" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-foreground font-mono">No transaction selected</h3>
-                <p className="text-xs text-muted-foreground max-w-xs mx-auto font-mono">
-                  Select any transaction from the list on the left to review details, change tags, link goals or view transaction history.
-                </p>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        // Mounted while not roomy, so it can slide out after closing.
+        <Drawer open={sheetOpen} autoFocus onOpenChange={(open) => { if (!open) setSheetFor(null); }}>
+          <DrawerContent
+            ref={sheetContentRef}
+            aria-describedby={undefined}
+            overlayClassName="bg-background/75"
+            className="inset-x-2 bottom-0 z-50 mx-auto max-h-[86dvh] max-w-lg rounded-t-2xl border border-border/75 bg-popover/95 shadow-2xl focus:outline-none sm:inset-x-4"
+            // Focus has already gone back to the list as the sheet closed (the
+            // effect on `sheetOpen`); nothing is left to restore once it has gone.
+            onCloseAutoFocus={(event) => event.preventDefault()}
+          >
+            <DrawerTitle className="sr-only">{selectedTx?.name ?? 'Transaction'}</DrawerTitle>
+            {/* Outside the scrolling body, and first, so the sheet opens with
+                focus on a way out rather than on Mark Reviewed. */}
+            <div className="flex shrink-0 justify-end px-2 pt-1">
+              <button
+                ref={sheetCloseRef}
+                type="button"
+                data-vaul-no-drag=""
+                onClick={() => setSheetFor(null)}
+                aria-label="Close transaction details"
+                className="t-press inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="app-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4">
+              {details ?? lastDetails.current}
+            </div>
+          </DrawerContent>
+        </Drawer>
+      )}
 
       <StatementImportDialog
         open={isStatementImportOpen}

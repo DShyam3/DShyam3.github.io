@@ -21,14 +21,25 @@ export interface ReviewShortcutHandlers {
   toggleSelected: (id: string) => void;
   selectAll: () => void;
   clearSelection: () => void;
+  /** Enter with nothing in particular focused opens the highlighted row. */
+  open?: (id: string) => void;
   enabled?: boolean;
 }
 
 const isTypingTarget = (el: EventTarget | null): boolean => {
   if (!(el instanceof HTMLElement)) return false;
   const tag = el.tagName.toLowerCase();
-  return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+  // A closed Select takes letters as typeahead, so it counts as typing too.
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable
+    || el.getAttribute('role') === 'combobox';
 };
+
+/**
+ * Something open over the list that the keyboard is addressing: a dialog
+ * (not one already sliding away -- it keeps its role until it has gone), or
+ * an open Select or menu, whose typeahead takes letters.
+ */
+const OVERLAY_OPEN = '[role="dialog"]:not([data-state="closed"]), [role="listbox"][data-state="open"], [role="menu"][data-state="open"]';
 
 export function useReviewShortcuts({
   orderedIds,
@@ -38,6 +49,7 @@ export function useReviewShortcuts({
   toggleSelected,
   selectAll,
   clearSelection,
+  open,
   enabled = true,
 }: ReviewShortcutHandlers) {
   useEffect(() => {
@@ -46,11 +58,24 @@ export function useReviewShortcuts({
     const onKeyDown = (e: KeyboardEvent) => {
       // Leave the browser's own shortcuts alone: cmd+A must still select text.
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // A key a dialog has already acted on (Radix marks the Escape that
+      // closes one) is spent: closing a sheet must not also drop the cursor.
+      if (e.defaultPrevented) return;
       // A bare letter has to stay a letter inside the search box.
       if (isTypingTarget(e.target)) return;
-      // Radix portals dialogs to the body root; while one is open the list
+      // Radix portals overlays to the body root; while one is open the list
       // behind it is not what the keyboard is addressing.
-      if (document.querySelector('[role="dialog"]')) return;
+      if (document.querySelector(OVERLAY_OPEN)) return;
+
+      // A row handles its own Enter; this is Enter with focus nowhere in
+      // particular, after J/K moved the highlight.
+      if (e.key === 'Enter') {
+        if (open && focusedId && (e.target === document.body || e.target === document.documentElement)) {
+          e.preventDefault();
+          open(focusedId);
+        }
+        return;
+      }
 
       const action = reviewKeyAction(e.key, orderedIds, focusedId);
       if (!action) return;
@@ -74,5 +99,5 @@ export function useReviewShortcuts({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [enabled, orderedIds, focusedId, setFocusedId, toggleReviewed, toggleSelected, selectAll, clearSelection]);
+  }, [enabled, orderedIds, focusedId, setFocusedId, toggleReviewed, toggleSelected, selectAll, clearSelection, open]);
 }

@@ -68,14 +68,13 @@
   .app-frame[data-layout="workspace"] { overflow: hidden; display: flex; flex-direction: column; }
 }
 
-/* Transactions is a master/detail view. In a roomy card the list flows in the
-   card's scroll and the inspector is a sticky sibling pane with its own
-   bounded scroll, so the selected row's details stay in view whatever the
-   list's length. Constrained, the list keeps a capped pane so the inspector
-   stacked below it stays within reach. */
-.tx-list-pane { max-height: max(16rem, calc(var(--frame-h, 100dvh) - 4rem)); overflow-y: auto; padding-right: .25rem; }
-@media (min-width: 1024px) and (min-height: 720px) {
-  .tx-list-pane { max-height: none; overflow: visible; padding-right: 0; }
+/* Transactions is a master/detail view. The list always flows in the card's
+   scroll. From 1024px wide the inspector is a sticky sibling pane with its
+   own bounded scroll, so the selected row's details stay in view whatever the
+   list's length or the window's height; narrower, the details open in a
+   bottom sheet instead (TransactionsTab.tsx, TX_ROOMY_QUERY: keep the two
+   equal). */
+@media (min-width: 1024px) {
   .tx-inspector-pane {
     position: sticky;
     top: calc(var(--toolbar-h, 0px) + 1rem);

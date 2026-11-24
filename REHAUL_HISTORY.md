@@ -3307,3 +3307,14 @@ Four decisions:
 Two knock-on effects. Discover's share of tmdb-proxy's 60 calls a minute went from 40 to 42. The sections' first pages in All are 14 calls now, two of them wildcards, and pages keep at least 14 while the walk takes its 28, so the first page still goes at once. That leaves 18 a minute for the owner's own adds, Seen it and searches. Wildcard answers are recorded as `you_might_like`, so no answer source and no migration were needed.
 
 Closure: in the tree on `discover-dislikes`, not committed and not pushed, so not shipped or live. Checked on a local production build at localhost:5173, signed out only: a wildcard appeared as "Beauty and the Beast — Wildcard · Family" and was one of 7 tiles once rationed; its dialog gave the reason; dismissing a regular tile kept the wildcard, a new suggestion took the freed place, and no new wildcard came in. The reviewer's findings (the creep, the vanishing tile, series-only genres, empty pages) were fixed with tests; the fixes were not re-reviewed. The signed-in owner check is open in `STATE.md`.
+
+### Transactions details become a sheet below 1024px wide, not below 1024×720 — 2026-11-24
+
+The plan row for Transactions said the details should open as a sheet below 1024×720, with the list capped until then. The row assumed the inspector stood under the list below 720px tall. It did not: the grid was side by side from 1024px wide at any height. A height floor would have turned common laptop windows (1366×768 is about 1366×650 inside a browser, 1280×800 about 1280×700, and Windows at 125% lands in the same range) into open, close, next for every row reviewed.
+
+Decisions:
+
+1. **The sheet threshold is width only.** From 1024px wide the list and the details sit side by side at any height, and the details pane is sticky with its own bounded scroll. A short wide window keeps that layout. Below 1024px wide the list is full width in the page's scroll and the details open as a bottom sheet. No capped list remains.
+2. **The sheet opens only on an explicit open.** A tap, Enter or Space on a row, Enter after moving the highlight with J or K, or a link from Home opens it. Focus and J or K never do, so the keyboard review loop never throws a sheet up.
+
+Closure: in the tree on `discover-answers`, not committed. Verified on the local stack only; the owner's signed-in pass is still open in `STATE.md`.
