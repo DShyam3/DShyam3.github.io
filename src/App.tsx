@@ -59,6 +59,7 @@ const Travel = lazy(() => import('./features/travel/TravelPage'));
 const YearInHours = lazy(() => import('./pages/YearInHours'));
 const Watchlist = lazy(() => import('./features/watchlist/WatchlistPage'));
 const WatchlistFavourites = lazy(() => import('./pages/WatchlistFavourites'));
+const WatchlistFinished = lazy(() => import('./pages/WatchlistFinished'));
 const WatchlistDiary = lazy(() => import('./pages/WatchlistDiary'));
 const WatchlistFranchises = lazy(() => import('./pages/WatchlistFranchises'));
 const Dev = lazy(() => import('./pages/Dev'));
@@ -185,6 +186,7 @@ const App = () => {
                     <Route path="/watchlist" element={<WatchlistNews />} />
                     <Route path="/watchlist/library" element={<Watchlist />} />
                     <Route path="/watchlist/favourites" element={<WatchlistFavourites />} />
+                    <Route path="/watchlist/finished" element={<WatchlistFinished />} />
                     <Route path="/watchlist/diary" element={<WatchlistDiary />} />
                     <Route path="/watchlist/franchises" element={<WatchlistFranchises />} />
                     <Route path="/watchlist/facts" element={<WatchlistFacts />} />

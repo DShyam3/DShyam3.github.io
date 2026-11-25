@@ -75,6 +75,11 @@ export const PUBLIC_ROUTE_META: readonly RouteMeta[] = [
     description: `All-time favourite films and television series picked by ${SITE.name}.`,
   },
   {
+    path: '/watchlist/finished',
+    title: withSiteName('Finished Films & Shows'),
+    description: `Watched films and completed television series tracked by ${SITE.name}.`,
+  },
+  {
     path: '/watchlist/diary',
     title: withSiteName('Watch Diary'),
     description: `Chronological film and television watch diary kept by ${SITE.name}.`,

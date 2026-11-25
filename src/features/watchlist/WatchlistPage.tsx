@@ -8,9 +8,8 @@ import { useSchedule } from '@/features/watchlist/useSchedule';
 import { useTMDB, type TMDBResult } from '@/features/watchlist/useTMDB';
 import { newItemFromDetails } from '@/features/watchlist/new-item';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
-import { LIBRARY_CATEGORIES, type LibraryCategory } from '@/features/watchlist/library-categories';
-import { groupByLanguage } from '@/features/watchlist/language-groups';
-import { LanguageGroupedSections } from '@/features/watchlist/components/LanguageGroupedSections';
+import { LibraryFiltersPopover } from '@/features/watchlist/components/LibraryFiltersPopover';
+import type { LibraryCategory } from '@/features/watchlist/library-categories';
 import { useAuth } from '@/contexts/AuthContext';
 import { titleKey, type TitleRef } from './title-ref';
 import { buildDisplaySyncLog, formatSyncPart, type DisplaySyncLogEntry } from '@/features/watchlist/sync-logic';
@@ -33,7 +32,6 @@ import {
   CheckCircle,
   Eye,
   EyeOff,
-  Filter,
   History,
   Library,
   Loader2,
@@ -55,7 +53,6 @@ import { useDockedDetailOpen } from '@/contexts/WorkspaceInspectorContext';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { PlatformLogo, hasPlatformLogo, platformLabel } from '@/features/watchlist/components/PlatformLogo';
 import {
   LIBRARY_TYPE_OPTIONS,
   MORE_SHELVES,
@@ -153,10 +150,12 @@ const Watchlist = () => {
 
   const [open, setOpen] = useState(false);
   const [viewParams] = useSearchParams();
-  // ?category=favourites opens on that shelf: the About page's favourite cards
-  // link here. Old tab slugs map onto the new shelves (shelfFromParam).
+  // ?category=favourites and ?category=finished redirect to their own tabs
+  // below. Old tab slugs map onto the active shelves (shelfFromParam).
   const linked = shelfFromParam(viewParams.get('category'));
-  const [selectedCategory, setSelectedCategory] = useState<Shelf>(() => linked?.shelf ?? 'Watching');
+  const [selectedCategory, setSelectedCategory] = useState<Shelf>(() =>
+    linked?.shelf && linked.shelf !== 'Finished' ? linked.shelf : 'Watching',
+  );
   // A link opens on All unless it names a type, so the About page's
   // favourites link never hides half of them. Only a pick is remembered.
   const [libraryType, setLibraryTypeState] = useState<LibraryType>(() => (linked ? linked.type ?? 'all' : readStoredType()));
@@ -334,11 +333,6 @@ const Watchlist = () => {
   const autoCategoryCounts = useMemo(() => computeAutoCategoryCounts(categoryItems), [categoryItems]);
   const statusCounts = useMemo(() => computeStatusCounts(categoryItems), [categoryItems]);
 
-
-  const getPlatformCount = (platform: string) => platformCounts[platform] || 0;
-  const getGenreCount = (genre: string) => genreCounts[genre] || 0;
-  const getStatusCount = (status: string) => statusCounts[status] || 0;
-
   // Time left per show, built only while a time order is picked.
   const finishTimes = useMemo(
     () => computeFinishTimes(categoryItems, byTimeLeft, isEpisodeWatched),
@@ -414,16 +408,6 @@ const Watchlist = () => {
     return <Icon className="h-4 w-4" />;
   };
 
-  const finishedGroups = useMemo(() => {
-    if (selectedCategory !== 'Finished') return [];
-    return groupByLanguage(filteredWatchlist, (item) => ({
-      original_language: item.original_language,
-      genre_ids: item.genre_ids,
-      genres: item.genres,
-      mediaType: item.category === 'Movies' ? 'movie' : 'tv',
-    }));
-  }, [selectedCategory, filteredWatchlist]);
-
   const categoryCounts = useMemo(
     () => computeShelfCounts(watchlist, shelfByItem, libraryType, searchQuery),
     [watchlist, shelfByItem, libraryType, searchQuery],
@@ -480,8 +464,6 @@ const Watchlist = () => {
 
   // While a time order is picked, each card says what it is ranked by.
   const timeLeftLabel = (item: WatchlistItem) => formatItemTimeLeft(item, byTimeLeft, finishTimes);
-
-  const activeFilterCount = [selectedPlatform, selectedGenre, selectedAutoCategory, selectedStatus].filter(Boolean).length;
 
   const renderCard = (item: WatchlistItem) => (
     <WatchlistCard
@@ -743,7 +725,7 @@ const Watchlist = () => {
                 <SelectSeparator />
               </>
             )}
-            {MAIN_SHELVES.map((shelf) => (
+            {MAIN_SHELVES.filter((shelf) => shelf !== 'Finished').map((shelf) => (
               <SelectItem key={shelf} value={shelf}>
                 <span className="flex items-center gap-2">{getCategoryIcon(shelf)}{shelf} ({categoryCounts[shelf]})</span>
               </SelectItem>
@@ -785,130 +767,29 @@ const Watchlist = () => {
             </Button>
           )}
         </div>
-        <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
-            <PopoverTrigger asChild><Button variant="outline" className="h-11 gap-2"><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}</Button></PopoverTrigger>
-            <PopoverContent align="end" collisionPadding={12} className="w-80 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain space-y-3" style={{ maxHeight: 'min(480px, var(--radix-popover-content-available-height))' }} aria-label="Library filters">
-              <div className="flex items-center justify-between"><h3 className="font-medium">Filter library</h3><Button variant="ghost" size="sm" onClick={() => { setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null); }}>Reset</Button></div>
-              <Select
-                value={selectedPlatform || 'all'}
-                onValueChange={(v) =>
-                  setSelectedPlatform(v === 'all' ? null : v)
-                }
-              >
-                <SelectTrigger aria-label="Platform" className="w-full h-11 text-sm">
-                  <div className="flex items-center gap-2 truncate">
-                    {!selectedPlatform && (
-                      <Filter className="h-3 w-3 opacity-50" />
-                    )}
-                    <SelectValue placeholder="Platform">
-                      {!selectedPlatform ? (
-                        'All Platforms'
-                      ) : hasPlatformLogo(selectedPlatform) ? (
-                        <PlatformLogo
-                          platform={selectedPlatform}
-                          size={16}
-                          maxWidth={90}
-                        />
-                      ) : (
-                        platformLabel(selectedPlatform)
-                      )}
-                    </SelectValue>
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Platforms</SelectItem>
-                  {ALL_PLATFORMS.filter((p) => getPlatformCount(p) > 0).map(
-                    (p) => (
-                      <SelectItem key={p} value={p}>
-                        <div className="flex items-center justify-between gap-4 w-full">
-                          <span className="flex items-center gap-2">
-                            <PlatformLogo platform={p} size={18} />
-                            <span
-                              className={cn(hasPlatformLogo(p) && 'sr-only')}
-                            >
-                              {platformLabel(p)}
-                            </span>
-                          </span>
-                          <span className="text-xs opacity-50">
-                            ({getPlatformCount(p)})
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ),
-                  )}
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedAutoCategory ?? 'all'} onValueChange={(value) => setSelectedAutoCategory(value === 'all' ? null : value as LibraryCategory)}>
-                <SelectTrigger aria-label="Automatic category" className="w-full h-11 text-sm"><SelectValue placeholder="Category" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {LIBRARY_CATEGORIES.filter((category) => autoCategoryCounts[category] > 0 || selectedAutoCategory === category).map((category) => (
-                    <SelectItem key={category} value={category}>{category} ({autoCategoryCounts[category]})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={selectedGenre || 'all'}
-                onValueChange={(v) => setSelectedGenre(v === 'all' ? null : v)}
-              >
-                <SelectTrigger aria-label="Genre" className="w-full h-11 text-sm">
-                  <div className="flex items-center gap-2 truncate">
-                    <Filter className="h-3 w-3 opacity-50" />
-                    <SelectValue placeholder="Genre" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Genres</SelectItem>
-                  {ALL_GENRES.filter((g) => getGenreCount(g) > 0).map((g) => (
-                    <SelectItem key={g} value={g}>
-                      <div className="flex items-center justify-between gap-4 w-full">
-                        <span>{g}</span>
-                        <span className="text-xs opacity-50">
-                          ({getGenreCount(g)})
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {libraryType !== 'movie' &&
-                Object.keys(statusCounts).length > 0 && (
-                  <Select
-                    value={selectedStatus || 'all'}
-                    onValueChange={(v) =>
-                      setSelectedStatus(v === 'all' ? null : v)
-                    }
-                  >
-                    <SelectTrigger aria-label="Series status" className="w-full h-11 text-sm">
-                      <div className="flex items-center gap-2 truncate">
-                        <Filter className="h-3 w-3 opacity-50" />
-                        <SelectValue placeholder="Status" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      {Object.keys(statusCounts)
-                        .sort()
-                        .map((status) => (
-                          <SelectItem key={status} value={status}>
-                            <div className="flex items-center justify-between gap-4 w-full">
-                              <span>
-                                {status === 'Canceled' ? 'Cancelled' : status}
-                              </span>
-                              <span className="text-xs opacity-50">
-                                ({getStatusCount(status)})
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                )}
-            </PopoverContent>
-          </Popover>
+        <LibraryFiltersPopover
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          libraryType={libraryType}
+          selectedPlatform={selectedPlatform}
+          onPlatformChange={setSelectedPlatform}
+          selectedAutoCategory={selectedAutoCategory}
+          onAutoCategoryChange={setSelectedAutoCategory}
+          selectedGenre={selectedGenre}
+          onGenreChange={setSelectedGenre}
+          selectedStatus={selectedStatus}
+          onStatusChange={setSelectedStatus}
+          platformCounts={platformCounts}
+          autoCategoryCounts={autoCategoryCounts}
+          genreCounts={genreCounts}
+          statusCounts={statusCounts}
+          onReset={() => {
+            setSelectedPlatform(null);
+            setSelectedGenre(null);
+            setSelectedAutoCategory(null);
+            setSelectedStatus(null);
+          }}
+        />
           {sortable && <Select value={sortOrder} onValueChange={value => setSortOrder(value as LibrarySort)}>
             <SelectTrigger aria-label="Sort library" className="h-11 w-[208px] shrink-0"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -925,6 +806,9 @@ const Watchlist = () => {
 
   if (viewParams.get('view') === 'schedule') return <Navigate to="/watchlist" replace />;
   if (viewParams.get('category') === 'favourites') return <Navigate to="/watchlist/favourites" replace />;
+  if (viewParams.get('category') === 'finished' || viewParams.get('category') === 'watched') {
+    return <Navigate to="/watchlist/finished" replace />;
+  }
 
   return (
     <AppShell title="Watchlist" subtitle="What I'm watching" toolbar={toolbar}>
@@ -966,16 +850,10 @@ const Watchlist = () => {
                 );
               })}
             </div>
-          ) : selectedCategory === 'Finished' ? (
-            <LanguageGroupedSections
-              groups={finishedGroups}
-              forceExpand={searching || activeFilterCount > 0}
-              renderGrid={(items) => <CardGrid>{items.map(renderCard)}</CardGrid>}
-            />
           ) : (
             <CardGrid>{visibleWatchlist.map(renderCard)}</CardGrid>
           )}
-          {selectedCategory !== 'Finished' && visibleCount < filteredWatchlist.length && (
+          {visibleCount < filteredWatchlist.length && (
             <div ref={observerTarget} className="h-20 w-full" />
           )}
         </div>

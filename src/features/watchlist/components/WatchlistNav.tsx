@@ -5,6 +5,7 @@ import { AppIcon } from '@/components/ui/icon';
 import {
   SFBookClosedFill,
   SFBooksVerticalFill,
+  SFCheckmarkCircleFill,
   SFHeart,
   SFHeartFill,
   SFListNumber,
@@ -16,12 +17,13 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { SPRING_PILL } from '@/theme/motion';
 import { cn } from '@/lib/utils';
 
-export type WatchlistView = 'news' | 'library' | 'favourites' | 'diary' | 'franchises' | 'facts';
+export type WatchlistView = 'news' | 'library' | 'favourites' | 'finished' | 'diary' | 'franchises' | 'facts';
 
 const VIEWS: { view: WatchlistView; to: string; label: string; Icon: SFSymbolComponent }[] = [
   { view: 'news', to: '/watchlist', label: 'News', Icon: SFNewspaperFill },
   { view: 'library', to: '/watchlist/library', label: 'Library', Icon: SFBooksVerticalFill },
   { view: 'favourites', to: '/watchlist/favourites', label: 'Favourites', Icon: SFHeartFill },
+  { view: 'finished', to: '/watchlist/finished', label: 'Finished', Icon: SFCheckmarkCircleFill },
   { view: 'diary', to: '/watchlist/diary', label: 'Diary', Icon: SFBookClosedFill },
   { view: 'franchises', to: '/watchlist/franchises', label: 'Franchises', Icon: SFListNumber },
   { view: 'facts', to: '/watchlist/facts', label: 'Cool facts', Icon: SFSparkles },
