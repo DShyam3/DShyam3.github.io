@@ -530,7 +530,7 @@ Editing a bill keeps the period its payment covers. Changing the due day or mont
 
 The Recurrings section has a calendar of bills: a month grid from the current month to eleven months ahead. Days with bills are marked, and selecting one filters the list below to that day. Each bill shows one of four statuses, written out as well as marked: Paid, when that period is confirmed paid; Seen in bank, when a matching bank payment settles it, counted from up to a week before its due date (three days for a weekly bill); Not confirmed, for a past date with neither; or Due. The summary reads the scheduled total and the amount still to pay, labelled as a forecast. Bills that cannot be placed on a date are named beneath the calendar.
 
-A quick failure loading finance profiles is retried automatically twice; if it still fails, or the database does not answer within 15 seconds, a persistent error offers “Try again”. A finance section that fails to display, or takes more than 15 seconds to load, offers “Reload page”.
+A quick failure loading finance profiles is retried automatically twice; if it still fails, or the database does not answer within 15 seconds, a persistent error offers “Try again”. A finance section that fails to display, or takes more than 15 seconds to load, offers “Reload page”, and its message says whether it could not load or ran into a problem. If Finance itself fails, its error is a plain full-screen message: “Finance could not load.” after a failed download, or “Finance ran into a problem.” after a display error, with “Try again” and “Back to home”. Opening /finance again retries on its own. Both full-screen errors, Finance's and the page's, move focus to their heading when they appear.
 
 When a data collection fails to load, saves are refused with a "Not saved" message instead of overwriting stored data. A profile's reset to defaults clears settings and holidays for the current profile, plus the shared reference tables (tax configurations, recurring templates, credit bureaus, holiday defaults, and budget presets); accounts, transactions, budget, bills and goals are not affected. Reset asks for confirmation before proceeding.
 
@@ -545,7 +545,7 @@ Bank-synced transfers are labelled "Transfers" rather than a spending category, 
 
 A transaction added by hand is dated the day chosen in its date picker, read in the browser's local time, and "today" is the current local day.
 
-The page loads the complete transaction ledger, however large, and displays 100 at a time with "Show 100 more"; search, filters and bulk selection cover every matching transaction, and a transaction opened from Home is always shown. Transfer links, transfer dismissals, one-sided transfers, transfers between profiles, payslips and their bank matches, net-worth history, goal contributions, investment activity and debt balance records also load in full, however many there are.
+The page loads the complete transaction ledger, however large, and displays 100 at a time with "Show 100 more"; search, filters and bulk selection cover every matching transaction, and a transaction opened from Home is always shown. "Select all on page" is a label as well as a checkbox, so tapping its text toggles the page's selection. Transfer links, transfer dismissals, one-sided transfers, transfers between profiles, payslips and their bank matches, net-worth history, goal contributions, investment activity and debt balance records also load in full, however many there are.
 
 Home's transaction list shows the same merchant mark as the Transactions tab: a logo
 where one is known, otherwise a coloured monogram. The list links to the Transactions
@@ -1024,7 +1024,7 @@ with equal blank gaps on either side. The credit stacks "Designed by" above
 larger text as the other footer labels. The credit is hidden on phones.
 Shared content widths and gutters keep large monitors readable across phones,
 tablets and desktops. Card actions remain visible on touch devices,
-with larger touch targets. "Skip to content" lands after a section's own controls.
+with larger touch targets. Checkboxes and switches keep their drawn size on touch screens and in Larger mode, each with an invisible 2.75rem tap area around it; a table row holding one is then as tall as that area, so neighbouring rows do not overlap. "Skip to content" lands after a section's own controls.
 
 The footer's copyright mark opens a dialog with Privacy and Credits tabs, focus
 trap and Escape to close. The Privacy tab lists Cookies, Personal Data, Analytics,
