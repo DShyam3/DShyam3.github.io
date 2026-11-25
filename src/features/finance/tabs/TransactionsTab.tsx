@@ -956,9 +956,12 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       <div className={cn('flex flex-col space-y-4', roomy && 'col-span-2')}>
         {/* TOOLBAR: Search, Filter, Sort, Batch Actions */}
         <div className="surface-card bg-card/50 border border-border/40 rounded-lg p-4 space-y-3 hover:border-border/80 transition-colors">
-          <div className="flex flex-col sm:flex-row items-center gap-3">
+          {/* Wraps at every width: the card's width follows the layout, not
+              the screen (two thirds of 1024px is narrower than a tablet), and
+              the toolbar's buttons do not fit beside the search on most. */}
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-center gap-3">
             {/* Search */}
-            <div className="relative w-full sm:flex-1">
+            <div className="relative w-full sm:grow sm:basis-40">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search description, category, tags..."
@@ -978,8 +981,9 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               )}
             </div>
 
-            {/* Toolbar Buttons */}
-            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+            {/* Toolbar Buttons. Wraps when its line is too narrow for them:
+                a Button shrinks below its label rather than overflow a row. */}
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto min-w-0 max-w-full ml-auto justify-end">
               {syncStatus}
               {/* Rules Dialog Trigger */}
               <Button
@@ -1105,6 +1109,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={() => setIsStatementImportOpen(true)}
+                aria-label="Import a statement"
                 className="h-9 rounded-lg border-border/40 bg-background/30 hover:bg-background/80 hover:text-foreground text-xs flex items-center gap-1.5 px-3 font-mono"
               >
                 <FileUp className="h-3.5 w-3.5" />
@@ -1114,6 +1119,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               <Button
                 size="sm"
                 onClick={() => setIsAddOpen(true)}
+                aria-label="Add a transaction"
                 className="h-9 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs flex items-center gap-1.5 px-3 font-mono"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -1121,7 +1127,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </Button>
 
               {/* Export CSV */}
-              <Button variant="outline" size="sm" className="h-9 border-border/40 rounded-lg text-xs bg-background/30 hover:bg-background/80 hover:text-foreground p-2.5 font-mono" onClick={handleExportCSV}>
+              <Button variant="outline" size="sm" aria-label="Export as CSV" className="h-9 border-border/40 rounded-lg text-xs bg-background/30 hover:bg-background/80 hover:text-foreground p-2.5 font-mono" onClick={handleExportCSV}>
                 <Download className="h-3.5 w-3.5" />
               </Button>
             </div>

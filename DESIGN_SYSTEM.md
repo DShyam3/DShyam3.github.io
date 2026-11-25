@@ -360,6 +360,14 @@ brands, in portrait and landscape.
   grow rules never stretch it into a large empty box; a table cell holding one
   grows to `2.75rem` so adjacent rows' targets do not overlap. Give any new
   small button-based control the same class.
+- A row of Buttons wraps (`flex-wrap`). A Button is `min-w-0`, so in a row
+  that cannot wrap it shrinks below its label instead of overflowing, and on
+  touch the grow rules stop it at `2.75rem` with the label spilling out. A
+  text column beside a button group takes a starting width (`grow basis-60`,
+  not `flex-1`, whose zero basis means the buttons never wrap) so the
+  buttons drop below it on a narrow card rather than squeezing it. Decide by
+  the card's width, not the screen's: a two-thirds column at 1024px is
+  narrower than a tablet.
 - Dialogs retain outer gutters and a bounded scrolling body, with the close
   control outside that body. The
   body's scrollbar is the thin `app-scroll` bar;

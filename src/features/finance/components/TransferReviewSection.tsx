@@ -154,9 +154,11 @@ export function TransferReviewSection() {
           {(showAllPending ? pending : pending.slice(0, PREVIEW)).map(pair => (
             <div
               key={`${pair.outflowId}_${pair.inflowId}`}
-              className="flex items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2"
+              className="flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2"
             >
-              <div className="min-w-0 flex-1 space-y-1">
+              {/* 15rem before the buttons share its line: at a phone's width
+                  they wrap below instead of squeezing the text and its tags. */}
+              <div className="min-w-0 grow basis-60 space-y-1">
                 <div className="text-xs font-semibold text-foreground font-mono truncate">
                   {transactionName(pair.outflowId)} ({accountName(pair.fromAccountId)})
                   {' → '}
@@ -175,7 +177,7 @@ export function TransferReviewSection() {
                     ))}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5">
                 <Button
                   size="sm"
                   variant="ghost"
@@ -290,7 +292,7 @@ export function TransferReviewSection() {
               key={leg.transactionId}
               className="flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2"
             >
-              <div className="min-w-0 flex-1 space-y-1">
+              <div className="min-w-0 grow basis-60 space-y-1">
                 <div className="text-xs font-semibold text-foreground font-mono truncate">
                   {transactionName(leg.transactionId)} ({accountName(leg.accountId)})
                 </div>
@@ -305,7 +307,7 @@ export function TransferReviewSection() {
                   ))}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5">
                 <Button
                   size="sm"
                   variant="ghost"
