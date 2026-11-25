@@ -2649,10 +2649,14 @@ export type Database = {
           created_at: string | null
           episode_number: number
           id: number
+          imdb_id: string | null
+          imdb_rating: number | null
           release_date: string | null
           runtime: number | null
           season_id: number | null
           title: string | null
+          tmdb_rating: number | null
+          tmdb_votes: number | null
           watched: boolean | null
           watched_at: string | null
         }
@@ -2660,10 +2664,14 @@ export type Database = {
           created_at?: string | null
           episode_number: number
           id?: number
+          imdb_id?: string | null
+          imdb_rating?: number | null
           release_date?: string | null
           runtime?: number | null
           season_id?: number | null
           title?: string | null
+          tmdb_rating?: number | null
+          tmdb_votes?: number | null
           watched?: boolean | null
           watched_at?: string | null
         }
@@ -2671,10 +2679,14 @@ export type Database = {
           created_at?: string | null
           episode_number?: number
           id?: number
+          imdb_id?: string | null
+          imdb_rating?: number | null
           release_date?: string | null
           runtime?: number | null
           season_id?: number | null
           title?: string | null
+          tmdb_rating?: number | null
+          tmdb_votes?: number | null
           watched?: boolean | null
           watched_at?: string | null
         }
@@ -2691,9 +2703,11 @@ export type Database = {
       tv_show_seasons: {
         Row: {
           created_at: string | null
+          episodes_checked_at: string | null
           id: number
           release_date: string | null
           release_year: number | null
+          scores_checked_at: string | null
           season_number: number
           trailer_checked_at: string | null
           trailer_key: string | null
@@ -2702,9 +2716,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          episodes_checked_at?: string | null
           id?: number
           release_date?: string | null
           release_year?: number | null
+          scores_checked_at?: string | null
           season_number: number
           trailer_checked_at?: string | null
           trailer_key?: string | null
@@ -2713,9 +2729,11 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          episodes_checked_at?: string | null
           id?: number
           release_date?: string | null
           release_year?: number | null
+          scores_checked_at?: string | null
           season_number?: number
           trailer_checked_at?: string | null
           trailer_key?: string | null

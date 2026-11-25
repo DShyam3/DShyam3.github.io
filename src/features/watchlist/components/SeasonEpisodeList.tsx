@@ -9,7 +9,7 @@ import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { useAuth } from '@/contexts/AuthContext';
 import { TitleScores } from './TitleScores';
 import { WatchedWhenMenu } from './WatchedWhenMenu';
-import { summarizeRatings } from '../rating-summary';
+import { summarizeExternalScores, summarizeRatings } from '../rating-summary';
 
 interface SeasonEpisodeListProps {
   seasons: Season[];
@@ -91,6 +91,12 @@ export function SeasonEpisodeList({
   const episodeRatingSummary = currentSeason
     ? summarizeRatings(currentSeason.episodes.map((ep) => ep.personal_rating))
     : null;
+  const seasonImdb = currentSeason
+    ? summarizeExternalScores(currentSeason.episodes.map((ep) => ep.imdb_rating))
+    : { average: null, count: 0 };
+  const seasonTmdb = currentSeason
+    ? summarizeExternalScores(currentSeason.episodes.map((ep) => ep.tmdb_rating))
+    : { average: null, count: 0 };
 
   /**
    * Advances to the next unwatched regular season after `completedSeasonNumber`
@@ -149,9 +155,14 @@ export function SeasonEpisodeList({
 
         {currentSeason && (
           <>
-            <TitleScores mine={isAdmin ? undefined : currentSeason.personal_rating} />
+            <TitleScores
+              mine={isAdmin ? undefined : currentSeason.personal_rating}
+              imdbRating={seasonImdb.average ?? undefined}
+              tmdbRating={seasonTmdb.average ?? undefined}
+              average
+            />
             <div className="flex items-center gap-2 text-xs text-muted-foreground pb-1.5 border-b">
-              <Calendar className="h-3.5 w-3.5" />
+              <Calendar aria-hidden="true" className="h-3.5 w-3.5" />
               <span>Released: {formatDate(currentSeason.release_date)}</span>
               <span className="ml-auto">
                 {currentSeason.episodes.length} episodes
@@ -208,7 +219,7 @@ export function SeasonEpisodeList({
                 }}
                 className="w-full whitespace-normal h-auto py-1.5"
               >
-                <Circle className="h-3.5 w-3.5 shrink-0" />
+                <Circle aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
                 <span>
                   Mark {currentSeason.season_number === 0 ? 'Specials' : `Season ${currentSeason.season_number}`} as Complete
                   {currentWatchedCount > 0 && (
@@ -231,7 +242,7 @@ export function SeasonEpisodeList({
                 }}
                 className="w-full gap-2 text-xs transition-[color,background-color,border-color] whitespace-normal h-auto py-1.5 text-muted-foreground hover:bg-secondary"
               >
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
                 <span>Season Complete — Mark as Unwatched</span>
               </Button>
             )}
@@ -301,27 +312,27 @@ export function SeasonEpisodeList({
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
                       <span className="shrink-0 whitespace-nowrap text-xs font-medium text-muted-foreground">
                         EP {episode.episode_number}
                       </span>
                       <h4
                         className={cn(
-                          'text-sm font-medium',
+                          'min-w-0 break-words text-sm font-medium',
                           watched && 'line-through opacity-70',
                         )}
                       >
                         {episode.title || 'Title unavailable'}
                       </h4>
-                      {watched && <span className="text-xs">✓</span>}
-                      {!released && <span className="ml-auto text-xs font-medium uppercase tracking-wider text-muted-foreground">Not released</span>}
-                      {nextUp && <span className="ml-auto rounded bg-primary/15 px-1.5 py-0.5 text-xs font-medium uppercase tracking-wider text-primary">Next up</span>}
+                      {watched && <span className="shrink-0 text-xs">✓</span>}
+                      {!released && <span className="ml-auto shrink-0 text-xs font-medium uppercase tracking-wider text-muted-foreground">Not released</span>}
+                      {nextUp && <span className="ml-auto shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-xs font-medium uppercase tracking-wider text-primary">Next up</span>}
                     </div>
                   </div>
                   {episode.runtime && (
                     <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-                      <Clock className="h-3 w-3" />
+                      <Clock aria-hidden="true" className="h-3 w-3" />
                       {formatRuntime(episode.runtime)}
                     </div>
                   )}
@@ -333,9 +344,17 @@ export function SeasonEpisodeList({
                     onChange={watched ? (rating) => onRate(rating, currentSeason.season_number, episode.episode_number) : undefined}
                   />
                 )}
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Calendar className="h-3 w-3" />
-                  {formatDate(episode.release_date)}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <Calendar aria-hidden="true" className="h-3 w-3" />
+                    {formatDate(episode.release_date)}
+                  </span>
+                  <TitleScores
+                    compact
+                    mine={isAdmin ? undefined : episode.personal_rating}
+                    imdbRating={episode.imdb_rating}
+                    tmdbRating={episode.tmdb_rating}
+                  />
                   {watched && (
                     <span className="ml-auto px-1.5 py-0.5 rounded text-xs font-medium uppercase tracking-wider bg-foreground/10 text-muted-foreground">
                       Watched

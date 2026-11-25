@@ -24,13 +24,16 @@ import {
   isMissingRpcError,
   parseItemTarget,
   parseOmdbResponse,
+  parseOmdbSeasonResponse,
   parseShard,
   pickCollection,
   pickCreators,
   pickDirectors,
+  pickTmdbEpisodeScores,
   pickTopCast,
   pickTrailerKey,
   type OmdbOutcome,
+  type OmdbSeasonOutcome,
   type TMDBCastMember,
   type TMDBCrewMember,
   type TMDBEpisode,
@@ -141,6 +144,8 @@ const TRAILER_BACKFILL_CONCURRENCY = 8
  * cast are not asked again every run and do not use up this allowance.
  */
 const MAX_CREDITS_BACKFILL_PER_RUN = 150
+const MAX_EPISODE_SCORES_BACKFILL_PER_RUN = 200
+const MAX_EPISODE_SCORES_BACKFILL_WIKIDATA_SHARD = 120
 
 /**
  * The least run time the Wikidata pass starts with. The spin-off lookup took
@@ -152,13 +157,17 @@ const WIKIDATA_PASS_MIN_MS = 30_000
 
 /**
  * IMDb, Rotten Tomatoes and Metacritic scores come from OMDb after the TMDB
- * pass, for titles whose scores were never read or are over a week old. OMDb's
- * free tier allows 1,000 requests a day; three nightly shards of at most this
- * many stay under it. A one-title resync always asks for its target.
+ * pass, for titles whose scores were never read or are over a week old, plus
+ * per-episode IMDb scores via `?Season=N`. OMDb's free tier allows 1,000
+ * requests a day; three nightly shards of at most this many stay under it.
+ * A one-title resync always asks for its target.
  */
 const OMDB_MAX_PER_RUN = 300
+const OMDB_WIKIDATA_SHARD_MAX = 200
 const OMDB_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
+const OMDB_SETTLED_SEASON_STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000
 const OMDB_REQUEST_GAP_MS = 100
+const OMDB_SEASON_CONCURRENCY = 3
 const OMDB_MAX_CONSECUTIVE_ERRORS = 5
 
 // The rows this function selects. The Deno client is untyped (there are no
@@ -195,6 +204,10 @@ interface EpisodeRow {
   runtime: number | null
   release_date: string | null
   watched: boolean | null
+  imdb_id: string | null
+  imdb_rating: number | null
+  tmdb_rating: number | null
+  tmdb_votes: number | null
 }
 interface SeasonRow {
   id: number
@@ -202,6 +215,8 @@ interface SeasonRow {
   release_date: string | null
   trailer_key: string | null
   trailer_checked_at: string | null
+  episodes_checked_at: string | null
+  scores_checked_at: string | null
   tv_show_episodes: EpisodeRow[] | null
 }
 interface ShowRow {
@@ -236,13 +251,21 @@ interface SyncSeason {
   trailer_key?: string
   /** When TMDB was last asked for this season's videos; unset means never. */
   trailer_checked_at?: string
+  /** When TMDB was last asked for this season's episode scores; unset means never. */
+  episodes_checked_at?: string
+  /** When OMDb was last asked for this season's episode scores; unset means never. */
+  scores_checked_at?: string
   episodes: {
-    id: number
+    id?: number
     episode_number: number
     title: string | null
     runtime: number | null
     release_date: string | null
     watched: boolean | null
+    imdb_id: string | null
+    imdb_rating: number | null
+    tmdb_rating: number | null
+    tmdb_votes: number | null
   }[]
 }
 
@@ -423,6 +446,7 @@ serve(async (req) => {
   // Set once the first TMDB call can have gone out; see the catch at the end.
   let loopStarted = false
   const failedTitles: string[] = []
+  const failedShowIds = new Set<string>()
   // What changed, for the Sync button's toast: status moves and new episodes.
   const changes: string[] = []
 
@@ -439,7 +463,7 @@ serve(async (req) => {
     // top-level rows; seasons and episodes stay embedded. A single-title
     // resync reads only that title's row and skips the other table outright.
     const MOVIE_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, genre_ids, original_language, origin_country, release_year, release_date, platform, trailer_key, runtime, collection_id, collection_name, library_state, top_cast, imdb_id, tmdb_rating, tmdb_votes, scores_checked_at'
-    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, genre_ids, original_language, origin_country, status, release_date, platform, trailer_key, library_state, top_cast, imdb_id, tmdb_rating, tmdb_votes, scores_checked_at, tv_show_seasons (id, season_number, release_date, trailer_key, trailer_checked_at, tv_show_episodes (id, episode_number, title, runtime, release_date, watched))'
+    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, genre_ids, original_language, origin_country, status, release_date, platform, trailer_key, library_state, top_cast, imdb_id, tmdb_rating, tmdb_votes, scores_checked_at, tv_show_seasons (id, season_number, release_date, trailer_key, trailer_checked_at, episodes_checked_at, scores_checked_at, tv_show_episodes (id, episode_number, title, runtime, release_date, watched, imdb_id, imdb_rating, tmdb_rating, tmdb_votes))'
     const none = { data: [], error: null }
     const [moviesResult, showsResult] = await Promise.all([
       !target
@@ -518,6 +542,8 @@ serve(async (req) => {
         release_date: season.release_date || undefined,
         trailer_key: season.trailer_key || undefined,
         trailer_checked_at: season.trailer_checked_at || undefined,
+        episodes_checked_at: season.episodes_checked_at || undefined,
+        scores_checked_at: season.scores_checked_at || undefined,
         episodes: (season.tv_show_episodes || []).map((ep) => ({
           id: ep.id,
           episode_number: ep.episode_number,
@@ -525,6 +551,10 @@ serve(async (req) => {
           runtime: ep.runtime,
           release_date: ep.release_date,
           watched: ep.watched,
+          imdb_id: isImdbId(ep.imdb_id) ? ep.imdb_id : null,
+          imdb_rating: ep.imdb_rating ?? null,
+          tmdb_rating: ep.tmdb_rating ?? null,
+          tmdb_votes: ep.tmdb_votes ?? null,
         })),
       })),
     }))
@@ -558,7 +588,11 @@ serve(async (req) => {
     const MAX_EXECUTION_TIME_MS = 100_000
     let hitCeiling = false
     const backfillTrailers = Boolean(shard || target)
+    const isWikidataShard = Boolean(shard && shard.index === shard.count - 1)
     let creditsBackfillLeft = shard ? MAX_CREDITS_BACKFILL_PER_RUN : 0
+    let episodeScoresBackfillLeft = shard
+      ? (isWikidataShard ? MAX_EPISODE_SCORES_BACKFILL_WIKIDATA_SHARD : MAX_EPISODE_SCORES_BACKFILL_PER_RUN)
+      : 0
     const trailerBackfill: { seasonId: number; tmdbId: number; seasonNumber: number; title: string }[] = []
     loopStarted = true
 
@@ -672,6 +706,8 @@ serve(async (req) => {
                 platform: item.platform ?? null,
                 trailer_key: item.trailer_key ?? null,
                 imdb_id: item.imdb_id ?? null,
+                tmdb_rating: item.tmdb_rating ?? null,
+                tmdb_votes: item.tmdb_votes ?? null,
                 release_year: item.year ?? null,
                 runtime: item.runtime ?? null,
                 collection_id: item.collection_id ?? null,
@@ -710,6 +746,8 @@ serve(async (req) => {
                 platform: item.platform ?? null,
                 trailer_key: item.trailer_key ?? null,
                 imdb_id: item.imdb_id ?? null,
+                tmdb_rating: item.tmdb_rating ?? null,
+                tmdb_votes: item.tmdb_votes ?? null,
                 status: item.series_status ?? null,
               }
               const tvDirty = Object.entries(tvUpdates).some(
@@ -724,6 +762,7 @@ serve(async (req) => {
                   check(await supabaseAdmin.from('tv_shows').update(tvUpdates).eq('id', parseInt(item.id)))
                 } else check(tvUpdate)
               }
+              if (data.status) item.series_status = data.status
 
               // Seasons TMDB no longer lists or has emptied, and stale Season 0
               // specials. Deleted only if they hold nothing of the owner's,
@@ -776,6 +815,7 @@ serve(async (req) => {
                         !target &&
                         isShowSettled &&
                         Boolean(localSeason?.trailer_checked_at) &&
+                        Boolean(localSeason?.episodes_checked_at) &&
                         localEpisodeCount > 0 &&
                         seasonReleaseDate != null &&
                         seasonReleaseDate < ninetyDaysAgo
@@ -784,10 +824,23 @@ serve(async (req) => {
                         !seasonReleaseDate ||
                         seasonReleaseDate >= ninetyDaysAgo ||
                         (isShowCurrentlyAiring && s.season_number >= maxLocalSeasonNumber - 1)
+                      let needsEpisodeScoresBackfill = false
+                      if (
+                        !target &&
+                        !isRecentOrActiveSeason &&
+                        !(!settledWithTbaMismatch && hasEpisodeCountChanged) &&
+                        localSeason &&
+                        !localSeason.episodes_checked_at &&
+                        episodeScoresBackfillLeft > 0
+                      ) {
+                        episodeScoresBackfillLeft--
+                        needsEpisodeScoresBackfill = true
+                      }
                       const shouldUpdateEpisodes =
                         Boolean(target) ||
                         isRecentOrActiveSeason ||
-                        (!settledWithTbaMismatch && hasEpisodeCountChanged)
+                        (!settledWithTbaMismatch && hasEpisodeCountChanged) ||
+                        needsEpisodeScoresBackfill
 
                       if (!shouldUpdateEpisodes) {
                         // Still update release_date if TMDB's changed, and queue
@@ -816,8 +869,8 @@ serve(async (req) => {
                       const validEpisodes = (sDetails?.episodes || []).filter(hasAirDate)
 
                       if (validEpisodes.length > 0) {
-                        let seasonId = localSeason?.id
-                        if (!seasonId) {
+                        let seasonId: number
+                        if (!localSeason?.id) {
                           const { data: insertedSeason, error: sErr } = await supabaseAdmin
                             .from('tv_show_seasons')
                             .upsert(
@@ -832,11 +885,14 @@ serve(async (req) => {
                             .single()
                           if (sErr || !insertedSeason) throw sErr ?? new Error(`season ${s.season_number} upsert returned no row`)
                           seasonId = insertedSeason.id
-                        } else if (localSeason && (localSeason.release_date ?? null) !== (s.air_date || null)) {
-                          check(await supabaseAdmin
-                            .from('tv_show_seasons')
-                            .update({ release_date: s.air_date || null })
-                            .eq('id', seasonId))
+                        } else {
+                          seasonId = localSeason.id
+                          if ((localSeason.release_date ?? null) !== (s.air_date || null)) {
+                            check(await supabaseAdmin
+                              .from('tv_show_seasons')
+                              .update({ release_date: s.air_date || null })
+                              .eq('id', seasonId))
+                          }
                         }
 
                         if (validEpisodes.length > localEpisodeCount) {
@@ -847,16 +903,32 @@ serve(async (req) => {
                         const existingByNumber = new Map(
                           (localSeason?.episodes ?? []).map((e) => [e.episode_number, e]),
                         )
+                        const nextSeasonEpisodes: SyncSeason['episodes'] = []
                         const epsToUpsert = validEpisodes.flatMap((v) => {
                           const title = v.name || `Episode ${v.episode_number}`
                           const runtime = v.runtime || data.episode_run_time?.[0] || null
                           const releaseDate = v.air_date
+                          const { tmdb_rating, tmdb_votes } = pickTmdbEpisodeScores(v)
                           const existing = existingByNumber.get(v.episode_number)
+                          nextSeasonEpisodes.push({
+                            id: existing?.id,
+                            episode_number: v.episode_number,
+                            title,
+                            runtime,
+                            release_date: releaseDate,
+                            watched: existing?.watched ?? null,
+                            imdb_id: existing?.imdb_id ?? null,
+                            imdb_rating: existing?.imdb_rating ?? null,
+                            tmdb_rating,
+                            tmdb_votes,
+                          })
                           if (
                             existing &&
                             (existing.title ?? null) === title &&
                             (existing.runtime ?? null) === runtime &&
-                            (existing.release_date ?? null) === releaseDate
+                            (existing.release_date ?? null) === releaseDate &&
+                            (existing.tmdb_rating ?? null) === tmdb_rating &&
+                            (existing.tmdb_votes ?? null) === tmdb_votes
                           ) {
                             return []
                           }
@@ -873,6 +945,8 @@ serve(async (req) => {
                             title,
                             runtime,
                             release_date: releaseDate,
+                            tmdb_rating,
+                            tmdb_votes,
                           }]
                         })
                         if (epsToUpsert.length > 0) {
@@ -880,9 +954,12 @@ serve(async (req) => {
                         }
 
                         const validNumberSet = new Set(validEpisodes.map((v) => v.episode_number))
-                        const toDeleteIds = (localSeason?.episodes ?? [])
+                        const unlistedLocalEpisodes = (localSeason?.episodes ?? [])
                           .filter((e) => !validNumberSet.has(e.episode_number))
+                        const toDeleteIds = unlistedLocalEpisodes
                           .map((e) => e.id)
+                          .filter((id): id is number => typeof id === 'number')
+                        const deletedEpisodeIds = new Set<number>()
                         if (toDeleteIds.length > 0) {
                           // Episodes TMDB no longer lists, or whose air date it
                           // has blanked. Delete atomically via RPC so an owner
@@ -895,15 +972,30 @@ serve(async (req) => {
                             if (!rated) console.warn(`Kept ${toDeleteIds.length} episode(s) of "${item.title}" S${s.season_number} TMDB no longer lists: the ratings read was incomplete`)
                             const doomed = rated ? toDeleteIds.filter((id) => !rated.has(id)) : []
                             if (doomed.length > 0) {
-                              check(await supabaseAdmin.from('tv_show_episodes').delete().in('id', doomed).or(UNWATCHED_ONLY))
+                              const { data: deletedRows } = check(
+                                await supabaseAdmin.from('tv_show_episodes').delete().in('id', doomed).or(UNWATCHED_ONLY).select('id'),
+                              )
+                              for (const row of deletedRows ?? []) {
+                                if (typeof row.id === 'number') deletedEpisodeIds.add(row.id)
+                              }
                             }
                           } else {
                             check(rpcResult)
+                            for (const id of Array.isArray(rpcResult.data) ? rpcResult.data : []) {
+                              if (typeof id === 'number') deletedEpisodeIds.add(id)
+                            }
+                          }
+                        }
+                        for (const keptEp of unlistedLocalEpisodes) {
+                          if (typeof keptEp.id === 'number' && !deletedEpisodeIds.has(keptEp.id)) {
+                            nextSeasonEpisodes.push(keptEp)
                           }
                         }
 
                         const nextTrailerKey = pickTrailerKey(sDetails?.videos?.results) ?? null
+                        const seasonCheckedAt = new Date().toISOString()
                         if (
+                          !localSeason?.episodes_checked_at ||
                           !localSeason?.trailer_checked_at ||
                           (localSeason?.trailer_key ?? null) !== nextTrailerKey
                         ) {
@@ -911,9 +1003,32 @@ serve(async (req) => {
                           // write must not fail a title whose episodes are fine.
                           const { error: trailerError } = await supabaseAdmin
                             .from('tv_show_seasons')
-                            .update({ trailer_key: nextTrailerKey, trailer_checked_at: new Date().toISOString() })
+                            .update({
+                              trailer_key: nextTrailerKey,
+                              trailer_checked_at: seasonCheckedAt,
+                              episodes_checked_at: seasonCheckedAt,
+                            })
                             .eq('id', seasonId)
                           if (trailerError) console.warn(`Trailer write failed for "${item.title}" S${s.season_number}:`, trailerError)
+                        }
+
+                        if (localSeason) {
+                          localSeason.release_date = s.air_date || undefined
+                          localSeason.trailer_key = nextTrailerKey ?? undefined
+                          localSeason.trailer_checked_at = localSeason.trailer_checked_at || seasonCheckedAt
+                          localSeason.episodes_checked_at = localSeason.episodes_checked_at || seasonCheckedAt
+                          localSeason.episodes = nextSeasonEpisodes
+                        } else {
+                          if (!item.seasons) item.seasons = []
+                          item.seasons.push({
+                            id: seasonId,
+                            season_number: s.season_number,
+                            release_date: s.air_date || undefined,
+                            trailer_key: nextTrailerKey ?? undefined,
+                            trailer_checked_at: seasonCheckedAt,
+                            episodes_checked_at: seasonCheckedAt,
+                            episodes: nextSeasonEpisodes,
+                          })
                         }
                       } else if (localSeason) {
                         const hasWatched = localSeason.episodes.some((ep) => watchedEpisodes.has(`${item.id}-s${s.season_number}-e${ep.episode_number}`))
@@ -943,6 +1058,7 @@ serve(async (req) => {
                 // `watchedEpisodes` is from the start of the run and knows
                 // nothing of ratings. Delete atomically via RPC; fall back to
                 // the two-step guard if the RPC migration has not landed yet.
+                const deletedSeasonIds = new Set<number>()
                 const rpcResult = await supabaseAdmin.rpc('prune_unowned_tv_seasons', { p_ids: seasonDeleteCandidates })
                 if (isMissingRpcError(rpcResult.error)) {
                   const keep = await seasonsToKeep(supabaseAdmin, seasonDeleteCandidates)
@@ -950,9 +1066,16 @@ serve(async (req) => {
                   const doomed = keep ? seasonDeleteCandidates.filter((id) => !keep.has(id)) : []
                   if (doomed.length > 0) {
                     check(await supabaseAdmin.from('tv_show_seasons').delete().in('id', doomed))
+                    for (const id of doomed) deletedSeasonIds.add(id)
                   }
                 } else {
                   check(rpcResult)
+                  for (const id of Array.isArray(rpcResult.data) ? rpcResult.data : []) {
+                    if (typeof id === 'number') deletedSeasonIds.add(id)
+                  }
+                }
+                if (deletedSeasonIds.size > 0) {
+                  item.seasons = item.seasons?.filter((ls) => !deletedSeasonIds.has(ls.id))
                 }
               }
             }
@@ -960,6 +1083,7 @@ serve(async (req) => {
           } catch (itemError) {
             console.error(`Error syncing item ${item.title}:`, itemError)
             failedTitles.push(item.title)
+            if (item.category === 'TV Shows') failedShowIds.add(item.id)
           }
         }),
       )
@@ -1075,6 +1199,7 @@ serve(async (req) => {
     // in the request URL; it is never logged or returned, and a fetch error is
     // logged as a fixed string because its message can carry the URL.
     const omdbStats = { asked: 0, updated: 0, notFound: 0, stoppedByLimit: false }
+    const omdbSeasonStats = { asked: 0, updated: 0, notFound: 0, stoppedByLimit: false }
     const omdbKey = Deno.env.get('OMDB_API_KEY')
     // Nightly parts and one-title resyncs only, like the trailer and credits
     // backfills: an unsharded manual run already uses nearly all of the CPU
@@ -1086,6 +1211,7 @@ serve(async (req) => {
     } else if (!runOmdb) {
       console.log(`[Sync ${runLabel}] Full manual run; the OMDb score pass runs in the nightly parts.`)
     } else {
+      const omdbRunCap = isWikidataShard ? OMDB_WIKIDATA_SHARD_MAX : OMDB_MAX_PER_RUN
       const staleBefore = Date.now() - OMDB_STALE_AFTER_MS
       const queue = [...movies, ...shows]
         .filter((item) => item.imdb_id && isActiveInNightly(item) && (!shard || Number(item.id) % shard.count === shard.index))
@@ -1095,7 +1221,7 @@ serve(async (req) => {
           const bTime = b.scores_checked_at ? Date.parse(b.scores_checked_at) : -Infinity
           return aTime === bTime ? 0 : aTime < bTime ? -1 : 1
         })
-        .slice(0, OMDB_MAX_PER_RUN)
+        .slice(0, omdbRunCap)
       let consecutiveErrors = 0
       for (const item of queue) {
         if (Date.now() - startTime >= MAX_EXECUTION_TIME_MS) break
@@ -1158,6 +1284,178 @@ serve(async (req) => {
       }
       console.log(
         `[Sync ${runLabel}] OMDb: asked ${omdbStats.asked}, updated ${omdbStats.updated}, not found ${omdbStats.notFound}, stopped by limit ${omdbStats.stoppedByLimit ? 'yes' : 'no'}.`,
+      )
+
+      if (
+        !omdbStats.stoppedByLimit &&
+        consecutiveErrors < OMDB_MAX_CONSECUTIVE_ERRORS &&
+        Date.now() - startTime < MAX_EXECUTION_TIME_MS
+      ) {
+        const nowMs = Date.now()
+        const recentCutoffMs = nowMs - 90 * 24 * 60 * 60 * 1000
+        const seasonQueue = shows
+          .filter(
+            (show) =>
+              show.imdb_id &&
+              !failedShowIds.has(show.id) &&
+              isActiveInNightly(show) &&
+              (!shard || Number(show.id) % shard.count === shard.index),
+          )
+          .flatMap((show) => {
+            const seasons = show.seasons ?? []
+            const maxSeasonNumber = Math.max(0, ...seasons.map((s) => s.season_number))
+            const isShowAiring = show.series_status === 'Returning Series' || show.series_status === 'In Production'
+            return seasons
+              .filter((season) => season.season_number > 0 && season.episodes.length > 0)
+              .filter((season) => {
+                const isActiveOrRecent =
+                  !season.release_date ||
+                  Date.parse(season.release_date) >= recentCutoffMs ||
+                  (isShowAiring && season.season_number >= maxSeasonNumber - 1)
+                const threshold = isActiveOrRecent ? OMDB_STALE_AFTER_MS : OMDB_SETTLED_SEASON_STALE_AFTER_MS
+                return Boolean(target) || !season.scores_checked_at || Date.parse(season.scores_checked_at) < nowMs - threshold
+              })
+              .map((season) => ({
+                imdbId: show.imdb_id!,
+                title: show.title,
+                season,
+              }))
+          })
+          .sort((a, b) => {
+            const aTime = a.season.scores_checked_at ? Date.parse(a.season.scores_checked_at) : -Infinity
+            const bTime = b.season.scores_checked_at ? Date.parse(b.season.scores_checked_at) : -Infinity
+            return aTime === bTime ? 0 : aTime < bTime ? -1 : 1
+          })
+          .slice(0, Math.max(0, omdbRunCap - omdbStats.asked))
+
+        let seasonCursor = 0
+        await Promise.all(
+          Array.from({ length: Math.min(OMDB_SEASON_CONCURRENCY, seasonQueue.length) }, async () => {
+            while (seasonCursor < seasonQueue.length) {
+              if (
+                omdbSeasonStats.stoppedByLimit ||
+                consecutiveErrors >= OMDB_MAX_CONSECUTIVE_ERRORS ||
+                Date.now() - startTime >= MAX_EXECUTION_TIME_MS
+              ) {
+                break
+              }
+              const entry = seasonQueue[seasonCursor++]
+              omdbSeasonStats.asked++
+              let outcome: OmdbSeasonOutcome
+              const omdbT0 = Date.now()
+              try {
+                const res = await fetch(
+                  `https://www.omdbapi.com/?${new URLSearchParams({
+                    i: entry.imdbId,
+                    Season: String(entry.season.season_number),
+                    apikey: omdbKey,
+                  })}`,
+                  { signal: AbortSignal.timeout(15000) },
+                )
+                outcome = parseOmdbSeasonResponse(await res.json().catch(() => null))
+                activeUsage.record({
+                  provider: 'omdb',
+                  endpoint: 'season-by-imdb',
+                  statusCode: res.status,
+                  outcome: outcome.kind === 'limit' ? 'rate_limited' : outcome.kind === 'error' ? 'error' : 'ok',
+                  durationMs: Date.now() - omdbT0,
+                })
+              } catch {
+                activeUsage.record({
+                  provider: 'omdb',
+                  endpoint: 'season-by-imdb',
+                  statusCode: null,
+                  outcome: 'error',
+                  durationMs: Date.now() - omdbT0,
+                })
+                outcome = { kind: 'error', message: 'OMDb request failed' }
+              }
+              if (outcome.kind === 'limit') {
+                omdbSeasonStats.stoppedByLimit = true
+                break
+              }
+              if (outcome.kind === 'error') {
+                console.warn(`[Sync ${runLabel}] OMDb season error for "${entry.title}" S${entry.season.season_number}: ${outcome.message}`)
+                if (++consecutiveErrors >= OMDB_MAX_CONSECUTIVE_ERRORS) {
+                  console.warn(`[Sync ${runLabel}] ${OMDB_MAX_CONSECUTIVE_ERRORS} OMDb errors in a row; stopping the season pass.`)
+                  break
+                }
+                continue
+              }
+              consecutiveErrors = 0
+              const checkedAt = new Date().toISOString()
+              const epsToUpdate = outcome.kind === 'episodes'
+                ? (() => {
+                  const omdbByNumber = new Map(outcome.episodes.map((ep) => [ep.episode_number, ep]))
+                  return entry.season.episodes.flatMap((localEp) => {
+                    const omdbEp = omdbByNumber.get(localEp.episode_number)
+                    if (!omdbEp) return []
+                    const ratingChanged = (omdbEp.imdb_rating ?? null) !== (localEp.imdb_rating ?? null)
+                    const idChanged = omdbEp.imdb_id !== null && omdbEp.imdb_id !== (localEp.imdb_id ?? null)
+                    if (!ratingChanged && !idChanged) return []
+                    return [{
+                      episode_number: localEp.episode_number,
+                      imdb_id: omdbEp.imdb_id ?? localEp.imdb_id ?? null,
+                      imdb_rating: omdbEp.imdb_rating,
+                    }]
+                  })
+                })()
+                : []
+
+              const rpcRes = await supabaseAdmin.rpc('set_season_omdb_scores', {
+                p_season_id: entry.season.id,
+                p_checked_at: checkedAt,
+                p_episodes: epsToUpdate,
+              })
+              if (isMissingRpcError(rpcRes.error)) {
+                let writeFailed = false
+                if (epsToUpdate.length > 0) {
+                  const updateResults = await Promise.all(
+                    epsToUpdate.map((ep) =>
+                      supabaseAdmin
+                        .from('tv_show_episodes')
+                        .update({ imdb_id: ep.imdb_id, imdb_rating: ep.imdb_rating })
+                        .eq('season_id', entry.season.id)
+                        .eq('episode_number', ep.episode_number),
+                    ),
+                  )
+                  const failedUpdate = updateResults.find((r) => r.error)
+                  if (failedUpdate?.error) {
+                    console.warn(
+                      `[Sync ${runLabel}] OMDb episode score write failed for "${entry.title}" S${entry.season.season_number}:`,
+                      failedUpdate.error.message,
+                    )
+                    writeFailed = true
+                  }
+                }
+                if (writeFailed) continue
+                const { error: seasonStampError } = await supabaseAdmin
+                  .from('tv_show_seasons')
+                  .update({ scores_checked_at: checkedAt })
+                  .eq('id', entry.season.id)
+                if (seasonStampError) {
+                  console.warn(
+                    `[Sync ${runLabel}] OMDb season stamp failed for "${entry.title}" S${entry.season.season_number}:`,
+                    seasonStampError.message,
+                  )
+                  continue
+                }
+              } else if (rpcRes.error) {
+                console.warn(
+                  `[Sync ${runLabel}] OMDb season score RPC failed for "${entry.title}" S${entry.season.season_number}:`,
+                  rpcRes.error.message,
+                )
+                continue
+              }
+
+              if (outcome.kind === 'not-found') omdbSeasonStats.notFound++
+              else omdbSeasonStats.updated++
+            }
+          }),
+        )
+      }
+      console.log(
+        `[Sync ${runLabel}] OMDb seasons: asked ${omdbSeasonStats.asked}, updated ${omdbSeasonStats.updated}, not found ${omdbSeasonStats.notFound}, stopped by limit ${omdbSeasonStats.stoppedByLimit ? 'yes' : 'no'}.`,
       )
     }
 
@@ -1414,6 +1712,7 @@ serve(async (req) => {
         failedTitles,
         changes,
         omdb: omdbKey && runOmdb ? omdbStats : undefined,
+        omdbSeasons: omdbKey && runOmdb ? omdbSeasonStats : undefined,
         durationMs,
         // Stopped at the time ceiling: titles past the stopping point were
         // not reached, and are in neither count.

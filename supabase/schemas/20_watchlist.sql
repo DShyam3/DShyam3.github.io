@@ -128,7 +128,15 @@ CREATE TABLE IF NOT EXISTS "public"."tv_show_episodes" (
     "runtime" integer,
     "title" "text",
     "watched_at" timestamp with time zone,
-    "created_at" timestamp with time zone DEFAULT "now"()
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "imdb_id" "text",
+    "imdb_rating" numeric(3,1),
+    "tmdb_rating" numeric(3,1),
+    "tmdb_votes" integer,
+    CONSTRAINT "tv_show_episodes_imdb_id_check" CHECK ("imdb_id" ~ '^tt[0-9]{7,10}$'),
+    CONSTRAINT "tv_show_episodes_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
+    CONSTRAINT "tv_show_episodes_tmdb_rating_check" CHECK ("tmdb_rating" BETWEEN 0 AND 10),
+    CONSTRAINT "tv_show_episodes_tmdb_votes_check" CHECK ("tmdb_votes" >= 0)
 );
 
 ALTER TABLE "public"."tv_show_episodes" OWNER TO "postgres";
@@ -154,7 +162,9 @@ CREATE TABLE IF NOT EXISTS "public"."tv_show_seasons" (
     "release_date" "date",
     "created_at" timestamp with time zone DEFAULT "now"(),
     "trailer_key" "text",
-    "trailer_checked_at" timestamp with time zone
+    "trailer_checked_at" timestamp with time zone,
+    "episodes_checked_at" timestamp with time zone,
+    "scores_checked_at" timestamp with time zone
 );
 
 ALTER TABLE "public"."tv_show_seasons" OWNER TO "postgres";
@@ -1320,6 +1330,24 @@ COMMENT ON COLUMN "public"."tv_shows"."metascore" IS
 COMMENT ON COLUMN "public"."tv_shows"."scores_checked_at" IS
     'When OMDb was last asked for this title; null = never. The nightly sync refreshes the oldest first within a daily request budget; a title OMDb has no scores for still gets a time so it is not asked every night. OMDb is an unofficial aggregator.';
 
+COMMENT ON COLUMN "public"."tv_show_episodes"."imdb_id" IS
+    'IMDb episode id (tt + 7..10 digits) from OMDb''s ?Season=N response; null when unknown.';
+
+COMMENT ON COLUMN "public"."tv_show_episodes"."imdb_rating" IS
+    'IMDb weighted user rating (0..10) from OMDb''s ?Season=N response; null when unknown or unrated.';
+
+COMMENT ON COLUMN "public"."tv_show_episodes"."tmdb_rating" IS
+    'TMDB community episode rating (0..10) from tv/{id}/season/{n}; null when unrated (vote_average = 0 or not fetched yet).';
+
+COMMENT ON COLUMN "public"."tv_show_episodes"."tmdb_votes" IS
+    'TMDB vote count (>= 0) from tv/{id}/season/{n}; null until synced.';
+
+COMMENT ON COLUMN "public"."tv_show_seasons"."episodes_checked_at" IS
+    'When watchlist-cron-sync (or the add flow) last fetched tv/{id}/season/{n} from TMDB with episode scores. Null on pre-migration seasons so settled seasons backfill once and then stay quiet.';
+
+COMMENT ON COLUMN "public"."tv_show_seasons"."scores_checked_at" IS
+    'When watchlist-cron-sync last asked OMDb (?i=<show_imdb_id>&Season=<n>) for this season''s episode IMDb ratings. Null means never asked; stamped even when OMDb has no entry so missing seasons are not retried every night.';
+
 COMMENT ON COLUMN "public"."tv_shows"."library_state" IS
     'active, paused, hidden or stopped. paused: a break -- the series leaves Your Week but keeps its shelf. stopped: the owner stopped watching it. hidden: hidden from visitors, owner-only. active is the truth for every pre-existing row. Films have no paused state (movies_library_state_check allows active, hidden, stopped).';
 
@@ -1750,3 +1778,44 @@ ALTER FUNCTION "public"."prune_unowned_tv_seasons"(integer[]) OWNER TO "postgres
 REVOKE ALL ON FUNCTION "public"."prune_unowned_tv_seasons"(integer[]) FROM PUBLIC, "anon", "authenticated";
 
 GRANT EXECUTE ON FUNCTION "public"."prune_unowned_tv_seasons"(integer[]) TO "service_role";
+
+-- Updates existing episode IMDb ids/ratings for one season and stamps
+-- scores_checked_at in one round trip without ever inserting ghost episodes.
+CREATE OR REPLACE FUNCTION "public"."set_season_omdb_scores"(
+    p_season_id integer,
+    p_checked_at timestamp with time zone,
+    p_episodes jsonb
+)
+    RETURNS void
+    LANGUAGE plpgsql SECURITY INVOKER
+    SET search_path = ''
+    AS $$
+BEGIN
+  IF jsonb_typeof(p_episodes) = 'array' AND jsonb_array_length(p_episodes) > 0 THEN
+    UPDATE public.tv_show_episodes e
+    SET imdb_id = COALESCE(x.imdb_id, e.imdb_id),
+        imdb_rating = x.imdb_rating
+    FROM jsonb_to_recordset(p_episodes) AS x(
+      episode_number integer,
+      imdb_id text,
+      imdb_rating numeric(3,1)
+    )
+    WHERE e.season_id = p_season_id
+      AND e.episode_number = x.episode_number
+      AND (
+        e.imdb_rating IS DISTINCT FROM x.imdb_rating
+        OR (x.imdb_id IS NOT NULL AND e.imdb_id IS DISTINCT FROM x.imdb_id)
+      );
+  END IF;
+
+  UPDATE public.tv_show_seasons
+  SET scores_checked_at = p_checked_at
+  WHERE id = p_season_id;
+END;
+$$;
+
+ALTER FUNCTION "public"."set_season_omdb_scores"(integer, timestamp with time zone, jsonb) OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION "public"."set_season_omdb_scores"(integer, timestamp with time zone, jsonb) FROM PUBLIC, "anon", "authenticated";
+
+GRANT EXECUTE ON FUNCTION "public"."set_season_omdb_scores"(integer, timestamp with time zone, jsonb) TO "service_role";

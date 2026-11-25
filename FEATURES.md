@@ -234,7 +234,7 @@ these are search links, rather than verified edition or stock listings.
 TV and film tracking backed by TMDB, searchable by title through a server-side
 proxy so the API key never reaches the browser.
 
-News, Library, Favourites, Diary and Franchises sit in one nav bar on every Watchlist page.
+News, Library, Favourites, Finished, Diary, Franchises and Cool facts sit in one nav bar on every Watchlist page.
 
 In Discover, the signed-in owner can click anywhere on the full-width search
 bar above the suggestions to look up a film or series they have watched. Each
@@ -259,6 +259,7 @@ For the signed-in owner, a `Rate what you’ve watched` button sits under that s
 A series can be paused from its details (Paused, out of Your Week): it keeps its shelf, and its card carries a Paused label. Films cannot be paused.
 Mark as watched for a film, and Mark Season N as Complete for a season, ask when: just now, on the release date (offered only once released), date unknown, or a picked day that is not earlier than the release (or a season's first air date) and not in the future. A single episode tick is recorded as now, and an episode not yet aired gets no date.
 - **Favourites** (`/watchlist/favourites`) — a dedicated tab listing the titles you have favourited, with the `All` / `Films` / `Series` switch remembered in the browser, title search (`Search favourites…`) that expands matching language groups, and the automatic category filter alongside its existing groups. Every known language has its own collapsible section, including languages with one title; `Language unknown` holds titles without saved language details. Signed-in admins can add titles via an `Add to Favourites` TMDB search dialog and run `Refresh favourite details` (showing progress while syncing).
+- **Finished** (`/watchlist/finished`) — a dedicated tab between Favourites and Diary holding watched films and ended series watched to the end, grouped by language (`LanguageGroupedSections`). Shares the remembered `All` / `Films` / `Series` switch, title search (`Search finished…`), the Filters popover (Platform, automatic Category, Genre and Series status), and sort choices (`Recently watched`, `Your rating` for signed-in admins, and `Title: A–Z`). Finished is no longer in the Library shelf dropdown, while Library cross-shelf search still includes finished titles.
 - **Personal Ratings** — tap-to-rate picker from `0.5` to `10` in `0.5` steps, with `Clear rating`, on movies, TV shows, seasons, and watched episodes. A season can be rated once at least one of its episodes is watched, and an episode only once it is watched. After watching, the app may ask `Watched — rate it?`, `Finished — rate the show?` or `Finished season N — rate it?`, each with `Skip` for that visit. Season pages show an independent episode average, `Episode average: X/10 · Y of Z rated`. Visitors see the owner's rating read-only, beside the IMDb, Rotten Tomatoes, Metacritic and TMDB scores where they are known; only the signed-in owner can set a rating. Watched titles still unrated are queued in News → Discover (`Rate what you’ve watched`).
 - **Your Week** — part of News, showing today's plans and days with plans or
   suggested releases. Expand calendar offers week and month views with previous,
@@ -286,7 +287,7 @@ Mark as watched for a film, and Mark Season N as Complete for a season, ask when
   The former Schedule view opens News.
 
 Library has a compact shelf picker, search field, Filters popover and text-only
-sort choices. While searching, the shelf dropdown displays `All shelves (N)` with live match counts per shelf; picking a shelf narrows the search to that shelf without clearing the search query. `/watchlist/library?category=favourites` redirects to `/watchlist/favourites`. Old category links still open the matching shelf: `?category=tv-shows` and `?category=movies` open To watch filtered to Series or Films, `watched` opens Finished, and `currently-watching` opens Watching. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the shelf picker. Library details for an admin hold a history and rating panel first: the personal rating, Mark as watched for films, a Favourite toggle, and Library visibility (In library, Hidden or Stopped watching). In the details inspector, the top badge row also includes a `Shelf: <shelf>` pill (when different from the status pill) and a `Favourite` heart pill. Schedule, Resync and Delete follow.
+sort choices. While searching, the shelf dropdown displays `All shelves (N)` with live match counts per shelf; picking a shelf narrows the search to that shelf without clearing the search query. `/watchlist/library?category=favourites` redirects to `/watchlist/favourites`, and `?category=finished` or `?category=watched` redirect to `/watchlist/finished`. Old category links still open the matching shelf: `?category=tv-shows` and `?category=movies` open To watch filtered to Series or Films, and `currently-watching` opens Watching. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the shelf picker. Library details for an admin hold a history and rating panel first: the personal rating, Mark as watched for films, a Favourite toggle, and Library visibility (In library, Hidden or Stopped watching). In the details inspector, the top badge row also includes a `Shelf: <shelf>` pill (when different from the status pill) and a `Favourite` heart pill. Schedule, Resync and Delete follow.
 
 Library filters include automatic categories for Anime, Cartoon, K-Drama (TV), Action, Sci-Fi and Documentary. A title can match several: its card shows the first, and its details list them all. The categories follow TMDB genre IDs, original language and origin country through reusable rules; the film/series switch and watch-status shelves stay separate. Favourites has the same automatic category filter alongside its existing groups. New additions save these TMDB facts, and the nightly sync fills them for older titles. A title without enough origin data is left out of origin-based categories until those facts arrive.
 
@@ -361,7 +362,10 @@ episodes, and the panel scrolls as one. It opens on the first regular season not
   series and for older or foreign films. The TMDB score is stored on the title
   when added and refreshed from TMDB by the nightly sync alongside IMDb, Rotten
   Tomatoes and Metacritic (falling back to the live TMDB record when not yet
-  stored). Seasons have no outside score.
+  stored). When a series' details open, each episode row shows compact IMDb and
+  TMDB score chips where known (plus `My score` for visitors), and the season
+  header shows IMDb and TMDB episode-average chips labelled `avg` (beside the
+  season's `My score` for visitors).
 
 **Sync:**
 

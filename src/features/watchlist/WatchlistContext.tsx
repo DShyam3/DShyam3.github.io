@@ -21,6 +21,7 @@ import { missingCategoryColumns } from './category-schema';
 import { isSameTitle, isShowWithId, titleKey, type TitleRef } from './title-ref';
 import { applyRatings, ratingColumn, watchlistRatingsQuery, withRating, type RatingTarget } from './ratings-query';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
+import { pickTmdbEpisodeScores } from './tmdb-score';
 import { localNoonIso, setWatchedArgs, type WatchedWhen } from './watched-when';
 import {
   resolveFavouriteCategory,
@@ -70,6 +71,10 @@ export interface Episode {
   release_date?: string;
   runtime?: number;
   watched?: boolean;
+  imdb_id?: string;
+  imdb_rating?: number;
+  tmdb_rating?: number;
+  tmdb_votes?: number;
 }
 
 export interface Season {
@@ -444,12 +449,22 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     if (loadedShowsRef.current.has(showId)) return;
     loadedShowsRef.current.add(showId);
 
-    const { data, error } = await supabase
+    const showIdNum = parseInt(showId);
+    const firstQuery = await supabase
       .from('tv_show_seasons')
       .select(
-        'id, trailer_key, tv_show_episodes (id, episode_number, title, release_date, runtime, watched)',
+        'id, trailer_key, tv_show_episodes (id, episode_number, title, release_date, runtime, watched, imdb_id, imdb_rating, tmdb_rating, tmdb_votes)',
       )
-      .eq('tv_show_id', parseInt(showId));
+      .eq('tv_show_id', showIdNum);
+    const { data, error } =
+      firstQuery.error && /(?:imdb_id|imdb_rating|tmdb_rating|tmdb_votes)/i.test(firstQuery.error.message)
+        ? await supabase
+            .from('tv_show_seasons')
+            .select(
+              'id, trailer_key, tv_show_episodes (id, episode_number, title, release_date, runtime, watched)',
+            )
+            .eq('tv_show_id', showIdNum)
+        : firstQuery;
 
     if (error) {
       // Allow a retry on the next open rather than leaving the show blank.
@@ -464,6 +479,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       title: string | null;
       release_date: string | null;
       runtime: number | null;
+      imdb_id?: string | null;
+      imdb_rating?: number | null;
+      tmdb_rating?: number | null;
+      tmdb_votes?: number | null;
     };
 
     // season id -> its full episode rows, keyed by episode number
@@ -471,10 +490,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     // season id -> its trailer's YouTube key
     const trailerBySeason = new Map<number, string>();
     (data || []).forEach((season) => {
+      const episodes: LoadedEpisode[] = season.tv_show_episodes || [];
       bySeason.set(
         season.id,
         new Map(
-          (season.tv_show_episodes || []).map((ep) => [ep.episode_number, ep]),
+          episodes.map((ep) => [ep.episode_number, ep]),
         ),
       );
       if (season.trailer_key) trailerBySeason.set(season.id, season.trailer_key);
@@ -501,6 +521,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                   title: row.title || `Episode ${ep.episode_number}`,
                   release_date: row.release_date || undefined,
                   runtime: row.runtime || undefined,
+                  imdb_id: row.imdb_id ?? undefined,
+                  imdb_rating: row.imdb_rating ?? undefined,
+                  tmdb_rating: row.tmdb_rating ?? undefined,
+                  tmdb_votes: row.tmdb_votes ?? undefined,
                 };
               }),
             };
@@ -809,18 +833,30 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                     `tv/${item.tmdb_id}/season/${s.season_number}`,
                     { append_to_response: 'videos', ...TRAILER_VIDEO_PARAMS },
                   );
-                  const { data: season, error: sErr } = await supabase
+                  const seasonPayload = {
+                    tv_show_id: show.id,
+                    season_number: s.season_number,
+                    release_date: s.air_date || null,
+                    trailer_key: pickTrailerKey(sDetails.videos?.results),
+                    // Checked, so the sync's trailer backfill skips it.
+                    trailer_checked_at: new Date().toISOString(),
+                  };
+                  const firstSeasonInsert = await supabase
                     .from('tv_show_seasons')
                     .insert({
-                      tv_show_id: show.id,
-                      season_number: s.season_number,
-                      release_date: s.air_date || null,
-                      trailer_key: pickTrailerKey(sDetails.videos?.results),
-                      // Checked, so the sync's trailer backfill skips it.
-                      trailer_checked_at: new Date().toISOString(),
+                      ...seasonPayload,
+                      episodes_checked_at: new Date().toISOString(),
                     })
                     .select()
                     .single();
+                  const { data: season, error: sErr } =
+                    firstSeasonInsert.error && /episodes_checked_at/i.test(firstSeasonInsert.error.message)
+                      ? await supabase
+                          .from('tv_show_seasons')
+                          .insert(seasonPayload)
+                          .select()
+                          .single()
+                      : firstSeasonInsert;
                   if (sErr) return false;
 
                   // Filter out TBA episodes (episodes with no air date)
@@ -828,7 +864,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                     hasAirDate,
                   );
                   if (validEpisodes.length > 0) {
-                    const eps = validEpisodes.map((v) => ({
+                    const baseEps = validEpisodes.map((v) => ({
                       season_id: season.id,
                       episode_number: v.episode_number,
                       title: v.name,
@@ -838,11 +874,35 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       // season trigger follows from the episodes.
                       watched: !laterWhen && item.watched === true && !!v.air_date && v.air_date <= todayIso,
                     }));
-                    const { data: insertedEps } = await supabase
+                    const eps = validEpisodes.map((v, idx) => ({
+                      ...baseEps[idx],
+                      ...pickTmdbEpisodeScores(v),
+                    }));
+                    const firstEpInsert = await supabase
                       .from('tv_show_episodes')
                       .insert(eps)
-                      .select('id, episode_number, title, release_date, runtime, watched');
-                    const mappedEpisodes: Episode[] = (insertedEps ?? [])
+                      .select('id, episode_number, title, release_date, runtime, watched, imdb_id, imdb_rating, tmdb_rating, tmdb_votes');
+                    const { data: insertedEps } =
+                      firstEpInsert.error && /(?:imdb_id|imdb_rating|tmdb_rating|tmdb_votes)/i.test(firstEpInsert.error.message)
+                        ? await supabase
+                            .from('tv_show_episodes')
+                            .insert(baseEps)
+                            .select('id, episode_number, title, release_date, runtime, watched')
+                        : firstEpInsert;
+                    type InsertedEpisodeRow = {
+                      id: number;
+                      episode_number: number;
+                      title: string | null;
+                      release_date: string | null;
+                      runtime: number | null;
+                      watched: boolean | null;
+                      imdb_id?: string | null;
+                      imdb_rating?: number | null;
+                      tmdb_rating?: number | null;
+                      tmdb_votes?: number | null;
+                    };
+                    const insertedRows: InsertedEpisodeRow[] = insertedEps ?? [];
+                    const mappedEpisodes: Episode[] = insertedRows
                       .sort((a, b) => (a.episode_number || 0) - (b.episode_number || 0))
                       .map((ep) => {
                         if (ep.release_date && ep.release_date <= todayIso) {
@@ -855,7 +915,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                           title: ep.title || `Episode ${ep.episode_number}`,
                           release_date: ep.release_date || undefined,
                           runtime: ep.runtime || undefined,
-                          watched: ep.watched,
+                          watched: ep.watched ?? undefined,
+                          imdb_id: ep.imdb_id ?? undefined,
+                          imdb_rating: ep.imdb_rating ?? undefined,
+                          tmdb_rating: ep.tmdb_rating ?? undefined,
+                          tmdb_votes: ep.tmdb_votes ?? undefined,
                         };
                       });
                     insertedSeasons.push({
@@ -1470,22 +1534,48 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               ),
             );
           } else {
-            const [{ data: show }, { data: lastWatched }] = await Promise.all([
-              supabase
-                .from('tv_shows')
-                .select(`id, title, platform, genre, genre_ids, original_language, origin_country, status, poster, release_date, tmdb_id, library_state,
-                  overview, trailer_key, creators, top_cast, imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes,
-                  tv_show_seasons (id, season_number, release_date, watched, trailer_key,
-                    tv_show_episodes (id, episode_number, title, watched, runtime, release_date))`)
-                .eq('id', targetId)
-                .maybeSingle(),
+            const baseShowColumns = `id, title, platform, genre, genre_ids, original_language, origin_country, status, poster, release_date, tmdb_id, library_state,
+              overview, trailer_key, creators, top_cast, imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes`;
+            const [showResult, { data: lastWatched }] = await Promise.all([
+              (async () => {
+                const withEpScores = await supabase
+                  .from('tv_shows')
+                  .select(`${baseShowColumns},
+                    tv_show_seasons (id, season_number, release_date, watched, trailer_key,
+                      tv_show_episodes (id, episode_number, title, watched, runtime, release_date, imdb_id, imdb_rating, tmdb_rating, tmdb_votes))`)
+                  .eq('id', targetId)
+                  .maybeSingle();
+                if (!withEpScores.error || !/(?:imdb_id|imdb_rating|tmdb_rating|tmdb_votes)/i.test(withEpScores.error.message)) {
+                  return withEpScores;
+                }
+                return supabase
+                  .from('tv_shows')
+                  .select(`${baseShowColumns},
+                    tv_show_seasons (id, season_number, release_date, watched, trailer_key,
+                      tv_show_episodes (id, episode_number, title, watched, runtime, release_date))`)
+                  .eq('id', targetId)
+                  .maybeSingle();
+              })(),
               supabase
                 .from('watchlist_show_last_watched')
                 .select('last_watched_at')
                 .eq('tv_show_id', targetId)
                 .maybeSingle(),
             ]);
+            const show = showResult.data;
             if (!show) return;
+            type RefreshedEpisodeRow = {
+              id: number;
+              episode_number: number;
+              title: string | null;
+              watched: boolean | null;
+              runtime: number | null;
+              release_date: string | null;
+              imdb_id?: string | null;
+              imdb_rating?: number | null;
+              tmdb_rating?: number | null;
+              tmdb_votes?: number | null;
+            };
             loadedDescriptionsRef.current.add(titleKey(target));
             loadedShowsRef.current.add(target.id);
             const refreshedSeasons: Season[] = (show.tv_show_seasons || [])
@@ -1496,7 +1586,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 release_date: season.release_date || undefined,
                 watched: season.watched,
                 trailer_key: season.trailer_key || undefined,
-                episodes: (season.tv_show_episodes || [])
+                episodes: ((season.tv_show_episodes || []) as RefreshedEpisodeRow[])
                   .sort((a, b) => (a.episode_number || 0) - (b.episode_number || 0))
                   .map((ep) => ({
                     id: ep.id,
@@ -1505,6 +1595,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                     release_date: ep.release_date || undefined,
                     runtime: ep.runtime || undefined,
                     watched: ep.watched,
+                    imdb_id: ep.imdb_id ?? undefined,
+                    imdb_rating: ep.imdb_rating ?? undefined,
+                    tmdb_rating: ep.tmdb_rating ?? undefined,
+                    tmdb_votes: ep.tmdb_votes ?? undefined,
                   })),
               }));
             setWatchlist((prev) =>

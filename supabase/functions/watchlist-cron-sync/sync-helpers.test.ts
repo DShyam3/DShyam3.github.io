@@ -12,10 +12,12 @@ import {
   omdbVotes,
   parseItemTarget,
   parseOmdbResponse,
+  parseOmdbSeasonResponse,
   parseShard,
   pickCollection,
   pickCreators,
   pickDirectors,
+  pickTmdbEpisodeScores,
   pickTopCast,
   pickTrailerKey,
   uniqueNames,
@@ -304,4 +306,76 @@ Deno.test('isMissingRpcError detects Postgres 42883 and PostgREST PGRST202 only'
   assertEquals(isMissingRpcError({ code: null }), false)
   assertEquals(isMissingRpcError(null), false)
   assertEquals(isMissingRpcError(undefined), false)
+})
+
+Deno.test('pickTmdbEpisodeScores rounds and clamps finite ratings and normalizes missing/zero values', () => {
+  assertJsonEquals(pickTmdbEpisodeScores({ vote_average: 8.36, vote_count: 142 }), {
+    tmdb_rating: 8.4,
+    tmdb_votes: 142,
+  })
+  assertJsonEquals(pickTmdbEpisodeScores({ vote_average: 11.4, vote_count: 12.6 }), {
+    tmdb_rating: 10,
+    tmdb_votes: 13,
+  })
+  assertJsonEquals(pickTmdbEpisodeScores({ vote_average: 0, vote_count: 0 }), {
+    tmdb_rating: null,
+    tmdb_votes: 0,
+  })
+  assertJsonEquals(pickTmdbEpisodeScores({ vote_average: -2, vote_count: -5 }), {
+    tmdb_rating: null,
+    tmdb_votes: 0,
+  })
+  assertJsonEquals(pickTmdbEpisodeScores({ vote_average: Number.NaN, vote_count: Number.POSITIVE_INFINITY }), {
+    tmdb_rating: null,
+    tmdb_votes: 0,
+  })
+  assertJsonEquals(pickTmdbEpisodeScores({}), {
+    tmdb_rating: null,
+    tmdb_votes: 0,
+  })
+})
+
+Deno.test('parseOmdbSeasonResponse classifies errors and parses deduplicated positive-integer episodes', () => {
+  assertJsonEquals(parseOmdbSeasonResponse(null), { kind: 'error', message: 'OMDb returned no JSON object' })
+  assertJsonEquals(parseOmdbSeasonResponse({}), { kind: 'error', message: 'OMDb response had no Response flag' })
+  assertJsonEquals(parseOmdbSeasonResponse({ Response: 'False', Error: 'Daily request limit reached!' }), { kind: 'limit' })
+  assertJsonEquals(parseOmdbSeasonResponse({ Response: 'False', Error: 'Series or season not found!' }), { kind: 'not-found' })
+  assertJsonEquals(parseOmdbSeasonResponse({ Response: 'False', Error: 'Incorrect IMDb ID.' }), { kind: 'not-found' })
+  assertJsonEquals(
+    parseOmdbSeasonResponse({ Response: 'False', Error: 'Invalid API key!' }),
+    { kind: 'error', message: 'Invalid API key!' },
+  )
+  assertJsonEquals(parseOmdbSeasonResponse({ Response: 'True' }), { kind: 'episodes', episodes: [] })
+  assertJsonEquals(parseOmdbSeasonResponse({ Response: 'True', Episodes: 'N/A' }), { kind: 'episodes', episodes: [] })
+
+  assertJsonEquals(
+    parseOmdbSeasonResponse({
+      Response: 'True',
+      Episodes: [
+        null,
+        'x',
+        { Episode: '0', imdbID: 'tt0000001', imdbRating: '8.0' },
+        { Episode: '-1', imdbID: 'tt0000002', imdbRating: '8.0' },
+        { Episode: '1.5', imdbID: 'tt0000003', imdbRating: '8.0' },
+        { Episode: 1, imdbID: 'tt0000004', imdbRating: '8.0' },
+        { Episode: '99999999999999999999', imdbID: 'tt0000005', imdbRating: '8.0' },
+        { Episode: ' 1 ', imdbID: 'tt0959621', imdbRating: '9.0' },
+        { Episode: '01', imdbID: 'tt9999999', imdbRating: '4.0' },
+        { Episode: '2', imdbID: 'tt1054724', imdbRating: '8.76' },
+        { Episode: '3', imdbID: 'tt1054725', imdbRating: '0.0' },
+        { Episode: '4', imdbID: 'N/A', imdbRating: 'N/A' },
+        { Episode: '5', imdbID: 'bad', imdbRating: '11.5' },
+      ],
+    }),
+    {
+      kind: 'episodes',
+      episodes: [
+        { episode_number: 1, imdb_id: 'tt0959621', imdb_rating: 9 },
+        { episode_number: 2, imdb_id: 'tt1054724', imdb_rating: 8.8 },
+        { episode_number: 3, imdb_id: 'tt1054725', imdb_rating: null },
+        { episode_number: 4, imdb_id: null, imdb_rating: null },
+        { episode_number: 5, imdb_id: null, imdb_rating: 10 },
+      ],
+    },
+  )
 })

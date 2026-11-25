@@ -3,7 +3,18 @@ import {
   formatScore,
   formatVoteCount,
   pickCollection,
+  pickTmdbEpisodeScores,
 } from './tmdb-score';
+
+describe('pickTmdbEpisodeScores', () => {
+  it('normalises positive ratings to 1dp, caps at 10, and treats 0 or missing as null with >=0 votes', () => {
+    expect(pickTmdbEpisodeScores({ vote_average: 8.76, vote_count: 342 })).toEqual({ tmdb_rating: 8.8, tmdb_votes: 342 });
+    expect(pickTmdbEpisodeScores({ vote_average: 11.4, vote_count: 5 })).toEqual({ tmdb_rating: 10, tmdb_votes: 5 });
+    expect(pickTmdbEpisodeScores({ vote_average: 0, vote_count: 0 })).toEqual({ tmdb_rating: null, tmdb_votes: 0 });
+    expect(pickTmdbEpisodeScores({})).toEqual({ tmdb_rating: null, tmdb_votes: 0 });
+    expect(pickTmdbEpisodeScores({ vote_average: -2, vote_count: -5 })).toEqual({ tmdb_rating: null, tmdb_votes: 0 });
+  });
+});
 
 describe('pickCollection', () => {
   it('is undefined when the key is absent', () => {

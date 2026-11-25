@@ -47,6 +47,8 @@ export interface TMDBEpisode {
   name?: string;
   air_date?: string | null;
   runtime?: number | null;
+  vote_average?: number;
+  vote_count?: number;
 }
 
 /** One entry of an `append_to_response: 'videos'` block. */

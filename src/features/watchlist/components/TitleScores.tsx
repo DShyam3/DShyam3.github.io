@@ -3,11 +3,14 @@ import { Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatScore, formatVoteCount } from '@/features/watchlist/tmdb-score';
 
-function ImdbBadge() {
+function ImdbBadge({ compact }: { compact?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-bold leading-none tracking-tight text-black"
+      className={cn(
+        'inline-flex items-center rounded py-0.5 text-xs font-bold leading-none tracking-tight text-black',
+        compact ? 'px-1' : 'px-1.5',
+      )}
       style={{ backgroundColor: '#F5C518' }}
     >
       IMDb
@@ -47,11 +50,14 @@ function MetacriticBadge({ score }: { score: number }) {
   );
 }
 
-function TmdbBadge() {
+function TmdbBadge({ compact }: { compact?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-bold leading-none tracking-tight text-[#032541]"
+      className={cn(
+        'inline-flex items-center rounded py-0.5 text-xs font-bold leading-none tracking-tight text-[#032541]',
+        compact ? 'px-1' : 'px-1.5',
+      )}
       style={{ backgroundColor: '#01B4E4' }}
     >
       TMDB
@@ -64,7 +70,18 @@ function TmdbBadge() {
  * and TMDB. The external three come from OMDb (nightly sync), while TMDB comes
  * from the title's TMDB record.
  */
-export function TitleScores({ mine, imdbRating, imdbVotes, rtScore, metascore, tmdbRating, tmdbVotes, className }: {
+export function TitleScores({
+  mine,
+  imdbRating,
+  imdbVotes,
+  rtScore,
+  metascore,
+  tmdbRating,
+  tmdbVotes,
+  compact,
+  average,
+  className,
+}: {
   /** The owner's own score, shown read-only (the admin edits it elsewhere). */
   mine?: number | null;
   imdbRating?: number;
@@ -73,9 +90,13 @@ export function TitleScores({ mine, imdbRating, imdbVotes, rtScore, metascore, t
   metascore?: number;
   tmdbRating?: number;
   tmdbVotes?: number;
+  compact?: boolean;
+  average?: boolean;
   className?: string;
 }) {
-  const chip = 'inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-secondary/40 px-2 py-1 text-xs text-muted-foreground tabular-nums';
+  const chip = compact
+    ? 'inline-flex items-center gap-1 rounded border border-border/60 bg-secondary/40 px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums'
+    : 'inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-secondary/40 px-2 py-1 text-xs text-muted-foreground tabular-nums';
   const parts: ReactNode[] = [];
   if (mine != null) {
     parts.push(
@@ -86,13 +107,16 @@ export function TitleScores({ mine, imdbRating, imdbVotes, rtScore, metascore, t
       </span>,
     );
   }
-  if (imdbRating != null) {
+  if (imdbRating != null && imdbRating > 0) {
     parts.push(
       <span key="imdb" className={chip}>
-        <ImdbBadge />
+        <ImdbBadge compact={compact} />
         <span className="font-medium text-foreground">{formatScore(imdbRating)}</span>
-        {imdbVotes != null && <span>({formatVoteCount(imdbVotes)})</span>}
-        <span className="sr-only"> IMDb out of 10</span>
+        {average && <span aria-hidden="true">avg</span>}
+        {!compact && imdbVotes != null && <span>({formatVoteCount(imdbVotes)})</span>}
+        <span className="sr-only">
+          {average ? ' IMDb episode average out of 10' : ' IMDb out of 10'}
+        </span>
       </span>,
     );
   }
@@ -117,16 +141,19 @@ export function TitleScores({ mine, imdbRating, imdbVotes, rtScore, metascore, t
   if (tmdbRating != null && tmdbRating > 0) {
     parts.push(
       <span key="tmdb" className={chip}>
-        <TmdbBadge />
+        <TmdbBadge compact={compact} />
         <span className="font-medium text-foreground">{formatScore(tmdbRating)}</span>
-        {tmdbVotes != null && tmdbVotes > 0 && <span>({formatVoteCount(tmdbVotes)})</span>}
-        <span className="sr-only"> TMDB out of 10</span>
+        {average && <span aria-hidden="true">avg</span>}
+        {!compact && tmdbVotes != null && tmdbVotes > 0 && <span>({formatVoteCount(tmdbVotes)})</span>}
+        <span className="sr-only">
+          {average ? ' TMDB episode average out of 10' : ' TMDB out of 10'}
+        </span>
       </span>,
     );
   }
   if (parts.length === 0) return null;
   return (
-    <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
+    <div className={cn('flex flex-wrap items-center', compact ? 'gap-1' : 'gap-1.5', className)}>
       {parts}
     </div>
   );

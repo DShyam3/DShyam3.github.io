@@ -75,7 +75,7 @@ export const SERVICES: ServiceDefinition[] = [
     id: 'omdb',
     name: 'OMDb',
     description: 'IMDb, Metascore and Rotten Tomatoes ratings.',
-    howUsed: 'Called by watchlist-cron-sync with each title’s IMDb ID on a weekly refresh.',
+    howUsed: 'Called by watchlist-cron-sync with each title’s IMDb ID and TV season number to refresh title and episode ratings.',
     whyUsed: 'TMDB has no IMDb or Rotten Tomatoes scores; OMDb supplies them.',
     providers: ['omdb'],
     limitLabel: '1,000 calls a day (free tier)',

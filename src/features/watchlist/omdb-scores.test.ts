@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isImdbId, parseOmdbResponse } from './omdb-scores';
+import { isImdbId, parseOmdbResponse, parseOmdbSeasonResponse } from './omdb-scores';
 
 const full = {
   Response: 'True',
@@ -165,6 +165,89 @@ describe('parseOmdbResponse scores', () => {
     expect(out).toEqual({
       kind: 'scores',
       scores: { imdb_rating: null, imdb_votes: null, rt_score: null, metascore: null },
+    });
+  });
+});
+
+describe('parseOmdbSeasonResponse', () => {
+  it('classifies limit, not-found, error, and malformed inputs', () => {
+    expect(parseOmdbSeasonResponse({ Response: 'False', Error: 'Daily request limit reached!' })).toEqual({ kind: 'limit' });
+    expect(parseOmdbSeasonResponse({ Response: 'False', Error: 'Series or season not found!' })).toEqual({ kind: 'not-found' });
+    expect(parseOmdbSeasonResponse({ Response: 'False', Error: 'Incorrect IMDb ID.' })).toEqual({ kind: 'not-found' });
+    expect(parseOmdbSeasonResponse({ Response: 'False', Error: 'Invalid API key!' })).toEqual({
+      kind: 'error',
+      message: 'Invalid API key!',
+    });
+    expect(parseOmdbSeasonResponse({ Response: 'False' })).toEqual({
+      kind: 'error',
+      message: 'OMDb returned an error',
+    });
+    expect(parseOmdbSeasonResponse(null)).toEqual({
+      kind: 'error',
+      message: 'OMDb returned no JSON object',
+    });
+    for (const bad of [undefined, 'x', 42, [], {}, { Response: 'Maybe' }]) {
+      expect(parseOmdbSeasonResponse(bad).kind).toBe('error');
+    }
+  });
+
+  it('returns an empty episodes array when Episodes is absent or not an array', () => {
+    expect(parseOmdbSeasonResponse({ Response: 'True' })).toEqual({ kind: 'episodes', episodes: [] });
+    expect(parseOmdbSeasonResponse({ Response: 'True', Episodes: 'N/A' })).toEqual({ kind: 'episodes', episodes: [] });
+    expect(parseOmdbSeasonResponse({ Response: 'True', Episodes: null })).toEqual({ kind: 'episodes', episodes: [] });
+  });
+
+  it('parses valid episodes, rounds/clamps ratings, and turns 0.0 or N/A into null', () => {
+    expect(
+      parseOmdbSeasonResponse({
+        Response: 'True',
+        Season: '1',
+        Episodes: [
+          { Episode: ' 1 ', imdbID: 'tt0959621', imdbRating: '9.0' },
+          { Episode: '2', imdbID: 'tt1054724', imdbRating: '8.76' },
+          { Episode: '3', imdbID: 'tt1054725', imdbRating: '11.2' },
+          { Episode: '4', imdbID: 'tt1054726', imdbRating: '0.0' },
+          { Episode: '5', imdbID: 'tt1054727', imdbRating: '0' },
+          { Episode: '6', imdbID: 'N/A', imdbRating: 'N/A' },
+          { Episode: '7', imdbID: 'bad-id', imdbRating: '0.1' },
+        ],
+      }),
+    ).toEqual({
+      kind: 'episodes',
+      episodes: [
+        { episode_number: 1, imdb_id: 'tt0959621', imdb_rating: 9 },
+        { episode_number: 2, imdb_id: 'tt1054724', imdb_rating: 8.8 },
+        { episode_number: 3, imdb_id: 'tt1054725', imdb_rating: 10 },
+        { episode_number: 4, imdb_id: 'tt1054726', imdb_rating: null },
+        { episode_number: 5, imdb_id: 'tt1054727', imdb_rating: null },
+        { episode_number: 6, imdb_id: null, imdb_rating: null },
+        { episode_number: 7, imdb_id: null, imdb_rating: 0.1 },
+      ],
+    });
+  });
+
+  it('skips invalid or duplicate episode numbers keeping the first occurrence', () => {
+    expect(
+      parseOmdbSeasonResponse({
+        Response: 'True',
+        Episodes: [
+          null,
+          'bad',
+          {},
+          { Episode: '0', imdbID: 'tt0000001', imdbRating: '8.0' },
+          { Episode: '-1', imdbID: 'tt0000002', imdbRating: '8.0' },
+          { Episode: '1.5', imdbID: 'tt0000003', imdbRating: '8.0' },
+          { Episode: 'N/A', imdbID: 'tt0000004', imdbRating: '8.0' },
+          { Episode: 1, imdbID: 'tt0000005', imdbRating: '8.0' },
+          { Episode: '99999999999999999999', imdbID: 'tt0000006', imdbRating: '8.0' },
+          { Episode: '2', imdbID: 'tt1111111', imdbRating: '8.4' },
+          { Episode: ' 02 ', imdbID: 'tt2222222', imdbRating: '6.1' },
+          { Episode: '2', imdbID: 'tt3333333', imdbRating: '5.0' },
+        ],
+      }),
+    ).toEqual({
+      kind: 'episodes',
+      episodes: [{ episode_number: 2, imdb_id: 'tt1111111', imdb_rating: 8.4 }],
     });
   });
 });

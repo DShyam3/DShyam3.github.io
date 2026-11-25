@@ -20,6 +20,8 @@ export interface TMDBEpisode {
   name?: string
   air_date?: string | null
   runtime?: number | null
+  vote_average?: number
+  vote_count?: number
 }
 export interface TMDBVideo {
   key?: string
@@ -148,6 +150,20 @@ export function pickCollection(
   return { collection_id: c.id, collection_name: c.name?.trim() || null }
 }
 
+export function pickTmdbEpisodeScores(
+  episode: { vote_average?: number; vote_count?: number },
+): { tmdb_rating: number | null; tmdb_votes: number } {
+  const avg = episode.vote_average
+  const count = episode.vote_count
+  const tmdb_rating = typeof avg === 'number' && Number.isFinite(avg) && avg > 0
+    ? Math.round(Math.min(10, avg) * 10) / 10
+    : null
+  const tmdb_votes = typeof count === 'number' && Number.isFinite(count) && count >= 0
+    ? Math.round(count)
+    : 0
+  return { tmdb_rating, tmdb_votes }
+}
+
 // Mirror of src/features/watchlist/omdb-scores.ts -- change both together.
 // Deno cannot import from src/, so this is a hand-maintained copy.
 export interface OmdbScores {
@@ -158,6 +174,16 @@ export interface OmdbScores {
 }
 export type OmdbOutcome =
   | { kind: 'scores'; scores: OmdbScores }
+  | { kind: 'not-found' }
+  | { kind: 'limit' }
+  | { kind: 'error'; message: string }
+export interface OmdbSeasonEpisodeScore {
+  episode_number: number
+  imdb_id: string | null
+  imdb_rating: number | null
+}
+export type OmdbSeasonOutcome =
+  | { kind: 'episodes'; episodes: OmdbSeasonEpisodeScore[] }
   | { kind: 'not-found' }
   | { kind: 'limit' }
   | { kind: 'error'; message: string }
@@ -227,6 +253,38 @@ export function parseOmdbResponse(json: unknown): OmdbOutcome {
       metascore: omdbPercent(omdbText(data.Metascore)) ?? omdbPercent(metacriticFromRatings),
     },
   }
+}
+export function parseOmdbSeasonResponse(json: unknown): OmdbSeasonOutcome {
+  if (!json || typeof json !== 'object') return { kind: 'error', message: 'OMDb returned no JSON object' }
+  const data = json as Record<string, unknown>
+  if (data.Response === 'False') {
+    const message = omdbText(data.Error) || 'OMDb returned an error'
+    const lower = message.toLowerCase()
+    if (lower.includes('limit')) return { kind: 'limit' }
+    if (lower.includes('not found') || lower.includes('incorrect imdb id')) return { kind: 'not-found' }
+    return { kind: 'error', message }
+  }
+  if (data.Response !== 'True') return { kind: 'error', message: 'OMDb response had no Response flag' }
+  if (!Array.isArray(data.Episodes)) return { kind: 'episodes', episodes: [] }
+
+  const episodes: OmdbSeasonEpisodeScore[] = []
+  const seen = new Set<number>()
+  for (const raw of data.Episodes) {
+    if (!raw || typeof raw !== 'object') continue
+    const entry = raw as Record<string, unknown>
+    const epText = omdbText(entry.Episode)
+    if (epText === null || !OMDB_INTEGER.test(epText)) continue
+    const episode_number = Number(epText)
+    if (!Number.isSafeInteger(episode_number) || episode_number < 1 || seen.has(episode_number)) continue
+    seen.add(episode_number)
+
+    const imdb_id = isImdbId(entry.imdbID) ? entry.imdbID : null
+    const parsedRating = omdbImdbRating(omdbText(entry.imdbRating))
+    const imdb_rating = parsedRating !== null && parsedRating > 0 ? parsedRating : null
+    episodes.push({ episode_number, imdb_id, imdb_rating })
+  }
+
+  return { kind: 'episodes', episodes }
 }
 
 // Mirror of src/features/watchlist/credits.ts. Deno cannot import from src/,
