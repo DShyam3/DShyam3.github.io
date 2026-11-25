@@ -235,7 +235,9 @@ export function InvestmentImportDialog({
               )}
 
               {parsed.holdings.length > 0 && (
-                <div className="overflow-x-auto rounded-lg border border-border/35">
+                // overflow-y-hidden: a row checkbox's touch target can reach
+                // past the last row, which would make this a vertical scroller.
+                <div className="overflow-x-auto overflow-y-hidden rounded-lg border border-border/35">
                   <table className="w-full min-w-[650px] text-left text-xs">
                     <thead className="border-b border-border/35 bg-muted/15 uppercase tracking-wider text-muted-foreground">
                       <tr>

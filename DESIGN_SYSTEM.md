@@ -355,6 +355,11 @@ brands, in portrait and landscape.
   compact toolbar; only the sync history list scrolls inside its popover.
 - Card actions appear on touch/coarse pointers; fine-pointer hover and keyboard
   focus reveal them. Shared touch controls use a `2.75rem` minimum target.
+  A control drawn smaller than that (Checkbox, Switch) carries `ui-hit-area`:
+  it keeps its drawn size and an invisible `::after` takes the target, so the
+  grow rules never stretch it into a large empty box; a table cell holding one
+  grows to `2.75rem` so adjacent rows' targets do not overlap. Give any new
+  small button-based control the same class.
 - Dialogs retain outer gutters and a bounded scrolling body, with the close
   control outside that body. The
   body's scrollbar is the thin `app-scroll` bar;

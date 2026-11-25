@@ -195,6 +195,20 @@ footer.app-footer { padding-block: .75rem; }
 html[data-display="larger"] { font-size: 125%; }
 html[data-display="larger"] .card-grid { --card-min: 12rem; }
 html[data-display="larger"] :is(button, [role="combobox"], .nav-link) { min-height: 2.75rem; }
+/* A checkbox or switch keeps the size it is drawn at. The rules above grow
+   every button to 2.75rem, and grown, a checkbox drew as a large empty square
+   and a switch as a circle. An invisible ::after takes the 2.75rem target
+   around it instead. At (0,3,0) this outranks every grow rule, here and in
+   surfaces.css, whatever order they load in. A table row holding one grows
+   to the target too, or the targets of adjacent rows overlap. */
+:root .ui-hit-area.ui-hit-area { min-height: 0; min-width: 0; }
+.ui-hit-area::after { content: ''; position: absolute; inset: 0; }
+@media (any-pointer: coarse), (hover: none) {
+  .ui-hit-area::after { inset: min(0px, calc((100% - 2.75rem) / 2)); }
+  td:has(> .ui-hit-area) { height: 2.75rem; }
+}
+html[data-display="larger"] .ui-hit-area::after { inset: min(0px, calc((100% - 2.75rem) / 2)); }
+html[data-display="larger"] td:has(> .ui-hit-area) { height: 2.75rem; }
 /* Clear external utility rings even for pointer focus. Visible keyboard
    focus stays inside controls, including at the edge of a scroller. */
 html :is(a, button, input, select, textarea, :where([tabindex]:not([tabindex="-1"])), [role="combobox"]):focus {

@@ -1257,15 +1257,17 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               {/* Select All Bar */}
               <div className="flex items-center px-4 py-1.5 border-b border-border/20 text-xs text-muted-foreground font-semibold">
                 <div className="flex items-center gap-3">
-                  <Checkbox
-                    checked={
-                      filteredTransactions.length > 0 &&
-                      filteredTransactions.every(tx => selectedTxIds.has(tx.id))
-                    }
-                    onCheckedChange={(checked) => handleSelectAll(!!checked)}
-                    className="h-3.5 w-3.5 rounded-sm border-primary/30"
-                  />
-                  <span>SELECT ALL ON PAGE</span>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <Checkbox
+                      checked={
+                        filteredTransactions.length > 0 &&
+                        filteredTransactions.every(tx => selectedTxIds.has(tx.id))
+                      }
+                      onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                      className="h-3.5 w-3.5 rounded-sm border-primary/30"
+                    />
+                    <span className="uppercase">Select all on page</span>
+                  </label>
                   {/* The shortcuts are worthless if nobody knows they exist,
                       and a help dialog nobody opens is the same as no help. */}
                   <span className="hidden lg:flex items-center gap-1 font-normal normal-case tracking-normal">
