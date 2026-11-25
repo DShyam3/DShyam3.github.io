@@ -1,5 +1,6 @@
 import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { isLoadFailure } from '@/components/layout/RouteErrorBoundary';
 
 /** Module loading is separate from database loading; neither may hide a failure forever. */
 export function FinanceSectionLoading() {
@@ -17,11 +18,11 @@ export function FinanceSectionLoading() {
   );
 }
 
-export class FinanceSectionBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
+export class FinanceSectionBoundary extends Component<{ children: ReactNode }, { failed: boolean; loadFailure: boolean }> {
+  state = { failed: false, loadFailure: false };
 
-  static getDerivedStateFromError() {
-    return { failed: true };
+  static getDerivedStateFromError(error: unknown) {
+    return { failed: true, loadFailure: isLoadFailure(error) };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -32,7 +33,7 @@ export class FinanceSectionBoundary extends Component<{ children: ReactNode }, {
     if (!this.state.failed) return this.props.children;
     return (
       <div role="alert" className="py-16 text-center text-sm font-sans space-y-3">
-        <p className="font-semibold">This finance section could not load.</p>
+        <p className="font-semibold">{this.state.loadFailure ? 'This finance section could not load.' : 'This finance section ran into a problem.'}</p>
         <p className="text-muted-foreground">Reload the page to try again. Your saved records are unchanged.</p>
         <Button variant="outline" onClick={() => window.location.reload()}>Reload page</Button>
       </div>

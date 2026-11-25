@@ -10,10 +10,11 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { AppShell } from '@/components/layout/AppShell';
+import { ErrorScreen } from '@/components/layout/ErrorScreen';
 import { PageLoader } from '@/components/layout/PageLoader';
+import { isLoadFailure } from '@/components/layout/RouteErrorBoundary';
 import { Button } from '@/components/ui/button';
 import { prefersSavedData, whenIdle } from '@/lib/idle';
 
@@ -99,15 +100,18 @@ export function FinanceSession({ children }: { children: ReactNode }) {
  * the chunk -- would unmount the whole app on whatever page the admin was
  * reading. Away from /finance it renders nothing; on it, the error and a
  * retry. Opening /finance after a failure retries on its own.
+ *
+ * The error is an `ErrorScreen`, not AppShell: this boundary sits above every
+ * route, so a second throw from its fallback would blank the whole site.
  */
 class FinanceHostBoundary extends Component<
   { target: HTMLElement | null; onRetry: () => void; children: ReactNode },
-  { failed: boolean }
+  { failed: boolean; loadFailure: boolean }
 > {
-  state = { failed: false };
+  state = { failed: false, loadFailure: false };
 
-  static getDerivedStateFromError() {
-    return { failed: true };
+  static getDerivedStateFromError(error: unknown) {
+    return { failed: true, loadFailure: isLoadFailure(error) };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -122,14 +126,17 @@ class FinanceHostBoundary extends Component<
     if (!this.state.failed) return this.props.children;
     const { target, onRetry } = this.props;
     if (!target) return null;
+    const { loadFailure } = this.state;
     return createPortal(
-      <AppShell title="Finance" subtitle="Income & tax">
-        <div role="alert" className="py-16 text-center text-sm font-sans space-y-3">
-          <p className="font-semibold">Finance could not load.</p>
-          <p className="text-muted-foreground">Check your connection and try again. Your saved records are unchanged.</p>
-          <Button variant="outline" onClick={onRetry}>Try again</Button>
-        </div>
-      </AppShell>,
+      <ErrorScreen
+        title={loadFailure ? 'Finance could not load.' : 'Finance ran into a problem.'}
+        message={`${loadFailure ? 'Check your connection and try again.' : 'Try again, or reload the page.'} Your saved records are unchanged.`}
+      >
+        <Button variant="outline" onClick={onRetry}>Try again</Button>
+        <Button variant="ghost" asChild>
+          <Link to="/">Back to home</Link>
+        </Button>
+      </ErrorScreen>,
       target,
     );
   }
