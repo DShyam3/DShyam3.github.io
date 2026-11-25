@@ -3348,3 +3348,9 @@ Four decisions:
 Measured live against Wikidata with no TMDB key: 117 links; the Star Wars group has 23 series; MCU TV has 8 series (adding Echo, Inhumans and VisionQuest).
 
 Closure: in the tree, not committed. The cache row is not refreshed and the edge functions are not deployed, so nothing is live. Order to ship is in `STATE.md`.
+
+### Manual TV status follows a changed TMDB status — 2026-11-25
+
+The owner can correct a show's series status, for example marking it Ended while TMDB still says Returning Series. Comparing each sync with the displayed status would immediately undo that correction. The sync therefore stores TMDB's last observed status separately. It leaves a manual choice alone while TMDB repeats that value; when TMDB reports a different value, it updates both the displayed status and the baseline. A new show stores its initial TMDB status as the baseline, and the migration backfills existing shows from their stored statuses. This gives the correction a clear end without making it permanent.
+
+Closure: the picker, sync rule, and baseline migration are in commit `83c6bf9e` on `main`. The current handoff reports the migration applied to local and hosted Supabase and the function deployed; this documentation pass could not independently query hosted Supabase.

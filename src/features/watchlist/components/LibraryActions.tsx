@@ -110,7 +110,7 @@ export function LibraryActions({ item }: { item: WatchlistItem }) {
             Series status
             <NativeSelect
               aria-label="Series status"
-              className="min-h-11 min-w-44"
+              className="min-h-11 min-w-44 rounded-lg border border-border bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               value={item.series_status ?? ''}
               disabled={saving}
               onChange={(event) => void save(() => setSeriesStatus(item, event.target.value as NonNullable<WatchlistItem['series_status']>))}
