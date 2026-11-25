@@ -14,12 +14,14 @@ export interface ImportFilm {
   /** ISO timestamp, or null for "watched, date unknown". */
   watchedAt: string | null;
   rating: number | null;
+  /** ISO timestamp when the rating was given (Trakt rated_at), if known. */
+  ratedAt?: string | null;
   /** Trakt rated it but logged no watch: kept, though not ticked by default. */
   ratedOnly?: boolean;
 }
 export interface ImportShowRef { tmdbId: number | null; title: string; year: number | null }
 export interface ImportEpisode { show: ImportShowRef; season: number; episode: number; watchedAt: string | null }
-export interface ImportRating { kind: 'show' | 'season'; show: ImportShowRef; season?: number; rating: number }
+export interface ImportRating { kind: 'show' | 'season'; show: ImportShowRef; season?: number; rating: number; ratedAt?: string | null }
 
 /** `libraryId` is set when this TMDB title is already in the library. */
 export interface Candidate { id: number; title: string; year: number | null; poster: string | null; libraryId?: string }
@@ -43,9 +45,9 @@ export interface ImportPlan {
 
 export interface ImportPayload {
   p_episodes: { id: number; watched_at: string | null }[];
-  p_movies: { id: number; watched_at: string | null; rating: number | null }[];
-  p_shows: { id: number; rating: number }[];
-  p_seasons: { id: number; rating: number }[];
+  p_movies: { id: number; watched_at: string | null; rating: number | null; rated_at?: string | null }[];
+  p_shows: { id: number; rating: number; rated_at?: string | null }[];
+  p_seasons: { id: number; rating: number; rated_at?: string | null }[];
   notFound: { episodes: number; films: number; ratings: number };
 }
 
@@ -145,11 +147,11 @@ export function importFromTrakt(result: TraktParseResult): {
     if (entry.kind === 'movie') {
       const key = filmKey(entry.title);
       const existing = films.get(key);
-      if (existing) existing.rating = entry.rating;
-      else films.set(key, { key, name: entry.title.title, year: entry.title.year, tmdbId: entry.title.tmdbId, watchedAt: null, rating: entry.rating, ratedOnly: true });
+      if (existing) { existing.rating = entry.rating; existing.ratedAt = entry.ratedAt; }
+      else films.set(key, { key, name: entry.title.title, year: entry.title.year, tmdbId: entry.title.tmdbId, watchedAt: null, rating: entry.rating, ratedAt: entry.ratedAt, ratedOnly: true });
     } else {
       const show = addShow(entry.title);
-      ratings.push({ kind: entry.kind, show, season: entry.season, rating: entry.rating });
+      ratings.push({ kind: entry.kind, show, season: entry.season, rating: entry.rating, ratedAt: entry.ratedAt });
     }
   }
   const episodes = result.episodes.map(ep => ({ show: addShow(ep.show), season: ep.season, episode: ep.episode, watchedAt: ep.watchedAt }));
@@ -285,7 +287,7 @@ export function buildImportPayload(plan: ImportPlan, freshLibrary: WatchlistItem
     return (kind === 'film' ? index.filmByTmdb : index.showByTmdb).get(settled.tmdbId);
   };
 
-  const movies = new Map<number, { id: number; watched_at: string | null; rating: number | null }>();
+  const movies = new Map<number, { id: number; watched_at: string | null; rating: number | null; rated_at?: string | null }>();
   for (const { film, resolution } of plan.films) {
     const settled = settle(resolution);
     if (!settled) continue;
@@ -294,8 +296,11 @@ export function buildImportPayload(plan: ImportPlan, freshLibrary: WatchlistItem
     const existing = movies.get(id);
     if (existing) {
       existing.watched_at = earlier(existing.watched_at, film.watchedAt);
-      existing.rating = existing.rating ?? film.rating;
-    } else movies.set(id, { id, watched_at: film.watchedAt, rating: film.rating });
+      if (existing.rating == null && film.rating != null) {
+        existing.rating = film.rating;
+        existing.rated_at = film.ratedAt ?? null;
+      }
+    } else movies.set(id, { id, watched_at: film.watchedAt, rating: film.rating, ...(film.ratedAt !== undefined ? { rated_at: film.ratedAt } : {}) });
   }
 
   const showIds = new Map<string, string>();
@@ -316,15 +321,16 @@ export function buildImportPayload(plan: ImportPlan, freshLibrary: WatchlistItem
     else episodes.set(id, { id, watched_at: ep.watchedAt });
   }
 
-  const shows = new Map<number, { id: number; rating: number }>();
-  const seasons = new Map<number, { id: number; rating: number }>();
+  const shows = new Map<number, { id: number; rating: number; rated_at?: string | null }>();
+  const seasons = new Map<number, { id: number; rating: number; rated_at?: string | null }>();
   for (const entry of plan.ratings) {
     const showId = showIds.get(showKey(entry.show));
     if (!showId) continue;
-    if (entry.kind === 'show') { shows.set(Number(showId), { id: Number(showId), rating: entry.rating }); continue; }
+    const rated = entry.ratedAt !== undefined ? { rated_at: entry.ratedAt } : {};
+    if (entry.kind === 'show') { shows.set(Number(showId), { id: Number(showId), rating: entry.rating, ...rated }); continue; }
     const id = index.seasonId(showId, entry.season ?? -1);
     if (id === undefined) notFound.ratings += 1;
-    else seasons.set(id, { id, rating: entry.rating });
+    else seasons.set(id, { id, rating: entry.rating, ...rated });
   }
 
   return {

@@ -2795,6 +2795,7 @@ export type Database = {
           rt_score: number | null
           scores_checked_at: string | null
           status: string | null
+          tmdb_status: string | null
           franchise: string | null
           last_activity_at: string | null
           title: string
@@ -2825,6 +2826,7 @@ export type Database = {
           rt_score?: number | null
           scores_checked_at?: string | null
           status?: string | null
+          tmdb_status?: string | null
           franchise?: string | null
           last_activity_at?: string | null
           title: string
@@ -2855,6 +2857,7 @@ export type Database = {
           rt_score?: number | null
           scores_checked_at?: string | null
           status?: string | null
+          tmdb_status?: string | null
           franchise?: string | null
           last_activity_at?: string | null
           title?: string
@@ -3138,6 +3141,7 @@ export type Database = {
           episode_id: number | null
           id: number
           movie_id: number | null
+          rated_at: string
           rating: number
           season_id: number | null
           tv_show_id: number | null
@@ -3147,6 +3151,7 @@ export type Database = {
           episode_id?: number | null
           id?: never
           movie_id?: number | null
+          rated_at?: string
           rating: number
           season_id?: number | null
           tv_show_id?: number | null
@@ -3156,6 +3161,7 @@ export type Database = {
           episode_id?: number | null
           id?: never
           movie_id?: number | null
+          rated_at?: string
           rating?: number
           season_id?: number | null
           tv_show_id?: number | null

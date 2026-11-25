@@ -221,7 +221,7 @@ export default function WatchlistFranchises() {
 
   const tvSeedIds = useMemo(() => tvSeedIdsOf(visibleWatchlist), [visibleWatchlist]);
   const tvSpinoffsQuery = useQuery({
-    queryKey: ['watchlist', 'tv-spinoffs', 'v2', tvSeedIds],
+    queryKey: ['watchlist', 'tv-spinoffs', 'v3', tvSeedIds],
     queryFn: () => getTvSpinoffs(tvSeedIds, { throwOnError: true }),
     enabled: !libraryLoading && tvSeedIds.length > 0,
     staleTime: 24 * 60 * 60 * 1000,

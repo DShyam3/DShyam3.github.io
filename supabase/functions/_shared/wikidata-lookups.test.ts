@@ -13,7 +13,7 @@ const AT = '2026-11-22T06:20:00.000Z'
 Deno.test('reads the proxy ids parameter as it always has', () => {
   assertJsonEquals(parseSpinoffSeedIds(' 3, 1,x,1, -2, 2.5,0,7 '), [3, 1, 7])
   assertJsonEquals(parseSpinoffSeedIds(null), [])
-  assertEquals(parseSpinoffSeedIds(Array.from({ length: 450 }, (_, i) => i + 1).join(',')).length, 400)
+  assertEquals(parseSpinoffSeedIds(Array.from({ length: 1050 }, (_, i) => i + 1).join(',')).length, 1000)
   assertJsonEquals(spinoffSeedIds([5, 5, 2]), [5, 2])
 })
 

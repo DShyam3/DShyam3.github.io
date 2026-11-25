@@ -137,9 +137,14 @@ describe('the visitor seed list', () => {
     expect(spinoffSeedList(tvSeedIdsOf(visibleLibraryFor(library, true)))).toEqual([5, 10, 20, 30, 40]);
   });
 
-  it('is stored whole, though the lookup reads only the first 400', () => {
+  it('reads a 434-show library whole, newest shows included', () => {
     const seeds = Array.from({ length: 434 }, (_, index) => index + 1);
-    expect(spinoffSeedIds(seeds)).toHaveLength(400);
+    expect(spinoffSeedIds(seeds)).toEqual(seeds);
+  });
+
+  it('is stored whole, though the lookup reads only the first 1,000', () => {
+    const seeds = Array.from({ length: 1050 }, (_, index) => index + 1);
+    expect(spinoffSeedIds(seeds)).toHaveLength(1000);
     expect(tvSpinoffCacheRow(seeds, [], NIGHT).seed_ids).toEqual(seeds);
   });
 });
@@ -150,12 +155,22 @@ const sparqlRows = (rows: Record<string, string>[]) => ({
   results: { bindings: rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, { value }]))) },
 });
 
+/** The SPARQL a lookup sent, from its URL (GET) or its form body (POST). */
+const sparqlOf = (input: string | URL, init?: RequestInit): string =>
+  new URL(String(input)).searchParams.get('query') ?? new URLSearchParams(String(init?.body ?? '')).get('query') ?? '';
+
 /** Wikidata and TMDB as the lookups ask them, from fixtures. */
-function stubUpstreams(tmdb: Record<string, { status: number; body?: unknown }>) {
-  const fetchStub = vi.fn(async (input: string | URL) => {
+function stubUpstreams(
+  tmdb: Record<string, { status: number; body?: unknown }>,
+  seedFranchises: Record<string, string>[] = [],
+) {
+  const fetchStub = vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     if (url.hostname === 'query.wikidata.org') {
-      const query = url.searchParams.get('query') ?? '';
+      const query = sparqlOf(input, init);
+      if (query.includes('VALUES ?seedShowTmdb')) {
+        return Response.json(sparqlRows(seedFranchises));
+      }
       if (query.includes('VALUES ?seedTmdb')) {
         return Response.json(sparqlRows([
           { seedTmdb: '1418', seedLabel: 'The Big Bang Theory', franchiseId: 'Q100', franchiseLabel: 'Big Bang Theory franchise', relatedLabel: 'Young Sheldon', relatedTvTmdb: '71728', relDate: '2017-09-25T00:00:00Z' },
@@ -259,15 +274,110 @@ describe('the cache answers as the proxy does', () => {
   it('keeps an answer whose sibling franchise query failed complete, as the proxy sends it', async () => {
     const fetchStub = stubUpstreams(TMDB_DETAILS);
     const answer = fetchStub.getMockImplementation()!;
-    fetchStub.mockImplementation(async (input: string | URL) =>
-      (new URL(String(input)).searchParams.get('query') ?? '').includes('VALUES ?franchise')
+    fetchStub.mockImplementation(async (input: string | URL, init?: RequestInit) =>
+      sparqlOf(input, init).includes('VALUES ?franchise')
         ? new Response('busy', { status: 503 })
-        : answer(input),
+        : answer(input, init),
     );
     const lookup = await fetchTvSpinoffs([1399, 1418, 60059], { tmdbApiKey: 'test-key' });
     expect(lookup.siblings).toBe('failed');
     expect(lookup.complete).toBe(true);
     expect(lookup.links.some((link) => link.relatedTmdbId === 248888)).toBe(false);
+  });
+
+  it("lists a franchise's series through the seeds' own franchise when no spin-off link names it", async () => {
+    // Wikidata records no P2512 link between any two Star Wars series: the
+    // franchise is found only from the seeds' media franchise (P8345).
+    const fetchStub = stubUpstreams(
+      {
+        ...TMDB_DETAILS,
+        'tv/60554': { status: 200, body: { poster_path: '/rebels.jpg', first_air_date: '2014-10-03' } },
+        'tv/82856': { status: 200, body: { poster_path: '/mando.jpg', first_air_date: '2019-11-12' } },
+      },
+      [
+        { seedShowTmdb: '82856', seedLabel: 'The Mandalorian', franchise: 'http://www.wikidata.org/entity/Q462', franchiseLabel: 'Star Wars' },
+        { seedShowTmdb: '4194', seedLabel: 'Star Wars: The Clone Wars', franchise: 'http://www.wikidata.org/entity/Q462', franchiseLabel: 'Star Wars' },
+      ],
+    );
+    const answer = fetchStub.getMockImplementation()!;
+    fetchStub.mockImplementation(async (input: string | URL, init?: RequestInit) => {
+      const query = sparqlOf(input, init);
+      if (query.includes('VALUES ?seedTmdb')) return Response.json(sparqlRows([]));
+      if (query.includes('VALUES ?franchise')) {
+        expect(query).toContain('wd:Q462');
+        return Response.json(sparqlRows([
+          { franchise: 'http://www.wikidata.org/entity/Q462', relatedLabel: 'Star Wars: The Clone Wars', relatedTvTmdb: '4194', relDate: '2008-10-03T00:00:00Z' },
+          { franchise: 'http://www.wikidata.org/entity/Q462', relatedLabel: 'Star Wars Rebels', relatedTvTmdb: '60554', relDate: '2014-10-03T00:00:00Z' },
+          { franchise: 'http://www.wikidata.org/entity/Q462', relatedLabel: 'The Mandalorian', relatedTvTmdb: '82856', relDate: '2019-11-12T00:00:00Z' },
+        ]));
+      }
+      return answer(input, init);
+    });
+
+    const lookup = await fetchTvSpinoffs([4194, 82856], { tmdbApiKey: 'test-key' });
+    expect(lookup.siblings).toBe('answered');
+    expect(lookup.complete).toBe(true);
+    // Anchored on the smallest seed id, whatever order Wikidata answers in.
+    expect(lookup.links.map((l) => [l.seedTmdbId, l.relatedTmdbId, l.franchiseName])).toEqual([
+      [4194, 60554, 'Star Wars'],
+      [4194, 82856, 'Star Wars'],
+    ]);
+
+    const starWars = [
+      { id: 'sw1', category: 'TV Shows', tmdb_id: 4194, title: 'Star Wars: The Clone Wars', release_date: '2008-10-03', image_url: null, library_state: null },
+      { id: 'sw2', category: 'TV Shows', tmdb_id: 82856, title: 'The Mandalorian (2019)', release_date: '2019-11-12', image_url: null, library_state: null },
+    ] as unknown as WatchlistItem[];
+    const groups = tvFranchisesFromLinks(lookup.links, starWars, 'https://img');
+    expect(groups).toHaveLength(1);
+    expect(groups[0].name).toBe('Star Wars Universe');
+    expect(groups[0].entries.map((entry) => entry.title)).toEqual([
+      'Star Wars: The Clone Wars',
+      'Star Wars Rebels',
+      'The Mandalorian',
+    ]);
+  });
+
+  it('retries a TMDB 429 once and records each details call', async () => {
+    const fetchStub = stubUpstreams(TMDB_DETAILS);
+    const answer = fetchStub.getMockImplementation()!;
+    let limited = 0;
+    fetchStub.mockImplementation(async (input: string | URL, init?: RequestInit) => {
+      if (String(input).includes('/tv/94997') && limited === 0) {
+        limited++;
+        return new Response('{}', { status: 429, headers: { 'Retry-After': '1' } });
+      }
+      return answer(input, init);
+    });
+    const events: { endpoint: string; statusCode?: number | null }[] = [];
+    const lookup = await fetchTvSpinoffs([1399, 1418, 60059], { tmdbApiKey: 'test-key', usage: { record: (event) => events.push(event) } });
+    expect(limited).toBe(1);
+    expect(lookup.complete).toBe(true);
+    expect(lookup.links.find((link) => link.relatedTmdbId === 94997)?.posterPath).toBe('/hotd.jpg');
+    expect(events.filter((event) => event.endpoint === 'tv/:id' && event.statusCode === 429)).toHaveLength(1);
+  });
+
+  it('looks up no poster for a series the seeds already hold', async () => {
+    const fetchStub = stubUpstreams(TMDB_DETAILS);
+    await fetchTvSpinoffs([1399, 1418, 60059], { tmdbApiKey: 'test-key' });
+    const asked = fetchStub.mock.calls.map(([input]) => String(input));
+    expect(asked.some((url) => url.includes('/tv/1418?'))).toBe(false);
+    expect(asked.some((url) => url.includes('/tv/71728?'))).toBe(true);
+  });
+
+  it('keeps the spin-off links when the seed franchise query fails', async () => {
+    const fetchStub = stubUpstreams(TMDB_DETAILS);
+    const answer = fetchStub.getMockImplementation()!;
+    fetchStub.mockImplementation(async (input: string | URL, init?: RequestInit) =>
+      sparqlOf(input, init).includes('VALUES ?seedShowTmdb')
+        ? new Response('busy', { status: 503 })
+        : answer(input, init),
+    );
+    const lookup = await fetchTvSpinoffs([1399, 1418, 60059], { tmdbApiKey: 'test-key' });
+    expect(lookup.siblings).toBe('failed');
+    expect(lookup.complete).toBe(true);
+    expect(lookup.links.some((link) => link.relatedTmdbId === 71728)).toBe(true);
+    // The franchise a spin-off link named is still asked about.
+    expect(lookup.links.some((link) => link.relatedTmdbId === 248888)).toBe(true);
   });
 
   it('marks an answer with no TMDB key incomplete', async () => {

@@ -3,7 +3,7 @@ export const TRAKT_MAX_ITEMS = 100000; // total
 export interface TraktTitleRef { tmdbId: number | null; title: string; year: number | null }
 export interface TraktEpisodeWatch { show: TraktTitleRef; season: number; episode: number; watchedAt: string | null }
 export interface TraktMovieWatch extends TraktTitleRef { watchedAt: string | null }
-export interface TraktRating { kind: 'movie' | 'show' | 'season'; title: TraktTitleRef; season?: number; rating: number }
+export interface TraktRating { kind: 'movie' | 'show' | 'season'; title: TraktTitleRef; season?: number; rating: number; ratedAt: string | null }
 export interface TraktParseResult {
   episodes: TraktEpisodeWatch[]; // merged: one per show identity + season + episode
   movies: TraktMovieWatch[]; // merged: one per identity
@@ -79,7 +79,7 @@ export function parseTraktFiles(files: { name: string; text: string }[], options
     const key = `${kind}|${identity(ref)}|${season ?? ''}`;
     const existing = ratings.get(key);
     if (existing && !(ratedAt && (!existing.ratedAt || ratedAt >= existing.ratedAt))) return;
-    ratings.set(key, { value: { kind, title: ref, ...(season !== undefined ? { season } : {}), rating }, ratedAt });
+    ratings.set(key, { value: { kind, title: ref, ...(season !== undefined ? { season } : {}), rating, ratedAt }, ratedAt });
   };
 
   const handle = (item: unknown) => {

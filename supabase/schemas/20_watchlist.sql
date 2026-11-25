@@ -187,6 +187,7 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
     "platform" "text" NOT NULL,
     "genre" "text",
     "status" "text",
+    "tmdb_status" "text",
     "poster" "text",
     "backdrop" "text",
     "overview" "text",
@@ -220,6 +221,9 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
 );
 
 ALTER TABLE "public"."tv_shows" OWNER TO "postgres";
+
+COMMENT ON COLUMN "public"."tv_shows"."tmdb_status" IS
+    'Last observed TMDB series status. A different status is a manual override until TMDB changes from this baseline.';
 
 CREATE SEQUENCE IF NOT EXISTS "public"."tv_shows_id_seq"
     AS integer
@@ -1081,13 +1085,13 @@ BEGIN
   -- Ratings go to the watchlist_ratings table (admin write), only where the
   -- target has none yet, only 0.5 to 10 in half-point steps.
   WITH i AS (
-    SELECT x.id, max(x.rating) AS rating
-    FROM jsonb_to_recordset(p_movies) AS x(id integer, watched_at timestamptz, rating numeric)
+    SELECT x.id, max(x.rating) AS rating, max(x.rated_at) AS rated_at
+    FROM jsonb_to_recordset(p_movies) AS x(id integer, watched_at timestamptz, rating numeric, rated_at timestamptz)
     WHERE x.id IS NOT NULL AND x.rating BETWEEN 0.5 AND 10 AND mod(x.rating, 0.5) = 0
     GROUP BY x.id
   ), u AS (
-    INSERT INTO public.watchlist_ratings (movie_id, rating, updated_at)
-    SELECT t.id, i.rating, now()
+    INSERT INTO public.watchlist_ratings (movie_id, rating, rated_at, updated_at)
+    SELECT t.id, i.rating, COALESCE(i.rated_at, now()), now()
     FROM i JOIN public.movies t ON t.id = i.id
     ON CONFLICT (movie_id) DO NOTHING
     RETURNING 1
@@ -1096,13 +1100,13 @@ BEGIN
   v_ratings := v_ratings + v_n;
 
   WITH i AS (
-    SELECT x.id, max(x.rating) AS rating
-    FROM jsonb_to_recordset(p_shows) AS x(id integer, rating numeric)
+    SELECT x.id, max(x.rating) AS rating, max(x.rated_at) AS rated_at
+    FROM jsonb_to_recordset(p_shows) AS x(id integer, rating numeric, rated_at timestamptz)
     WHERE x.id IS NOT NULL AND x.rating BETWEEN 0.5 AND 10 AND mod(x.rating, 0.5) = 0
     GROUP BY x.id
   ), u AS (
-    INSERT INTO public.watchlist_ratings (tv_show_id, rating, updated_at)
-    SELECT t.id, i.rating, now()
+    INSERT INTO public.watchlist_ratings (tv_show_id, rating, rated_at, updated_at)
+    SELECT t.id, i.rating, COALESCE(i.rated_at, now()), now()
     FROM i JOIN public.tv_shows t ON t.id = i.id
     ON CONFLICT (tv_show_id) DO NOTHING
     RETURNING 1
@@ -1111,13 +1115,13 @@ BEGIN
   v_ratings := v_ratings + v_n;
 
   WITH i AS (
-    SELECT x.id, max(x.rating) AS rating
-    FROM jsonb_to_recordset(p_seasons) AS x(id integer, rating numeric)
+    SELECT x.id, max(x.rating) AS rating, max(x.rated_at) AS rated_at
+    FROM jsonb_to_recordset(p_seasons) AS x(id integer, rating numeric, rated_at timestamptz)
     WHERE x.id IS NOT NULL AND x.rating BETWEEN 0.5 AND 10 AND mod(x.rating, 0.5) = 0
     GROUP BY x.id
   ), u AS (
-    INSERT INTO public.watchlist_ratings (season_id, rating, updated_at)
-    SELECT t.id, i.rating, now()
+    INSERT INTO public.watchlist_ratings (season_id, rating, rated_at, updated_at)
+    SELECT t.id, i.rating, COALESCE(i.rated_at, now()), now()
     FROM i JOIN public.tv_show_seasons t ON t.id = i.id
     ON CONFLICT (season_id) DO NOTHING
     RETURNING 1
@@ -1512,6 +1516,7 @@ CREATE TABLE IF NOT EXISTS "public"."watchlist_ratings" (
     "season_id" integer REFERENCES "public"."tv_show_seasons"("id") ON DELETE CASCADE,
     "episode_id" integer REFERENCES "public"."tv_show_episodes"("id") ON DELETE CASCADE,
     "rating" numeric NOT NULL,
+    "rated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "watchlist_ratings_rating_check" CHECK (("rating" BETWEEN 0.5 AND 10 AND mod("rating", 0.5) = 0)),
     CONSTRAINT "watchlist_ratings_one_target_check" CHECK (num_nonnulls("movie_id", "tv_show_id", "season_id", "episode_id") = 1),

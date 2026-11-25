@@ -11,7 +11,7 @@ import { PersonalRating } from './PersonalRating';
 
 export function LibraryActions({ item }: { item: WatchlistItem }) {
   const { isAdmin } = useAuth();
-  const { watchlist, setMovieWatched, setLibraryState, setFranchise, setPersonalRating, ratingsStatus, favourites, addFavourite, removeFavourite } = useWatchlist();
+  const { watchlist, setMovieWatched, setLibraryState, setFranchise, setSeriesStatus, setPersonalRating, ratingsStatus, favourites, addFavourite, removeFavourite } = useWatchlist();
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const [skipped, setSkipped] = useState(false);
@@ -105,6 +105,28 @@ export function LibraryActions({ item }: { item: WatchlistItem }) {
             <option value="stopped">Stopped watching</option>
           </NativeSelect>
         </label>
+        {item.category === 'TV Shows' && (
+          <label className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            Series status
+            <NativeSelect
+              aria-label="Series status"
+              className="min-h-11 min-w-44"
+              value={item.series_status ?? ''}
+              disabled={saving}
+              onChange={(event) => void save(() => setSeriesStatus(item, event.target.value as NonNullable<WatchlistItem['series_status']>))}
+            >
+              {!item.series_status && <option value="" disabled>Choose a status</option>}
+              <option value="Returning Series">Returning series</option>
+              <option value="In Production">In production</option>
+              <option value="Ended">Ended</option>
+              <option value="Canceled">Canceled</option>
+              {item.series_status === 'Cancelled' && <option value="Cancelled">Cancelled</option>}
+            </NativeSelect>
+          </label>
+        )}
+        {item.category === 'TV Shows' && (
+          <p className="text-xs text-muted-foreground">Your choice stays until TMDB reports a different status.</p>
+        )}
         <form
           className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
           onSubmit={(event) => {

@@ -7,6 +7,7 @@ import { corsOriginHeader } from '../_shared/site-origins.ts'
 import { selectAllPages } from '../_shared/select-all-pages.ts'
 import { ratedEpisodes, seasonsToKeep, UNWATCHED_ONLY } from '../_shared/owner-data.ts'
 import { createUsageBatcher } from '../_shared/api-usage.ts'
+import { syncedSeriesStatus } from '../_shared/series-status.ts'
 import { collectionPartRows, type CollectionPartRow } from '../_shared/collection-parts.ts'
 import {
   fetchFilmUniverses,
@@ -231,6 +232,7 @@ interface ShowRow {
   original_language?: string | null
   origin_country?: string[] | null
   status: string | null
+  tmdb_status: string | null
   release_date: string | null
   platform: string | null
   trailer_key: string | null
@@ -291,6 +293,7 @@ interface SyncItem {
   collection_id?: number | null
   collection_name?: string | null
   series_status?: string | null
+  tmdb_status?: string | null
   /** True once `top_cast` is stored; false asks TMDB for credits. */
   has_credits: boolean
   /** Stored IMDb id; the OMDb pass only asks for titles that have one. */
@@ -463,7 +466,7 @@ serve(async (req) => {
     // top-level rows; seasons and episodes stay embedded. A single-title
     // resync reads only that title's row and skips the other table outright.
     const MOVIE_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, genre_ids, original_language, origin_country, release_year, release_date, platform, trailer_key, runtime, collection_id, collection_name, library_state, top_cast, imdb_id, tmdb_rating, tmdb_votes, scores_checked_at'
-    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, genre_ids, original_language, origin_country, status, release_date, platform, trailer_key, library_state, top_cast, imdb_id, tmdb_rating, tmdb_votes, scores_checked_at, tv_show_seasons (id, season_number, release_date, trailer_key, trailer_checked_at, episodes_checked_at, scores_checked_at, tv_show_episodes (id, episode_number, title, runtime, release_date, watched, imdb_id, imdb_rating, tmdb_rating, tmdb_votes))'
+    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, genre_ids, original_language, origin_country, status, tmdb_status, release_date, platform, trailer_key, library_state, top_cast, imdb_id, tmdb_rating, tmdb_votes, scores_checked_at, tv_show_seasons (id, season_number, release_date, trailer_key, trailer_checked_at, episodes_checked_at, scores_checked_at, tv_show_episodes (id, episode_number, title, runtime, release_date, watched, imdb_id, imdb_rating, tmdb_rating, tmdb_votes))'
     const none = { data: [], error: null }
     const [moviesResult, showsResult] = await Promise.all([
       !target
@@ -531,6 +534,7 @@ serve(async (req) => {
       platform: s.platform ?? null,
       trailer_key: s.trailer_key ?? null,
       series_status: s.status,
+      tmdb_status: s.tmdb_status,
       has_credits: s.top_cast !== null,
       imdb_id: isImdbId(s.imdb_id) ? s.imdb_id : undefined,
       tmdb_rating: s.tmdb_rating ?? null,
@@ -726,10 +730,15 @@ serve(async (req) => {
                 } else check(movieUpdate)
               }
             } else {
-              if (data.status && item.series_status && data.status !== item.series_status) {
+              const nextStatus = syncedSeriesStatus(item.series_status ?? null, item.tmdb_status ?? null, data.status)
+              if (nextStatus.changed && nextStatus.status !== item.series_status) {
                 changes.push(`${item.title}: status → ${data.status}`)
               }
-              const tvUpdates: Record<string, unknown> = { ...commonUpdates, status: data.status }
+              const tvUpdates: Record<string, unknown> = { ...commonUpdates }
+              if (nextStatus.changed) {
+                tvUpdates.status = nextStatus.status
+                tvUpdates.tmdb_status = nextStatus.tmdbStatus
+              }
               if (data.aggregate_credits) {
                 tvUpdates.creators = pickCreators(data.created_by)
                 tvUpdates.top_cast = pickTopCast(data.aggregate_credits.cast)
@@ -749,6 +758,7 @@ serve(async (req) => {
                 tmdb_rating: item.tmdb_rating ?? null,
                 tmdb_votes: item.tmdb_votes ?? null,
                 status: item.series_status ?? null,
+                tmdb_status: item.tmdb_status ?? null,
               }
               const tvDirty = Object.entries(tvUpdates).some(
                 ([k, v]) => !(k in storedShow) || !sameVal(v, storedShow[k]),
@@ -762,7 +772,10 @@ serve(async (req) => {
                   check(await supabaseAdmin.from('tv_shows').update(tvUpdates).eq('id', parseInt(item.id)))
                 } else check(tvUpdate)
               }
-              if (data.status) item.series_status = data.status
+              if (nextStatus.changed) {
+                item.series_status = nextStatus.status
+                item.tmdb_status = nextStatus.tmdbStatus
+              }
 
               // Seasons TMDB no longer lists or has emptied, and stale Season 0
               // specials. Deleted only if they hold nothing of the owner's,
@@ -1095,9 +1108,10 @@ serve(async (req) => {
     // read before asking the proxy. Spin-offs are answered for the seed list
     // a signed-out visitor sends, so a hidden or stopped show is never a seed;
     // a browser with another list (the owner, or the library changed since)
-    // asks the proxy as before. Only a complete answer is stored (every TMDB
-    // poster and date answered; the sibling-franchise query may have failed,
-    // as it does for the proxy on nearly every call). Otherwise a
+    // asks the proxy as before. Only a whole answer is stored: every TMDB
+    // poster and date answered, and the franchise-sibling queries answered
+    // (a night they time out would otherwise replace a good row with one
+    // missing every franchise series). Otherwise a
     // row for tonight's seed list stays (the browser stops trusting it after
     // 48 hours), and a row for any other list is deleted: it can no longer
     // match a visitor, and it may name a show hidden or stopped since.
@@ -1142,12 +1156,12 @@ serve(async (req) => {
       const [spinoffs, universes] = await Promise.all([
         seeds.length === 0
           ? Promise.resolve(null)
-          : timed('tv-spinoffs', () => fetchTvSpinoffs(spinoffSeedIds(seeds), { tmdbApiKey: TMDB_API_KEY, signal })),
+          : timed('tv-spinoffs', () => fetchTvSpinoffs(spinoffSeedIds(seeds), { tmdbApiKey: TMDB_API_KEY, signal, usage: activeUsage })),
         TMDB_API_KEY
           ? timed('film-universes', () => fetchFilmUniverses(activeUsage, { tmdbApiKey: TMDB_API_KEY, signal }))
           : Promise.resolve(null),
       ])
-      const spinoffsStored = spinoffs?.complete === true &&
+      const spinoffsStored = spinoffs?.complete === true && spinoffs.siblings !== 'failed' &&
         await storeLookup(tvSpinoffCacheRow(seeds, spinoffs.links, new Date().toISOString()))
       if (!spinoffsStored) await clearOtherSeedLists()
       const universesStored = universes !== null &&

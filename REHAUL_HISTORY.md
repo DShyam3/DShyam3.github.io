@@ -3333,3 +3333,18 @@ Six decisions:
 6. **Season outside scores are derived locally over episode rows.** Neither TMDB nor OMDb provides a reliable standalone season score, so `SeasonEpisodeList` computes IMDb and TMDB episode averages deterministically in the client via `summarizeExternalScores` (`rating-summary.ts`) and labels them `avg`.
 
 Closure: migrations `20261124204936_watchlist_episode_scores.sql` and `20261124211553_watchlist_season_omdb_rpc.sql` are applied to hosted (`yvtiybyuifkiwyrnjebe`), and `watchlist-cron-sync` v34 is deployed live. Both TMDB (`1,080 / 1,082` regular seasons) and OMDb (`1,079 / 1,079` eligible seasons, completed on `2026-11-25 06:00–06:20 UTC`) backfills are complete on hosted. Reviewed by `reviewer` (Opus); all 5 findings were fixed and verified by tests, lint, typecheck and build, without a second reviewer pass.
+
+### TV franchises from each show's own media franchise, read in separate queries — 2026-11-25
+
+Discover's and Franchises' TV cards came only from Wikidata spin-off links (`P2512`). Wikidata holds almost none between Star Wars series, so the Star Wars group was empty, and the sibling query (`P179` by statement and rank) timed out on every call. A seed cap of 400 also dropped the 34 newest of 434 library shows.
+
+Four decisions:
+
+1. **Siblings come from the seed's own media franchise (`P8345`), as well as spin-off links.** A show's franchise is recorded on the show itself, where spin-off links are sparse. Both run in the same lookup; the spin-off query keeps its own 30 s timeout.
+2. **`P179` is read as truthy statements in its own query.** The statement-and-rank form timed out on every call, so it runs in parallel with the `P8345` query and is best effort: if it fails, the `P8345` siblings still appear. Abandoned projects, web series, story arcs and five-part episodes are excluded.
+3. **The cron stores no TV franchise row when its franchise queries failed.** A bad night would otherwise replace a good cached answer with a smaller one. The old row stays until a run succeeds.
+4. **Seed cap 1,000, matching the cache table's `cardinality(seed_ids) <= 1000`.** Client persisted query keys moved from v2 to v3 so a browser cannot keep an answer built under the old rules. The tmdb-proxy endpoint keeps its own limit of 12 per 10 minutes.
+
+Measured live against Wikidata with no TMDB key: 117 links; the Star Wars group has 23 series; MCU TV has 8 series (adding Echo, Inhumans and VisionQuest).
+
+Closure: in the tree, not committed. The cache row is not refreshed and the edge functions are not deployed, so nothing is live. Order to ship is in `STATE.md`.

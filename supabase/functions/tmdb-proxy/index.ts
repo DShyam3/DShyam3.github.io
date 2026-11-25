@@ -112,6 +112,14 @@ async function isRateLimited(
 const UNIVERSE_LIMIT = 6
 const UNIVERSE_WINDOW_SECONDS = 600
 
+// One spin-off call costs four SPARQL queries and up to 150 details calls,
+// and shares the cron's Wikidata user agent, so a loop would throttle the
+// nightly cache too. A browser asks once a day per seed list, but every
+// library change makes a new list, so the owner adding a run of shows gets
+// twice the universe allowance.
+const SPINOFF_LIMIT = 12
+const SPINOFF_WINDOW_SECONDS = 600
+
 /** As /dev lists it: a Wikidata lookup under its own name, as on success. */
 const usageEndpoint = (endpoint: string) =>
     endpoint.startsWith('wikidata/') ? endpoint.slice('wikidata/'.length) : endpoint
@@ -171,23 +179,45 @@ serve(async (req) => {
         }
 
         if (endpoint === 'wikidata/tv-spinoffs') {
+            if (await isRateLimited(`${callerKey(req)}:tv-spinoffs`, SPINOFF_LIMIT, SPINOFF_WINDOW_SECONDS)) {
+                void recordApiUsage({
+                    provider: 'wikidata',
+                    endpoint: 'tv-spinoffs',
+                    statusCode: 429,
+                    outcome: 'rate_limited',
+                    durationMs: Date.now() - startedAt,
+                })
+                return new Response(JSON.stringify({ error: 'Too many requests' }), {
+                    status: 429,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(SPINOFF_WINDOW_SECONDS),
+                    },
+                })
+            }
             const ids = parseSpinoffSeedIds(searchParams.get('ids'))
-            const { links: results } = await fetchTvSpinoffs(ids, { tmdbApiKey: TMDB_API_KEY })
-            void recordApiUsage({
-                provider: 'wikidata',
-                endpoint: 'tv-spinoffs',
-                statusCode: 200,
-                outcome: 'ok',
-                durationMs: Date.now() - startedAt,
-            })
-            return new Response(JSON.stringify({ results }), {
-                status: 200,
-                headers: {
-                    ...corsHeaders,
-                    'Content-Type': 'application/json',
-                    'Cache-Control': cacheControlFor(endpoint),
-                },
-            })
+            const usage = createUsageBatcher()
+            try {
+                const { links: results } = await fetchTvSpinoffs(ids, { tmdbApiKey: TMDB_API_KEY, usage })
+                void recordApiUsage({
+                    provider: 'wikidata',
+                    endpoint: 'tv-spinoffs',
+                    statusCode: 200,
+                    outcome: 'ok',
+                    durationMs: Date.now() - startedAt,
+                })
+                return new Response(JSON.stringify({ results }), {
+                    status: 200,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Cache-Control': cacheControlFor(endpoint),
+                    },
+                })
+            } finally {
+                void usage.flush()
+            }
         }
 
         if (endpoint === 'wikidata/film-universes') {

@@ -89,6 +89,38 @@ export function useNotSeen() {
       return next;
     });
   };
+  /** Likely seen's "None of these": every title on screen, in one write. */
+  const markManyNotSeen = (items: ReadonlyArray<{ media: DiscoveryMedia; id: number }>) => {
+    if (items.length === 0) return;
+    setLocal((prev) => {
+      const next = new Set(prev);
+      for (const item of items) next.add(discoveryKey(item.media, item.id));
+      writeNotSeen(next);
+      return next;
+    });
+  };
+  /**
+   * Undo for "None of these": takes the titles back out, here and, for the
+   * owner, from the table, once any write that may carry them has landed.
+   */
+  const unmarkNotSeen = async (items: ReadonlyArray<{ media: DiscoveryMedia; id: number }>) => {
+    if (items.length === 0) return;
+    const keys = new Set(items.map((item) => discoveryKey(item.media, item.id)));
+    setLocal((prev) => {
+      const next = new Set([...prev].filter((key) => !keys.has(key)));
+      writeNotSeen(next);
+      return next;
+    });
+    if (!ownerSynced) return;
+    await Promise.allSettled([...writesRef.current]);
+    const byMedia = new Map<DiscoveryMedia, number[]>();
+    for (const item of items) byMedia.set(item.media, [...(byMedia.get(item.media) ?? []), item.id]);
+    const results = await Promise.all([...byMedia].map(([media, ids]) =>
+      supabase.from('watchlist_not_seen').delete().eq('media', media).in('tmdb_id', ids)));
+    await queryClient.invalidateQueries({ queryKey: NOT_SEEN_QUERY_KEY });
+    const failed = results.find((result) => result.error);
+    if (failed?.error) throw new Error(failed.error.message);
+  };
   const resetNotSeen = async () => {
     setLocal(new Set());
     writeNotSeen(new Set());
@@ -101,5 +133,5 @@ export function useNotSeen() {
   };
   const resettable = local.size + (ownerSynced ? remoteKeys?.size ?? 0 : 0);
 
-  return { notSeen, markNotSeen, resetNotSeen, resettable, ownerSynced };
+  return { notSeen, markNotSeen, markManyNotSeen, unmarkNotSeen, resetNotSeen, resettable, ownerSynced };
 }

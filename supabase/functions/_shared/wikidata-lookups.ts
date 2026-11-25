@@ -25,11 +25,68 @@ const WIKIDATA_HEADERS = {
     'User-Agent': 'DShyamWatchlist/1.0 (https://dshyam3.github.io)',
 }
 
-/** The most seeds one spin-off lookup reads; the rest of the list is dropped. */
-const MAX_SPINOFF_SEEDS = 400
+/**
+ * The most seeds one spin-off lookup reads; the rest of the list is dropped.
+ * The browser sends every show, smallest id first, so the ids past the cap
+ * are the newest shows: keep it well above the library's size (434 TV seeds
+ * on 2026-11-25). Matches the cache table's `cardinality(seed_ids) <= 1000`.
+ * The lookup's own queries go to Wikidata as a POST body, but the browser
+ * still sends the ids to tmdb-proxy in a GET URL, about 8.5 KB at 1,000 ids
+ * against a common 8 KB request-line limit: treat ~900 as the real ceiling.
+ */
+const MAX_SPINOFF_SEEDS = 1000
+
+/**
+ * Franchises one lookup reads siblings for. The seeds had 32 media
+ * franchises on 2026-11-25, answered in under 2s.
+ */
+const MAX_SIBLING_FRANCHISES = 80
+
+/** The spin-off query, which has no caller signal on the proxy path. */
+const SPINOFF_QUERY_TIMEOUT_MS = 30_000
+/** Each best-effort franchise query. */
+const FRANCHISE_QUERY_TIMEOUT_MS = 8_000
+/**
+ * Every TMDB details call of one lookup together, so the proxy path stays
+ * well inside the 150s edge request limit: 30s + 8s + 45s at worst.
+ */
+const ENRICH_BUDGET_MS = 45_000
+
+/**
+ * Wikidata classes filed under a franchise that are not a series to watch:
+ * an abandoned project, a fan web series, a crossover arc filed as its own
+ * item. Animated web series is a different class and stays.
+ */
+const NOT_A_SERIES = [
+    'Q113629797', // unfinished or abandoned television project
+    'Q526877', // web series
+    'Q2620972', // story arc
+    'Q99079902', // five-part episode
+]
+
+/** TMDB details calls one spin-off lookup makes for posters and dates. */
+const MAX_ENRICHED_TARGETS = 150
+
+/**
+ * One SPARQL query, sent as a form POST: Wikidata answers POST as it answers
+ * GET, and a body has no length limit a URL of 1,000 ids would meet.
+ */
+async function askWikidata<T>(query: string, signal: AbortSignal | undefined): Promise<T[]> {
+    const response = await fetch('https://query.wikidata.org/sparql', {
+        method: 'POST',
+        headers: { ...WIKIDATA_HEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ query }).toString(),
+        signal,
+    })
+    if (!response.ok) throw new Error(`Wikidata returned ${response.status}`)
+    const payload = (await response.json()) as { results?: { bindings?: T[] } }
+    return payload.results?.bindings ?? []
+}
 
 /** What a lookup needs from its caller. */
 export interface WikidataLookupOptions {
+    /** Where each TMDB details call is reported, for /dev usage. */
+    usage?: UsageRecorder
     /** TMDB key for posters and dates. Without it a spin-off answer is never complete. */
     tmdbApiKey?: string
     /**
@@ -51,7 +108,7 @@ function within(signal: AbortSignal | undefined, timeoutMs?: number): AbortSigna
 
 /**
  * The seeds a spin-off lookup reads from the ids it was sent: positive
- * integers, first copy kept, in the order sent, at most 400.
+ * integers, first copy kept, in the order sent, at most `MAX_SPINOFF_SEEDS`.
  */
 export function spinoffSeedIds(ids: readonly unknown[]): number[] {
     const clean = ids.filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0)
@@ -119,16 +176,61 @@ export interface TvSpinoffLookup {
      */
     complete: boolean
     /**
-     * The best-effort sibling-franchise query: 'failed' on an error or its 8s
-     * timeout, which nearly every call has hit since it shipped (the proxy
-     * then answers without siblings). Not part of `complete`, so the cron
-     * stores the answer visitors already get.
+     * The best-effort sibling-franchise queries (each seed's franchises, then
+     * every series in them): 'failed' when either errors or meets its 8s
+     * timeout, and the answer goes without the siblings that query would have
+     * found. Not part of `complete`, so the cron stores the answer visitors
+     * already get.
      */
     siblings: 'answered' | 'failed' | 'not asked'
 }
 
+/** The seed a franchise's sibling links hang from, and the franchise's name. */
+interface FranchiseAnchor {
+    seedTmdbId: number
+    seedTitle: string
+    franchiseName: string | null
+}
+
+/**
+ * Each seed's media franchises (P8345), as franchise id to the seed with the
+ * smallest TMDB id in it, so this choice does not hang on the order Wikidata
+ * answers in. (A franchise a spin-off link already named keeps that link's
+ * seed, which does.)
+ */
+async function fetchSeedFranchises(seedIds: number[], signal: AbortSignal | undefined): Promise<Map<string, FranchiseAnchor>> {
+    const values = seedIds.map((id) => `"${id}"`).join(' ')
+    const rows = await askWikidata<{
+        seedShowTmdb?: { value?: string }
+        seedLabel?: { value?: string }
+        franchise?: { value?: string }
+        franchiseLabel?: { value?: string }
+    }>(`SELECT DISTINCT ?seedShowTmdb ?seedLabel ?franchise ?franchiseLabel WHERE {
+  VALUES ?seedShowTmdb { ${values} }
+  ?seed wdt:P4983 ?seedShowTmdb ;
+    wdt:P8345 ?franchise .
+  ?seed rdfs:label ?seedLabel . FILTER(LANG(?seedLabel) = "en")
+  OPTIONAL { ?franchise rdfs:label ?franchiseLabel . FILTER(LANG(?franchiseLabel) = "en") }
+}`, within(signal, FRANCHISE_QUERY_TIMEOUT_MS))
+    const anchors = new Map<string, FranchiseAnchor>()
+    for (const row of rows) {
+        const franchiseId = row.franchise?.value?.split('/').pop()?.trim() ?? ''
+        const seedTmdbId = Number(row.seedShowTmdb?.value)
+        const seedTitle = row.seedLabel?.value?.trim()
+        if (!/^Q\d+$/.test(franchiseId) || !Number.isInteger(seedTmdbId) || seedTmdbId <= 0 || !seedTitle) continue
+        const franchiseName = row.franchiseLabel?.value?.trim() || null
+        const known = anchors.get(franchiseId)
+        if (known && known.seedTmdbId <= seedTmdbId) {
+            if (!known.franchiseName) known.franchiseName = franchiseName
+            continue
+        }
+        anchors.set(franchiseId, { seedTmdbId, seedTitle, franchiseName: franchiseName ?? known?.franchiseName ?? null })
+    }
+    return new Map([...anchors].sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1))))
+}
+
 export async function fetchTvSpinoffs(seedIds: number[], options: WikidataLookupOptions = {}): Promise<TvSpinoffLookup> {
-    const { tmdbApiKey, signal } = options
+    const { tmdbApiKey, signal, usage } = options
     if (seedIds.length === 0) return { links: [], complete: true, siblings: 'not asked' }
     let complete = true
     let siblings: TvSpinoffLookup['siblings'] = 'not asked'
@@ -154,17 +256,18 @@ export async function fetchTvSpinoffs(seedIds: number[], options: WikidataLookup
   ?seed rdfs:label ?seedLabel . FILTER(LANG(?seedLabel) = "en")
   ?related rdfs:label ?relatedLabel . FILTER(LANG(?relatedLabel) = "en")
 }`
-    const url = new URL('https://query.wikidata.org/sparql')
-    url.searchParams.set('query', sparql)
-    const response = await fetch(url.toString(), {
-        headers: WIKIDATA_HEADERS,
-        signal: within(signal),
-    })
-    if (!response.ok) throw new Error(`Wikidata returned ${response.status}`)
-    const payload = (await response.json()) as { results?: { bindings?: WikidataBinding[] } }
+    // The seeds' own franchises do not depend on the spin-off links, so both
+    // queries go at once. A failed franchise query costs only the siblings.
+    const [rows, seedFranchises] = await Promise.all([
+        askWikidata<WikidataBinding>(sparql, within(signal, SPINOFF_QUERY_TIMEOUT_MS)),
+        fetchSeedFranchises(seedIds, signal).catch((err: unknown) => {
+            console.warn('Wikidata seed franchise lookup failed (non-fatal):', err)
+            return null
+        }),
+    ])
     const links: TvSpinoffLink[] = []
     const seen = new Set<string>()
-    for (const row of payload.results?.bindings ?? []) {
+    for (const row of rows) {
         const seedTmdbId = Number(row.seedTmdb?.value)
         const seedTitle = row.seedLabel?.value?.trim()
         const relatedTitle = row.relatedLabel?.value?.trim()
@@ -199,10 +302,16 @@ export async function fetchTvSpinoffs(seedIds: number[], options: WikidataLookup
         })
     }
 
-    // Best-effort second pass: for franchises discovered via P2512 spin-offs,
-    // pull sibling TV series sharing the same Wikidata franchise (P8345 / P179)
-    // so shared TV universes like the MCU include non-spinoff sibling shows too.
-    const franchiseSeeds = new Map<string, { seedTmdbId: number; seedTitle: string; franchiseName: string | null }>()
+    // Best-effort second pass: every TV series that shares a franchise with a
+    // seed, so a shared universe lists the series the library has not
+    // started. The franchises come from the seeds themselves as well as from
+    // the spin-off links above: Wikidata records few P2512 links (none
+    // between any two Star Wars series), so a franchise read only from them
+    // was never asked about. A series is in a franchise by media franchise
+    // (P8345) or, as some MCU series are only, part of the series (P179),
+    // read as truthy statements in a query of its own: the old single query
+    // that read P179 by statement and rank outran its timeout on every call.
+    const franchiseSeeds = new Map<string, FranchiseAnchor>()
     for (const l of links) {
         if (l.franchiseId && /^Q\d+$/.test(l.franchiseId) && !franchiseSeeds.has(l.franchiseId)) {
             franchiseSeeds.set(l.franchiseId, {
@@ -212,98 +321,126 @@ export async function fetchTvSpinoffs(seedIds: number[], options: WikidataLookup
             })
         }
     }
+    if (seedFranchises === null) siblings = 'failed'
+    for (const [franchiseId, anchor] of seedFranchises ?? []) {
+        const known = franchiseSeeds.get(franchiseId)
+        if (!known) franchiseSeeds.set(franchiseId, anchor)
+        else if (!known.franchiseName && anchor.franchiseName) known.franchiseName = anchor.franchiseName
+    }
+    if (franchiseSeeds.size > MAX_SIBLING_FRANCHISES) {
+        console.warn(`TV franchises: ${franchiseSeeds.size}, reading siblings for the first ${MAX_SIBLING_FRANCHISES}`)
+    }
     if (franchiseSeeds.size > 0) {
-        const franchiseValues = [...franchiseSeeds.keys()].slice(0, 15).map((id) => `wd:${id}`).join(' ')
-        const siblingSparql = `SELECT DISTINCT ?franchise ?relatedLabel ?relatedTvTmdb ?relDate WHERE {
+        const franchiseValues = [...franchiseSeeds.keys()].slice(0, MAX_SIBLING_FRANCHISES).map((id) => `wd:${id}`).join(' ')
+        const siblingSparql = (property: 'P8345' | 'P179') => `SELECT DISTINCT ?franchise ?relatedLabel ?relatedTvTmdb ?relDate WHERE {
   VALUES ?franchise { ${franchiseValues} }
-  { ?related wdt:P8345 ?franchise . }
-  UNION {
-    ?related p:P179 ?stmt .
-    ?stmt ps:P179 ?franchise .
-    FILTER NOT EXISTS { ?stmt wikibase:rank wikibase:DeprecatedRank }
+  ?related wdt:${property} ?franchise ;
+    wdt:P4983 ?relatedTvTmdb .
+  FILTER NOT EXISTS {
+    VALUES ?notSeries { ${NOT_A_SERIES.map((id) => `wd:${id}`).join(' ')} }
+    ?related wdt:P31 ?notSeries .
   }
-  ?related wdt:P4983 ?relatedTvTmdb .
   OPTIONAL { ?related wdt:P580 ?startTime . }
   OPTIONAL { ?related wdt:P577 ?pubDate . }
   BIND(COALESCE(?startTime, ?pubDate) AS ?relDate)
   ?related rdfs:label ?relatedLabel . FILTER(LANG(?relatedLabel) = "en")
 }`
-        try {
-            const sibUrl = new URL('https://query.wikidata.org/sparql')
-            sibUrl.searchParams.set('query', siblingSparql)
-            const sibRes = await fetch(sibUrl.toString(), {
-                headers: WIKIDATA_HEADERS,
-                signal: within(signal, 8000),
-            })
-            siblings = sibRes.ok ? 'answered' : 'failed'
-            if (sibRes.ok) {
-                const sibPayload = (await sibRes.json()) as {
-                    results?: {
-                        bindings?: {
-                            franchise?: { value?: string }
-                            relatedLabel?: { value?: string }
-                            relatedTvTmdb?: { value?: string }
-                            relDate?: { value?: string }
-                        }[]
-                    }
-                }
-                for (const row of sibPayload.results?.bindings ?? []) {
-                    const fId = row.franchise?.value?.split('/').pop()?.trim() || ''
-                    const anchor = franchiseSeeds.get(fId)
-                    const relatedTmdbId = row.relatedTvTmdb?.value ? Number(row.relatedTvTmdb.value) : null
-                    const relatedTitle = row.relatedLabel?.value?.trim()
-                    if (
-                        !anchor ||
-                        !relatedTitle ||
-                        !relatedTmdbId ||
-                        !Number.isInteger(relatedTmdbId) ||
-                        relatedTmdbId <= 0 ||
-                        relatedTmdbId === anchor.seedTmdbId
-                    ) continue
-                    const key = `${anchor.seedTmdbId}->tv:${relatedTmdbId}`
-                    if (seen.has(key)) continue
-                    seen.add(key)
-                    const rawDate = row.relDate?.value?.slice(0, 10) ?? null
-                    links.push({
-                        seedTmdbId: anchor.seedTmdbId,
-                        seedTitle: anchor.seedTitle,
-                        franchiseId: fId,
-                        franchiseName: anchor.franchiseName,
-                        relatedMediaType: 'tv',
-                        relatedTmdbId,
-                        relatedTitle,
-                        releaseDate: rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null,
-                        posterPath: null,
-                    })
-                }
+        type SiblingRow = {
+            franchise?: { value?: string }
+            relatedLabel?: { value?: string }
+            relatedTvTmdb?: { value?: string }
+            relDate?: { value?: string }
+        }
+        const answers = await Promise.allSettled((['P8345', 'P179'] as const).map((property) =>
+            askWikidata<SiblingRow>(siblingSparql(property), within(signal, FRANCHISE_QUERY_TIMEOUT_MS))))
+        const siblingRows: SiblingRow[] = []
+        for (const answer of answers) {
+            if (answer.status === 'fulfilled') siblingRows.push(...answer.value)
+            else {
+                siblings = 'failed'
+                console.warn('Wikidata sibling TV franchise lookup failed (non-fatal):', answer.reason)
             }
-        } catch (err) {
-            siblings = 'failed'
-            console.warn('Wikidata sibling TV franchise lookup failed (non-fatal):', err)
+        }
+        if (siblings === 'not asked') siblings = 'answered'
+        for (const row of siblingRows) {
+            const fId = row.franchise?.value?.split('/').pop()?.trim() || ''
+            const anchor = franchiseSeeds.get(fId)
+            const relatedTmdbId = row.relatedTvTmdb?.value ? Number(row.relatedTvTmdb.value) : null
+            const relatedTitle = row.relatedLabel?.value?.trim()
+            if (
+                !anchor ||
+                !relatedTitle ||
+                !relatedTmdbId ||
+                !Number.isInteger(relatedTmdbId) ||
+                relatedTmdbId <= 0 ||
+                relatedTmdbId === anchor.seedTmdbId
+            ) continue
+            const key = `${anchor.seedTmdbId}->tv:${relatedTmdbId}`
+            if (seen.has(key)) continue
+            seen.add(key)
+            const rawDate = row.relDate?.value?.slice(0, 10) ?? null
+            links.push({
+                seedTmdbId: anchor.seedTmdbId,
+                seedTitle: anchor.seedTitle,
+                franchiseId: fId,
+                franchiseName: anchor.franchiseName,
+                relatedMediaType: 'tv',
+                relatedTmdbId,
+                relatedTitle,
+                releaseDate: rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null,
+                posterPath: null,
+            })
         }
     }
 
     // Enrich unique related targets with TMDB poster_path and release_date using
     // a bounded worker pool (concurrency 10) so not-in-library spin-offs render
-    // posters without bursting TMDB or requiring extra browser requests.
-    if (!tmdbApiKey && links.length > 0) complete = false
-    if (tmdbApiKey && links.length > 0) {
-        const targets = new Map<string, { media: 'tv' | 'movie'; id: number }>()
-        for (const l of links) {
-            const k = `${l.relatedMediaType}:${l.relatedTmdbId}`
-            if (!targets.has(k)) targets.set(k, { media: l.relatedMediaType, id: l.relatedTmdbId })
+    // posters without bursting TMDB or requiring extra browser requests. A
+    // seed is a library show, whose own poster and date the browser uses
+    // first, so it is not looked up.
+    const seedSet = new Set(seedIds)
+    const targets = new Map<string, { media: 'tv' | 'movie'; id: number }>()
+    for (const l of links) {
+        if (l.relatedMediaType === 'tv' && seedSet.has(l.relatedTmdbId)) continue
+        const k = `${l.relatedMediaType}:${l.relatedTmdbId}`
+        if (!targets.has(k)) targets.set(k, { media: l.relatedMediaType, id: l.relatedTmdbId })
+    }
+    if (!tmdbApiKey && targets.size > 0) complete = false
+    if (tmdbApiKey && targets.size > 0) {
+        if (targets.size > MAX_ENRICHED_TARGETS) {
+            console.warn(`TV spin-off targets: ${targets.size}, looking up posters for the first ${MAX_ENRICHED_TARGETS}`)
+        }
+        const budget = within(signal, ENRICH_BUDGET_MS)
+        // One retry for a 429, after TMDB's Retry-After (at most 5s): the pool
+        // runs beside the cron's other TMDB passes, and one 429 would
+        // otherwise leave the answer incomplete and unstored for the night.
+        const details = async (media: 'tv' | 'movie', id: number): Promise<Response> => {
+            for (let attempt = 0; ; attempt++) {
+                const startedAt = Date.now()
+                try {
+                    const res = await fetch(`${TMDB_BASE_URL}/${media}/${id}?api_key=${tmdbApiKey}&language=en-GB`, {
+                        signal: within(budget, 10000),
+                    })
+                    usage?.record({ provider: 'tmdb', endpoint: `${media}/:id`, statusCode: res.status, durationMs: Date.now() - startedAt })
+                    if (res.status !== 429 || attempt > 0) return res
+                    await res.body?.cancel()
+                    const waitSeconds = Math.min(Math.max(Number(res.headers.get('Retry-After')) || 1, 1), 5)
+                    await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000))
+                } catch (error) {
+                    usage?.record({ provider: 'tmdb', endpoint: `${media}/:id`, statusCode: null, outcome: 'error', durationMs: Date.now() - startedAt })
+                    throw error
+                }
+            }
         }
         const meta = new Map<string, { posterPath: string | null; releaseDate: string | null }>()
-        const queue = [...targets.entries()].slice(0, 60)
+        const queue = [...targets.entries()].slice(0, MAX_ENRICHED_TARGETS)
         let cursor = 0
         await Promise.all(
             Array.from({ length: Math.min(10, queue.length) }, async () => {
                 while (cursor < queue.length) {
                     const [k, t] = queue[cursor++]
                     try {
-                        const res = await fetch(`${TMDB_BASE_URL}/${t.media}/${t.id}?api_key=${tmdbApiKey}&language=en-GB`, {
-                            signal: within(signal, 10000),
-                        })
+                        const res = await details(t.media, t.id)
                         if (!res.ok) {
                             // A 404 is TMDB not having the title, the same answer every time.
                             if (res.status !== 404) complete = false
@@ -525,7 +662,7 @@ export type WikidataCacheLookup = 'tv-spinoffs' | 'film-universes'
 /** One row of `watchlist_wikidata_cache`. */
 export interface WikidataCacheRow {
     lookup: WikidataCacheLookup
-    /** The ids the browser sends, whole: the lookup itself reads the first 400. */
+    /** The ids the browser sends, whole: the lookup itself reads the first `MAX_SPINOFF_SEEDS`. */
     seed_ids: number[]
     results: TvSpinoffLink[] | FilmUniverseMember[]
     synced_at: string

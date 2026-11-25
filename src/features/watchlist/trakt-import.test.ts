@@ -49,7 +49,10 @@ describe('parseTraktFiles', () => {
       { rating: 8, type: 'episode', episode: { season: 1, number: 1 }, show },
       { rating: 11, type: 'movie', movie: { title: 'X' } },
     ]);
-    expect(out.ratings.map(r => [r.kind, r.rating, r.season])).toEqual([['show', 9, undefined], ['season', 8, 1]]);
+    expect(out.ratings.map(r => [r.kind, r.rating, r.season, r.ratedAt])).toEqual([
+      ['show', 9, undefined, '2024-06-01T00:00:00.000Z'],
+      ['season', 8, 1, null],
+    ]);
     expect(out.skipped).toBe(2);
     expect(out.skippedReasons).toEqual({ 'episode rating': 1, 'invalid rating': 1 });
   });

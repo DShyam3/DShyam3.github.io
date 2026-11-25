@@ -245,6 +245,7 @@ interface WatchlistContextType {
   setMovieWatched: (item: WatchlistItem, watched: boolean, when?: WatchedWhen) => Promise<void>;
   setLibraryState: (item: WatchlistItem, state: LibraryState) => Promise<void>;
   setFranchise: (item: WatchlistItem, franchise: string | null) => Promise<void>;
+  setSeriesStatus: (item: WatchlistItem, status: NonNullable<WatchlistItem['series_status']>) => Promise<void>;
   setPersonalRating: (item: WatchlistItem, rating: number | null, seasonNumber?: number, episodeNumber?: number) => Promise<void>;
   /**
    * Whether the owner's scores are in. `ready` too when there are none to
@@ -779,6 +780,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               tmdb_id: item.tmdb_id || null,
               release_date: item.release_date || null,
               status: item.series_status || 'Returning Series',
+              tmdb_status: item.series_status ?? null,
               trailer_key: item.trailer_key || null,
               creators: item.creators ?? null,
               top_cast: item.top_cast ?? null,
@@ -1103,6 +1105,18 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) { reportPersonalUpdateError(error); }
   };
 
+  const setSeriesStatus = async (item: WatchlistItem, status: NonNullable<WatchlistItem['series_status']>) => {
+    try {
+      if (!isAdmin || item.category !== 'TV Shows') throw new Error('Status update unavailable');
+      const { data, error } = await supabase.from('tv_shows')
+        .update({ status }).eq('id', Number(item.id)).select('id').single();
+      if (error || !data) throw error ?? new Error('Status update failed');
+      setWatchlist((prev) => prev.map((row) => row.category === 'TV Shows' && row.id === item.id
+        ? { ...row, status, series_status: status } : row));
+      await invalidateWatchDerived(queryClient);
+    } catch (error) { reportPersonalUpdateError(error); }
+  };
+
   // Scores live in the owner-only watchlist_ratings table, one row per
   // title, season or episode. The library itself never carries them; they
   // are laid on at render (applyRatings) from their own query, so they are
@@ -1126,6 +1140,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       const column = ratingColumn(target);
       const { error } = personal_rating === null
         ? await supabase.from('watchlist_ratings').delete().eq(column, targetId)
+        // Omit rated_at so Postgres sets DEFAULT now() on insert and preserves it on edit.
         : await supabase.from('watchlist_ratings').upsert(
           { ...target, rating: personal_rating, updated_at: new Date().toISOString() },
           { onConflict: column },
@@ -1850,6 +1865,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const stableSetMovieWatched = useStableCallback(setMovieWatched);
   const stableSetLibraryState = useStableCallback(setLibraryState);
   const stableSetFranchise = useStableCallback(setFranchise);
+  const stableSetSeriesStatus = useStableCallback(setSeriesStatus);
   const stableSetPersonalRating = useStableCallback(setPersonalRating);
   const stableRemoveWatchlistItem = useStableCallback(removeWatchlistItem);
   const stableAddFavourite = useStableCallback(addFavourite);
@@ -1895,6 +1911,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       setMovieWatched: stableSetMovieWatched,
       setLibraryState: stableSetLibraryState,
       setFranchise: stableSetFranchise,
+      setSeriesStatus: stableSetSeriesStatus,
       setPersonalRating: stableSetPersonalRating,
       ratingsStatus,
       addFavourite: stableAddFavourite,
@@ -1931,6 +1948,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       stableSetMovieWatched,
       stableSetLibraryState,
       stableSetFranchise,
+      stableSetSeriesStatus,
       stableSetPersonalRating,
       ratingsStatus,
       stableAddFavourite,

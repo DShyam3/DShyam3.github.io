@@ -279,7 +279,7 @@ export function useDiscovery(type: LibraryType) {
   const { getCollection, getTvSpinoffs, getFilmUniverses } = useTMDB();
   const { isAdmin } = useAuth();
   const { answers, answersSettled, notInterested, hiddenFromSuggestions, dismissMany, resetDismissed, resettable, ownerSynced } = useDismissedSuggestions();
-  const { notSeen, markNotSeen, resetNotSeen, resettable: notSeenResettable, ownerSynced: notSeenSynced } = useNotSeen();
+  const { notSeen, markNotSeen, markManyNotSeen, unmarkNotSeen, resetNotSeen, resettable: notSeenResettable, ownerSynced: notSeenSynced } = useNotSeen();
   const [collectionLimit, setCollectionLimit] = useState(COLLECTIONS_PER_BATCH);
   const [franchiseTarget, setFranchiseTarget] = useState(FRANCHISES_PER_STEP);
   const today = new Date();
@@ -590,7 +590,7 @@ export function useDiscovery(type: LibraryType) {
 
   const tvSeedIds = useMemo(() => tvSeedIdsOf(visibleLibrary), [visibleLibrary]);
   const tvSpinoffs = useQuery({
-    queryKey: ['watchlist', 'tv-spinoffs', 'v2', tvSeedIds],
+    queryKey: ['watchlist', 'tv-spinoffs', 'v3', tvSeedIds],
     enabled: !loading && type !== 'movie' && tvSeedIds.length > 0,
     staleTime: 24 * 60 * 60 * 1000,
     retry: false,
@@ -1043,10 +1043,19 @@ export function useDiscovery(type: LibraryType) {
       }
     },
     likelySeenLoading: !likelySeenReady,
+    likelySeenLoadingMore: likelySeenFetchingNext,
+    likelySeenHasMore: Boolean(likelySeenHasNext),
     taste: tasteWords,
     dismiss,
     skipMany,
     markNotSeen,
+    // Likely seen's "None of these": the owner's own call, so it asks for the
+    // next page itself rather than spending the automatic ones.
+    noneOfTheseLikelySeen: (items: ReadonlyArray<AnswerTarget>) => {
+      markManyNotSeen(items);
+      if (likelySeenHasNext && !likelySeenFetchingNext) void fetchNextLikelySeen();
+    },
+    unmarkNotSeen,
     resetDismissed: async () => { await Promise.all([resetDismissed(), resetNotSeen()]); },
     dismissedCount: resettable + notSeenResettable,
     // Only when both tables are, so the footnote never claims more.

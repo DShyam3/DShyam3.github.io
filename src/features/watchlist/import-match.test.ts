@@ -152,7 +152,7 @@ describe('sources', () => {
     ]) }]);
     const out = importFromTrakt(result);
     expect(out.films).toHaveLength(1);
-    expect(out.films[0]).toMatchObject({ tmdbId: 949, rating: 8, watchedAt: '2021-01-01T00:00:00.000Z' });
+    expect(out.films[0]).toMatchObject({ tmdbId: 949, rating: 8, ratedAt: '2022-01-01T00:00:00.000Z', watchedAt: '2021-01-01T00:00:00.000Z' });
     expect(out.films[0].ratedOnly).toBeUndefined();
     expect(out.shows).toHaveLength(1);
     expect(out.episodes).toHaveLength(1);

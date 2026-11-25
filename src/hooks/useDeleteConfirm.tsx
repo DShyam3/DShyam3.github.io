@@ -1,6 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useReturnFocus } from '@/components/layout/useReturnFocus';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,8 @@ export interface DeleteConfirmRequest {
   description?: ReactNode;
   /** What the destructive button says. Defaults to "Delete". */
   confirmLabel?: string;
+  /** Where focus goes on close if the control that asked has left the page. */
+  returnFocusTo?: () => HTMLElement | null;
   onConfirm: () => void | Promise<void>;
 }
 
@@ -41,10 +44,15 @@ export interface DeleteConfirmRequest {
 export function useDeleteConfirm() {
   const [pending, setPending] = useState<DeleteConfirmRequest | null>(null);
   const [busy, setBusy] = useState(false);
+  // Radix hands focus back to a DialogTrigger on close, and this dialog has
+  // none: without this, focus fell to <body> and a keyboard user lost their
+  // place. The control that asked (or its menu's button) gets it back.
+  const returnFocus = useReturnFocus();
 
   const askDelete = useCallback((request: DeleteConfirmRequest) => {
+    returnFocus.remember(undefined, request.returnFocusTo);
     setPending(request);
-  }, []);
+  }, [returnFocus]);
 
   const close = useCallback(() => {
     setPending(null);
@@ -68,7 +76,10 @@ export function useDeleteConfirm() {
         if (!open) close();
       }}
     >
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent
+        className="sm:max-w-sm"
+        onCloseAutoFocus={returnFocus.restore}
+      >
         <DialogHeader>
           <DialogTitle className="font-serif">
             {pending?.title ?? (pending?.name ? `Delete "${pending.name}"` : 'Delete')}

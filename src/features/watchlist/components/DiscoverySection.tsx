@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useWatchlist } from '../useWatchlist';
 import { useTMDB } from '../useTMDB';
 import type { TMDBResult } from '../useTMDB';
@@ -347,13 +348,15 @@ const tileKey = (item: DiscoveryItem) => discoveryKey(item.media, item.id);
  * stays mounted when `items` empties, so a tile still offering its rating
  * outlives the last of the others.
  */
-function TileGrid({ items, type = 'all', onDismiss, onNotSeen, heading, className }: {
+function TileGrid({ items, type = 'all', onDismiss, onNotSeen, heading, footer, className }: {
   items: DiscoveryItem[];
   /** The tab: a held tile of the other media waits out of sight. */
   type?: LibraryType;
   onDismiss: (item: DiscoveryItem) => void;
   onNotSeen?: (media: DiscoveryMedia, id: number) => void;
   heading?: ReactNode;
+  /** Below the grid, given the tiles shown less any still being logged with Seen it. */
+  footer?: (answerable: DiscoveryItem[]) => ReactNode;
   className?: string;
 }) {
   // A tile logged with Seen it leaves `items` as its title joins the library;
@@ -415,6 +418,7 @@ function TileGrid({ items, type = 'all', onDismiss, onNotSeen, heading, classNam
           />
         ))}
       </CardGrid>
+      {footer?.(shown.filter((item) => !held.some((entry) => tileKey(entry.item) === tileKey(item))))}
     </div>
   );
 }
@@ -592,6 +596,31 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
   const [selected, setSelected] = useState<{ id: string; category: 'Movies' | 'TV Shows' } | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OrderEntryView | null>(null);
   const [resetFailed, setResetFailed] = useState(false);
+  const { askDelete: askReset, deleteDialog: resetDialog } = useDeleteConfirm();
+  // Likely seen's last "None of these", for its status line and Undo.
+  const [noneMarked, setNoneMarked] = useState<{ items: DiscoveryItem[]; undo: 'idle' | 'pending' | 'failed' } | null>(null);
+  const undoRef = useRef<HTMLButtonElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+  // The grid may empty under the button while the next page loads: focus
+  // goes to Undo, which stays put, rather than falling to the page.
+  useEffect(() => {
+    if (noneMarked?.undo === 'idle') undoRef.current?.focus();
+  }, [noneMarked]);
+  const noneOfThese = (items: DiscoveryItem[]) => {
+    if (items.length === 0) return;
+    discovery.noneOfTheseLikelySeen(items);
+    setNoneMarked({ items, undo: 'idle' });
+  };
+  const undoNoneOfThese = async () => {
+    if (!noneMarked) return;
+    setNoneMarked({ ...noneMarked, undo: 'pending' });
+    try {
+      await discovery.unmarkNotSeen(noneMarked.items);
+      setNoneMarked(null);
+    } catch {
+      setNoneMarked({ ...noneMarked, undo: 'failed' });
+    }
+  };
   const comingSoon = discovery.upcoming.slice(0, 12);
   // "films lean to Comedy, Action, Adventure · 2010s · English", per tab.
   const tasteLines = ([['movie', 'films'], ['tv', 'series']] as const)
@@ -606,6 +635,16 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
     setResetFailed(false);
     try { await discovery.resetDismissed(); } catch { setResetFailed(true); }
   };
+  // One click forgot every answer, and the button sits under the grid where
+  // a stray tap lands: ask first.
+  const confirmReset = () => askReset({
+    title: 'Reset Discover answers?',
+    description: `Forgets your ${discovery.dismissedCount.toLocaleString('en-GB')} Not interested, Skip these and Not seen ${discovery.dismissedCount === 1 ? 'answer' : 'answers'} ${discovery.synced ? 'on every device' : 'on this browser'}, so Discover suggests those titles again. This can’t be undone.`,
+    confirmLabel: 'Reset answers',
+    onConfirm: resetAnswers,
+    // The button leaves once nothing is left to reset.
+    returnFocusTo: () => footerRef.current,
+  });
 
   const openEntry = (entry: OrderEntryView) => {
     if (entry.libraryId) {
@@ -699,6 +738,14 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           type={type}
           onDismiss={(item) => discovery.dismiss(item, 'likely_seen')}
           onNotSeen={discovery.markNotSeen}
+          footer={(answerable) => answerable.length > 0 && (
+            <div className="flex justify-center">
+              <Button variant="ghost" onClick={() => noneOfThese(answerable)}>
+                <EyeOff className="h-4 w-4" />
+                None of these
+              </Button>
+            </div>
+          )}
           className="space-y-3 pt-2"
           heading={
             <div className="space-y-0.5">
@@ -711,6 +758,29 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
             </div>
           }
         />
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+          <p role="status">
+            {noneMarked && (
+              <>
+                {noneMarked.undo === 'failed'
+                  ? 'Couldn’t undo. Try again.'
+                  : `Marked ${noneMarked.items.length} not seen.`}
+                {noneMarked.undo !== 'failed' && discovery.likelySeenLoadingMore && ' Finding more…'}
+                {noneMarked.undo !== 'failed' && !discovery.likelySeenLoadingMore && discovery.likelySeen.length === 0 && !discovery.likelySeenHasMore && ' Nothing more to ask about for now.'}
+              </>
+            )}
+          </p>
+          {noneMarked && (
+            <Button
+              ref={undoRef}
+              variant="ghost"
+              disabled={noneMarked.undo === 'pending'}
+              onClick={() => { void undoNoneOfThese(); }}
+            >
+              {noneMarked.undo === 'pending' ? 'Undoing…' : 'Undo'}
+            </Button>
+          )}
+        </div>
       </section>
 
       <section className="space-y-4" aria-labelledby="discover-might-like">
@@ -766,13 +836,14 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         )}
       </section>
 
-      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+      <div ref={footerRef} tabIndex={-1} className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         <span>
-          Suggestions from TMDB. “Not interested” hides a title across Discover; “Skip these” hides a page of suggestions for {SKIP_DAYS} days, but not from “Have you already watched?”; “Not seen” stops a title being asked about in Likely seen. All are {discovery.synced ? 'saved across your devices' : 'remembered on this browser'}.
+          Suggestions from TMDB. “Not interested” hides a title across Discover; “Skip these” hides a page of suggestions for {SKIP_DAYS} days, but not from “Have you already watched?”; “Not seen” stops a title being asked about in Likely seen, and “None of these” answers it for every title shown there (Undo takes it back). All are {discovery.synced ? 'saved across your devices' : 'remembered on this browser'}.
         </span>
-        {discovery.dismissedCount > 0 && <Button variant="ghost" onClick={() => { void resetAnswers(); }}>Reset Discover answers</Button>}
+        {discovery.dismissedCount > 0 && <Button variant="ghost" onClick={confirmReset}>Reset Discover answers…</Button>}
         {resetFailed && <p role="alert" className="text-destructive">Couldn’t reset your answers. Try again.</p>}
       </div>
+      {resetDialog}
 
       {selectedItem && (
         <WatchlistDetailDialog

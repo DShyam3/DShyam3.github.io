@@ -197,7 +197,7 @@ export function useTMDB() {
         if (clean.length === 0) return [];
         try {
             return await queryClient.fetchQuery({
-                queryKey: ['watchlist', 'tmdb-spinoffs', 'v2', clean],
+                queryKey: ['watchlist', 'tmdb-spinoffs', 'v3', clean],
                 staleTime: 24 * 60 * 60 * 1000,
                 // Asked while Discover is busy; a 429 waits out the minute.
                 retry: detailRetry,
