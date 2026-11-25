@@ -1,41 +1,58 @@
 # State
 
-Updated 2026-11-24. Branch `main`; readable dot-matrix numbers commit `df5a4cfb` is pushed to `origin/main`. Separate Watchlist, Supabase, Dev, and launch-config edits remain uncommitted in this checkout; none are claimed as shipped.
+Updated 2026-11-25. Branch `discover-dislikes` at `5dccda52`, equal to `origin/main` (pushed; Pages run `45521434245` succeeded). The main checkout holds another session's uncommitted work (Watchlist, Supabase, Dev, launch-config, FEATURES.md, REHAUL_HISTORY.md, STATE.md, public/sitemap.xml, src/App.tsx); none of it is claimed as shipped here.
 
 ## Closed (pushed)
-- **Readable numbers in dot-matrix UI** (`df5a4cfb`). Numeric runs in shared `DotMatrixText` labels, command-menu counts, travel itinerary headings, the footer clock, and Home travel fact counts use Space Mono. The local Chrome render showed clear section numbers and counts before the final command-menu and itinerary edits; the final tree passed static checks. No post-deploy or real-device check was done.
+- **Rate what you've watched queue** (`e05e3049`). Deployed; live entry bundle `/assets/index-BeCvStVW.js` has the title and the skips key. Unit tests and local stack only.
+- **Transaction details sheet** (`d5bc2ac2`). Deployed; live `TransactionsTab-L37w0g3K.js` has "Close transaction details" and `(min-width: 1024px)`.
+- **Diary plan correction** (`5dccda52`). Deploy order, Public ratings and OMDb key removed as done; hosted state checked 2026-11-24.
+- **Readable numbers in dot-matrix UI** (`df5a4cfb`). Numeric runs use Space Mono in shared `DotMatrixText` labels, command-menu counts, travel headings, footer clock, Home fact counts.
+- **Discover dislikes count** (`8d8ca5fc`, migration `20261123135113` on hosted). Decision in `REHAUL_HISTORY.md` (2026-11-23).
+- **Discover steps 1–3** (`ec6881fa`, `fc16742f`, `fbe288dd`; via `00527d91`). Migrations `20261122192738`, `20261122201711` on hosted.
+- **Travel map touch preview** (`666dd03a`, another session). First tap previews, second tap or `Open` opens the drawer.
+- **Wildcards** (`12e24973`, Pages run `45474511099`) and **Seen it offers the rating** (`e030d81d`, run `45482255622`). Deployed; see open notes.
 
-## Last checks (2026-11-24, worktree changed concurrently afterward)
-| Check | Result |
+## Checks
+| Check | Result (2026-11-25, rebased tree, before push) |
 |---|---|
-| `npm run lint` | pass, 0 errors and 0 warnings |
+| `npm run lint` | 0 errors, 0 warnings |
 | `npm run typecheck` | pass |
-| `npm run typecheck:functions` | pass |
-| `npm run build` | pass; Vite reports a large-chunk advisory |
-| Bundled `impeccable detect --json --changed` | `[]`, no findings |
-| `yes \| npx --yes impeccable detect src/` | not verified: npm registry DNS failed |
-| `npm run ship-check` | ran; 90/100 and launch blocker reported for a generated airport-code string that matched the AWS-key pattern. The flagged line was checked and contains airport codes; other findings were not reviewed here |
-| `graphify update .`; floorplan refresh, recent-work, build | pass; floorplan retains warnings and unmapped files from other work |
+| `npx vitest run` | 133 files / 3,077 tests pass |
+| `npm run build` | pass |
+| `yes \| npx --yes impeccable detect src/` | 0 anti-patterns (run before the rebase) |
+| `npm run typecheck:functions` | not run on this push (passed 2026-11-24 on the dot-matrix tree) |
+| `npm run ship-check` | not run on this push (2026-11-24: 90/100, launch blocker, see open notes) |
 
 ## Still open / not verified
-- The number change is pushed but has not been seen on the live site or on a real phone/tablet. Other direct Doto labels may still contain numbers; the local render covered the shared labels, clock and Home fact counts, while the final command-menu and itinerary edits passed static checks only.
-- The separate Watchlist, Supabase, Dev, and launch-config worktree edits are in progress, not shipped or verified by this handoff.
+- **Rate queue, not seen live as owner.** Verified on the local stack only; reviewer fixes not re-reviewed. Series path not exercised in a browser (unit tests only).
+- **Rate queue, owner's three choices** await the owner (REHAUL_PLAN Discover item 2): series rule, hidden titles excluded, skips per browser. Hosted: 0 rows in `watchlist_ratings` (382 watched films, 434 series) as of 2026-11-24.
+- **Transactions sheet, not seen live or checked as owner.** Verified on the local stack only; reviewer fixes not re-reviewed. Not on iPhone or iPad hardware (soft keyboard over the sheet's inputs). Select typeahead guard not exercised in a browser. No hook tests for the shortcut guards (no DOM test environment). One shared InspectorSheet not built (three copies: WorkspaceInspector, CashFlowSurface, TransactionsTab).
+- **Transactions, noticed, not from this change:** at 375px under coarse pointer each row's checkbox renders as a large empty square.
 - **Seen it offers the rating:** not seen live as the owner; reviewer fixes not re-reviewed.
-- **Travel map touch preview:** needs a real iPad check of first/second tap, Open target, ocean clear and trackpad hover.
-- **Wildcards:** live bundle checked previously, but not seen in an owner-signed-in browser; reviewer fixes not re-reviewed.
-- **Route error screen on Pages:** live, but not seen triggered there.
+- **Wildcards:** live bundle checked; not seen in an owner-signed-in browser; reviewer fixes not re-reviewed.
+- **Discover, owner's signed-in check** of steps 1–3, dislikes and taste line is outstanding. Discover order on the owner's data not checked since `48bdbdcf`.
+- **Travel map touch preview:** needs an iPad check (first/second tap, `Open` target, ocean tap clears, trackpad hover).
+- **Dot-matrix numbers:** not seen on the live site or a real phone or tablet. Other direct Doto labels may still hold numbers; the final command-menu and itinerary edits passed static checks only.
+- **Route error screen on Pages:** live, not seen triggered there.
 - **Stale-chunk reload on Pages:** checked locally only; needs an old tab observed across a deploy.
-- **FinanceHostBoundary** (`src/features/finance/FinanceSession.tsx`) can throw again if Finance fails while a Watchlist detail is docked; pre-existing.
-- **Local Supabase stack:** previously at `20261123135113`. Other local stacks may still carry the old `20261122221500` migration name. Current uncommitted migration has not been applied or verified here.
-- The reported hosted `finance_settings` payday schedule (`monthly_date`, day `29`) was not verified here.
-- An earlier `npx vitest run` passed 132 files / 3,066 tests after two failures in a prior run did not reproduce; the flake remains unexplained. No test run was made for the current worktree.
-- Signed-in owner check of Discover steps 1–3, dislikes and taste line is outstanding. Discover order on the owner's data has not been checked since `48bdbdcf`.
-- Wikidata nightly cache run (`06:20Z`, 2026-11-23) remains unverified. Revolut bank consent in TrueLayer needs renewal when convenient.
+- **FinanceHostBoundary** (`src/features/finance/FinanceSession.tsx`) renders AppShell in its fallback; can throw again if Finance fails while a Watchlist detail is docked. Pre-existing, not fixed.
+- **impeccable on running `/watchlist`:** 3 reported on the signed-out Following panel (header blinking cursor, 2 nested cards). Not from these changes.
+- **ship-check (2026-11-24):** launch blocker for a generated airport-code string matching the AWS-key pattern; the line was checked and holds airport codes. Other findings not reviewed.
+- **Local Supabase stack** at `20261123135113`; other stacks may still carry `20261122221500`. Fix with `supabase db reset` or `supabase migration repair --local --status reverted 20261122221500`. Current uncommitted migration not applied or verified here.
+- **Hosted `finance_settings` payday schedule** (`monthly_date`, day `29`) not verified here.
+- **Flaky test:** one earlier vitest run had 2 failures that did not reproduce; names not captured; cause unexplained.
+- **Wikidata nightly cache run** (`06:20Z`, 2026-11-23, `f618f259`) not verified.
+- **Revolut bank consent** in TrueLayer needs renewal when convenient.
+- **Separate Watchlist, Supabase, Dev, launch-config edits** remain uncommitted in the main checkout; in progress, not shipped or verified.
+- **graphify and floorplan** not run after this push: the main checkout's uncommitted changes block fast-forward. (The 2026-11-24 graphify and floorplan pass retains warnings and unmapped files from other work.)
 
 ## Next
-1. Finish and verify the separate Watchlist and Supabase edits before shipping that worktree.
-2. Check the number change on a real device and after deployment.
-3. Run the signed-in owner Discover check from `REHAUL_PLAN.md` item 1.
+1. Owner's signed-in checks on the live site: REHAUL_PLAN Discover item 1, including the Seen it rating offer, the rating queue, and the Transactions pass.
+2. Owner's call on the rating queue's three choices (REHAUL_PLAN Discover item 2).
+3. Run `graphify update .` and the floorplan refresh once the main checkout can fast-forward.
+4. Finish and verify the separate Watchlist and Supabase edits before shipping them.
+5. Check dot-matrix numbers on a real device and after deploy; Travel map on iPad; Transactions on iPhone and iPad.
 
 ## Blockers
-- Owner-specific Discover checks require the owner's signed-in session.
+- Owner-specific checks need the owner's signed-in session; no agent can perform them.
+- The main checkout's uncommitted work blocks fast-forward and the graphify and floorplan refresh.
