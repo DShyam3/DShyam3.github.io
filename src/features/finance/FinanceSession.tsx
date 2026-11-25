@@ -5,6 +5,7 @@ import {
   Suspense,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ErrorInfo,
   type ReactNode,
@@ -16,6 +17,7 @@ import { ErrorScreen } from '@/components/layout/ErrorScreen';
 import { PageLoader } from '@/components/layout/PageLoader';
 import { isLoadFailure } from '@/components/layout/RouteErrorBoundary';
 import { Button } from '@/components/ui/button';
+import { hasWritesInFlight, writesSettled } from '@/integrations/supabase/write-tracking-fetch';
 import { prefersSavedData, whenIdle } from '@/lib/idle';
 
 const loadFinanceHost = () => lazy(() => import('./FinancePage'));
@@ -53,7 +55,28 @@ export function FinanceSession({ children }: { children: ReactNode }) {
   // A failed chunk import stays failed inside one lazy(), so a retry builds a
   // fresh one; the boundary is keyed on the attempt to reset with it.
   const [host, setHost] = useState(() => ({ attempt: 0, FinanceHost: loadFinanceHost() }));
-  const retry = () => setHost(h => ({ attempt: h.attempt + 1, FinanceHost: loadFinanceHost() }));
+  // The failed host's writes may still be in flight, and most skip its save
+  // queue (FinanceDataContext). A fresh host reading before they land would
+  // show the rows from before them, so it mounts once they have; until then
+  // the boundary shows the loader. With none in flight it mounts at once, in
+  // the same commit, so an automatic retry never paints the error.
+  const [waiting, setWaiting] = useState(false);
+  const waitingRef = useRef(false);
+  const remount = () => setHost(h => ({ attempt: h.attempt + 1, FinanceHost: loadFinanceHost() }));
+  const retry = () => {
+    if (waitingRef.current) return;
+    if (!hasWritesInFlight('finance_')) {
+      remount();
+      return;
+    }
+    waitingRef.current = true;
+    setWaiting(true);
+    void writesSettled('finance_').then(() => {
+      waitingRef.current = false;
+      setWaiting(false);
+      remount();
+    });
+  };
   const { attempt, FinanceHost } = host;
 
   useEffect(() => {
@@ -81,7 +104,7 @@ export function FinanceSession({ children }: { children: ReactNode }) {
       {children}
       {hosted && (
         <FinanceTargetContext.Provider value={target}>
-          <FinanceHostBoundary key={attempt} target={target} onRetry={retry}>
+          <FinanceHostBoundary key={attempt} target={target} waiting={waiting} onRetry={retry}>
             <Suspense fallback={target ? createPortal(<PageLoader />, target) : null}>
               <FinanceHost />
             </Suspense>
@@ -105,7 +128,13 @@ export function FinanceSession({ children }: { children: ReactNode }) {
  * route, so a second throw from its fallback would blank the whole site.
  */
 class FinanceHostBoundary extends Component<
-  { target: HTMLElement | null; onRetry: () => void; children: ReactNode },
+  {
+    target: HTMLElement | null;
+    /** A retry is waiting for the failed host's writes to land. */
+    waiting: boolean;
+    onRetry: () => void;
+    children: ReactNode;
+  },
   { failed: boolean; loadFailure: boolean }
 > {
   state = { failed: false, loadFailure: false };
@@ -124,8 +153,9 @@ class FinanceHostBoundary extends Component<
 
   render() {
     if (!this.state.failed) return this.props.children;
-    const { target, onRetry } = this.props;
+    const { target, waiting, onRetry } = this.props;
     if (!target) return null;
+    if (waiting) return createPortal(<PageLoader />, target);
     const { loadFailure } = this.state;
     return createPortal(
       <ErrorScreen

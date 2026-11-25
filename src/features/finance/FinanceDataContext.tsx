@@ -158,6 +158,20 @@ import {
 
 export type { BreakdownRateMode, PayslipSaveOutcome, StoredStudentLoanRate };
 
+// The save queue outlives the provider. Finance's "Try again" mounts a fresh
+// provider while the failed one's last saves may still be in flight; with the
+// queue per mount, the new load would read before they land and show rows
+// that predate them, and a save timed out before the failure would no longer
+// hold its key. One provider is mounted at a time (FinanceSession), so sharing
+// changes nothing else.
+//
+// The last save or delete queued per collection key; the next one waits for
+// it, so two in flight cannot commit out of order or prune each other's rows.
+const saveChains = new Map<string, Promise<unknown>>();
+// Collections whose save timed out: the request may still land, so later
+// saves of that key are refused until it does, rather than raced.
+const timedOutSaveKeys = new Set<string>();
+
 /** All the state and the two Supabase functions. Kept as a hook so the context
  *  value's type is inferred from it rather than hand-maintained. */
 function useProvideFinanceData() {
@@ -419,9 +433,6 @@ function useProvideFinanceData() {
   // The same rows by table and id, as last read or written, with their owner:
   // a write sends only the columns an edit changed (planRowWrites).
   const storedRowsRef = useRef(new Map<string, Map<string, StoredRow>>());
-  // The last save or delete queued per collection key; the next one waits for
-  // it, so two in flight cannot commit out of order or prune each other's rows.
-  const saveChainsRef = useRef(new Map<string, Promise<unknown>>());
   // Saves a caller holds back before sending (the review queue's coalesced
   // save). Sent before a load reads, so the load shows them instead of a copy
   // that predates them -- and an edit built on that copy cannot send it back.
@@ -437,9 +448,6 @@ function useProvideFinanceData() {
     beforeLoadFlushesRef.current.add(flush);
     return () => { beforeLoadFlushesRef.current.delete(flush); };
   }, []);
-  // Collections whose save timed out: the request may still land, so later
-  // saves of that key are refused until it does, rather than raced.
-  const timedOutSaveKeysRef = useRef(new Set<string>());
   // Collections whose last run failed on a request abandoned for time, set by
   // the run's own catch: its outcome is unknown, so the key is held a while.
   const abortedSaveKeysRef = useRef(new Set<string>());
@@ -1573,7 +1581,7 @@ function useProvideFinanceData() {
         // Saves held back are sent now, and saves already sent land first, so
         // the read below includes them.
         for (const flush of beforeLoadFlushesRef.current) flush();
-        await Promise.all(saveChainsRef.current.values());
+        await Promise.all(saveChains.values());
         const [
           settingsRes,
           userHolidaysRes,
@@ -2602,7 +2610,7 @@ function useProvideFinanceData() {
     const withDeadline = () => new Promise<boolean>(resolve => {
       // After a timeout the late request may still land; racing it with a
       // newer save could commit them out of order. Refused until it settles.
-      if (timedOutSaveKeysRef.current.has(key)) {
+      if (timedOutSaveKeys.has(key)) {
         toast({ title: 'Not saved', description: 'An earlier save of this data may still be landing. Try again in a minute, or reload.', variant: 'destructive' });
         resolve(false);
         return;
@@ -2615,7 +2623,7 @@ function useProvideFinanceData() {
         window.clearTimeout(timer);
         timer = window.setTimeout(() => {
           timedOut = true;
-          timedOutSaveKeysRef.current.add(key);
+          timedOutSaveKeys.add(key);
           toast({ title: 'Save timed out', description: 'The connection did not answer. Later edits to this data wait until it does.', variant: 'destructive' });
           resolve(false);
         }, SAVE_TIMEOUT_MS);
@@ -2629,19 +2637,19 @@ function useProvideFinanceData() {
         if (abortedSaveKeysRef.current.delete(key) && !ok) {
           // Failed on its own request abandoned for time: the outcome is
           // unknown until the server's own limits have passed.
-          timedOutSaveKeysRef.current.add(key);
-          window.setTimeout(() => timedOutSaveKeysRef.current.delete(key), ABORTED_WRITE_GRACE_MS);
+          timedOutSaveKeys.add(key);
+          window.setTimeout(() => timedOutSaveKeys.delete(key), ABORTED_WRITE_GRACE_MS);
         } else if (timedOut) {
           // The late request has landed (or failed): nothing is left to race.
-          timedOutSaveKeysRef.current.delete(key);
+          timedOutSaveKeys.delete(key);
         }
         resolve(ok);
       };
       run().then(settle, () => settle(false));
     });
-    const previous = saveChainsRef.current.get(key) ?? Promise.resolve(true);
+    const previous = saveChains.get(key) ?? Promise.resolve(true);
     const next = previous.then(withDeadline, withDeadline);
-    saveChainsRef.current.set(key, next);
+    saveChains.set(key, next);
     return next;
   };
 
@@ -2692,7 +2700,7 @@ function useProvideFinanceData() {
       }
     });
 
-  // Saves of one collection run one after another (saveChainsRef). Refused
+  // Saves of one collection run one after another (saveChains). Refused
   // when asked for, not when their turn comes: a save requested while this
   // profile's rows are not yet on screen carries the previous profile's list,
   // and must not run once the load lands.

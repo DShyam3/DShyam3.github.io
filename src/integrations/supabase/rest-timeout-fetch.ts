@@ -34,7 +34,7 @@ export const isRestTimeout = (error: unknown): boolean => {
   return typeof message === 'string' && message.includes(TIMEOUT_MESSAGE);
 };
 
-const hrefOf = (input: RequestInfo | URL): string =>
+export const hrefOf = (input: RequestInfo | URL): string =>
   typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
 /** `supabaseUrl` is the project URL the client was created with; the REST

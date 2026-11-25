@@ -7,6 +7,8 @@
  * aggregated counts to `public.api_usage_events` when the admin is signed in.
  */
 
+import { hrefOf } from './rest-timeout-fetch';
+
 export type ClientTelemetryOutcome = 'ok' | 'rate_limited' | 'error';
 
 export interface ClientUsageSample {
@@ -225,9 +227,6 @@ function recordSample(sample: ClientUsageSample) {
     scheduleFlush();
   }
 }
-
-const hrefOf = (input: RequestInfo | URL): string =>
-  typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
 export function withApiUsageTelemetry(
   fetchImpl: typeof fetch,
