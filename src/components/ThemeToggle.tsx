@@ -2,8 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
-import { AppIcon } from '@/components/ui/icon';
-import { SFMoonStarsFill, SFSunMaxFill } from '@/components/ui/sf-symbols';
+import { DotMatrixIcon } from '@/components/dot-matrix/DotMatrixIcon';
 import { markManualOverride } from '@/hooks/useTimeBasedTheme';
 
 /** Both icons rise from the right and set to the left, clipped by the button. */
@@ -95,10 +94,10 @@ export function ThemeToggle() {
       className="w-9 h-9 relative overflow-hidden"
     >
       <div ref={sunRef} className={iconClass} style={{ opacity: night ? 0 : 1 }} aria-hidden="true">
-        <AppIcon icon={SFSunMaxFill} className="h-4 w-4 text-foreground" />
+        <DotMatrixIcon icon="sun" />
       </div>
       <div ref={moonRef} className={iconClass} style={{ opacity: night ? 1 : 0 }} aria-hidden="true">
-        <AppIcon icon={SFMoonStarsFill} className="h-4 w-4 text-foreground" />
+        <DotMatrixIcon icon="moon" />
       </div>
       <span className="sr-only">Toggle theme</span>
     </Button>

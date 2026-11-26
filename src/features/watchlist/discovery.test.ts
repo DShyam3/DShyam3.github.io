@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { admitWildcards, curateDiscovery, discoverySeeds, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, keepHeldInPlace, likelySeenConsensus, type DiscoveryItem } from './discovery';
+import { LIKELY_SEEN_POOL_PAGES, LIKELY_SEEN_TOP_PAGES, admitWildcards, curateDiscovery, discoverySeeds, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, keepHeldInPlace, likelySeenConsensus, likelySeenLanguage, likelySeenTmdbPage, type DiscoveryItem } from './discovery';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -493,5 +493,55 @@ describe('admitWildcards', () => {
     const seen = new Map<string, number>();
     show(admitWildcards([...others(2), { key: 'x' }], keyOf, seen), seen);
     expect(admitWildcards([...others(2), wild('x')], keyOf, seen).map(keyOf)).toEqual(['movie:0', 'movie:1', 'x']);
+  });
+});
+
+describe('likelySeenTmdbPage', () => {
+  const walk = (week: number) => Array.from({ length: LIKELY_SEEN_POOL_PAGES }, (_, index) => likelySeenTmdbPage(index, week));
+
+  it('reads every page of the pool once, whatever the week', () => {
+    for (const week of [0, 1, 14, 15, 34, 35, 2930, -3]) {
+      expect([...walk(week)].sort((a, b) => a - b)).toEqual(Array.from({ length: LIKELY_SEEN_POOL_PAGES }, (_, i) => i + 1));
+    }
+  });
+
+  it('starts at the week\'s top page, then takes turns with the deeper pages', () => {
+    const pages = walk(14);
+    expect(pages[0]).toBe(15);
+    expect(pages.slice(0, 6)).toEqual([15, 30, 1, 31, 2, 32]);
+    for (let i = 0; i < 2 * LIKELY_SEEN_TOP_PAGES; i += 1) {
+      if (i % 2 === 0) expect(pages[i]).toBeLessThanOrEqual(LIKELY_SEEN_TOP_PAGES);
+      else expect(pages[i]).toBeGreaterThan(LIKELY_SEEN_TOP_PAGES);
+    }
+    expect(pages.slice(2 * LIKELY_SEEN_TOP_PAGES).every((page) => page > LIKELY_SEEN_TOP_PAGES)).toBe(true);
+  });
+
+  it('moves the top pages\' start on by one a week, as before', () => {
+    expect(likelySeenTmdbPage(0, 0)).toBe(1);
+    expect(likelySeenTmdbPage(0, 1)).toBe(2);
+    expect(likelySeenTmdbPage(0, 15)).toBe(1);
+  });
+});
+
+describe('likelySeenLanguage', () => {
+  it('picks the strongest language other than English', () => {
+    expect(likelySeenLanguage(new Map([['en', 0.9], ['hi', 0.05], ['ko', 0.04]]))).toBe('hi');
+  });
+
+  it('needs a few percent of the profile', () => {
+    expect(likelySeenLanguage(new Map([['en', 0.98], ['hi', 0.02]]))).toBeNull();
+    expect(likelySeenLanguage(new Map([['en', 0.97], ['hi', 0.03]]))).toBe('hi');
+  });
+
+  it('skips English, no language and languages turned away from', () => {
+    expect(likelySeenLanguage(new Map([['en', 1]]))).toBeNull();
+    expect(likelySeenLanguage(new Map([['en', 0.8], ['xx', 0.2]]))).toBeNull();
+    expect(likelySeenLanguage(new Map([['en', 0.9], ['fr', -0.2]]))).toBeNull();
+    expect(likelySeenLanguage(new Map())).toBeNull();
+  });
+
+  it('gives a tie to the earlier code, in any order', () => {
+    expect(likelySeenLanguage(new Map([['ko', 0.05], ['ja', 0.05]]))).toBe('ja');
+    expect(likelySeenLanguage(new Map([['ja', 0.05], ['ko', 0.05]]))).toBe('ja');
   });
 });

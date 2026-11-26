@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { EntryState, OrderEntryView, OrderView } from '@/features/watchlist/franchise';
+import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
 import { WatchedWhenMenu } from '@/features/watchlist/components/WatchedWhenMenu';
 import { useDismissedKeys } from '@/features/watchlist/useDismissedSuggestions';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
@@ -118,6 +119,7 @@ export function EntryList({
   edits?: EntryEdits;
 }) {
   const [editing, setEditing] = useState<number | null>(null);
+  const [filterMode, setFilterMode] = useState<'all' | 'remaining'>('all');
   const dismissed = useDismissedKeys();
   const todayIso = new Date().toLocaleDateString('en-CA');
 
@@ -125,120 +127,175 @@ export function EntryList({
     return <p className="text-sm text-muted-foreground">Nothing in this order yet.</p>;
   }
 
+  const remainingCount = view.total - view.watched;
+  const canFilterRemaining = !edits && view.entries.length >= 4 && view.watched > 0 && remainingCount > 0;
+  const effectiveFilter = canFilterRemaining ? filterMode : 'all';
+
+  const indexedEntries = view.entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => effectiveFilter === 'all' || entry.state !== 'watched');
+
   return (
-    <ol className="divide-y divide-border/50">
-      {view.entries.map((entry, i) => {
-        const year = entry.releaseDate?.slice(0, 4);
-        const adding = isAdding?.(entry.key) ?? false;
-        const releaseDate = entry.releaseDate?.slice(0, 10);
-        const released = !releaseDate || releaseDate <= todayIso;
-        // Once in the library a title is the library's, whatever was dismissed.
-        const notInterested = entry.state === 'not-in-library' && dismissed.has(entry.key);
-        return (
-          <li key={entry.key} className="flex gap-3 py-3">
-            <span className="w-6 shrink-0 pt-1 text-right text-sm tabular-nums text-muted-foreground">{i + 1}</span>
-            <button
-              type="button"
-              onClick={() => onOpen(entry)}
-              aria-label={`${entry.title} — open details`}
-              className="shrink-0 self-start rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    <div className="space-y-2.5">
+      {canFilterRemaining ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+          <span className="font-mono text-xs text-muted-foreground tabular-nums">
+            Showing {indexedEntries.length} of {view.total} entries
+          </span>
+          <SegmentedControl
+            label="Filter franchise entries"
+            options={[
+              { key: 'all' as const, label: `All (${view.total})` },
+              { key: 'remaining' as const, label: `Remaining (${remainingCount})` },
+            ]}
+            value={effectiveFilter}
+            onChange={setFilterMode}
+          />
+        </div>
+      ) : null}
+
+      <ol className="divide-y divide-border/50">
+        {indexedEntries.map(({ entry, index: i }) => {
+          const year = entry.releaseDate?.slice(0, 4);
+          const adding = isAdding?.(entry.key) ?? false;
+          const releaseDate = entry.releaseDate?.slice(0, 10);
+          const released = !releaseDate || releaseDate <= todayIso;
+          // Once in the library a title is the library's, whatever was dismissed.
+          const notInterested = entry.state === 'not-in-library' && dismissed.has(entry.key);
+          const isNextUp = view.nextUp?.key === entry.key;
+
+          return (
+            <li
+              key={entry.key}
+              className={cn(
+                'flex items-start gap-3 py-2.5 transition-colors',
+                isNextUp && 'rounded-sm bg-primary/5 px-2 -mx-2',
+              )}
             >
-              <Poster src={entry.poster} mediaType={entry.mediaType} className={cn('w-12 transition-opacity', notInterested ? 'opacity-60' : 'hover:opacity-85')} />
-            </button>
-            <div className="min-w-0 flex-1 space-y-1.5">
+              <span className="w-6 shrink-0 pt-2 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                {String(i + 1).padStart(2, '0')}
+              </span>
               <button
                 type="button"
                 onClick={() => onOpen(entry)}
                 aria-label={`${entry.title} — open details`}
-                className="block max-w-full break-words rounded text-left font-serif text-base font-medium leading-snug hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="shrink-0 self-start rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                {entry.title}
-              </button>
-              <p className="text-sm text-muted-foreground">
-                {entry.mediaType === 'tv' ? 'Series' : 'Film'}
-                {year ? ` · ${year}` : ''}
-              </p>
-              <p>
-                <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium', CHIP[entry.state])}>
-                  {entry.state === 'watched' && <Check className="h-3 w-3" aria-hidden="true" />}
-                  {notInterested ? 'Not interested' : stateLabel(entry)}
-                </span>
-              </p>
-              {editing === i && edits ? (
-                <NoteEditor
-                  initial={entry.note ?? ''}
-                  onCancel={() => setEditing(null)}
-                  onSave={async (note) => {
-                    const failure = await edits.onNote(i, note);
-                    if (!failure) setEditing(null);
-                    return failure;
-                  }}
+                <Poster
+                  src={entry.poster}
+                  mediaType={entry.mediaType}
+                  className={cn(
+                    'w-10 sm:w-11 transition-opacity',
+                    notInterested ? 'opacity-55' : 'hover:opacity-85',
+                  )}
                 />
-              ) : (
-                entry.note && <p className="break-words text-sm text-muted-foreground">{entry.note}</p>
-              )}
-              {(edits || ((onAddToLibrary || onSeenIt || onDismiss) && entry.state === 'not-in-library')) && (
-                <div className="flex flex-wrap items-center gap-1 pt-1">
-                  {onAddToLibrary && entry.state === 'not-in-library' && (
-                    <Button
+              </button>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <button
                       type="button"
-                      variant="outline"
-                      disabled={adding}
-                      onClick={() => onAddToLibrary(entry)}
-                      className="gap-1.5"
+                      onClick={() => onOpen(entry)}
+                      aria-label={`${entry.title} — open details`}
+                      className="block max-w-full break-words rounded text-left text-sm sm:text-base font-medium leading-snug text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
-                      {adding ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-                      {adding ? 'Adding…' : 'Add to library'}
-                    </Button>
-                  )}
-                  {onSeenIt && entry.state === 'not-in-library' && released && (
-                    <WatchedWhenMenu
-                      releaseDate={releaseDate || undefined}
-                      releaseText={entry.mediaType === 'tv' ? 'On each episode\'s air date' : undefined}
-                      disabled={adding}
-                      onPick={(when) => onSeenIt(entry, when)}
-                      variant="outline"
-                      size="default"
-                      className="min-h-10 gap-1.5 text-sm"
-                    >
-                      <Check className="h-4 w-4" aria-hidden="true" />
-                      Seen it
-                    </WatchedWhenMenu>
-                  )}
-                  {onDismiss && entry.state === 'not-in-library' && !notInterested && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={adding}
-                      onClick={() => onDismiss(entry)}
-                      className="gap-1.5 text-muted-foreground"
-                    >
-                      <X className="h-4 w-4" aria-hidden="true" />
-                      Not interested
-                    </Button>
-                  )}
-                  {edits && (
-                    <>
-                      <Button type="button" variant="ghost" size="icon" disabled={edits.busy || i === 0} onClick={() => edits.onMove(i, i - 1)} aria-label={`Move ${entry.title} up`}>
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" variant="ghost" size="icon" disabled={edits.busy || i === view.entries.length - 1} onClick={() => edits.onMove(i, i + 1)} aria-label={`Move ${entry.title} down`}>
-                        <ArrowDown className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" variant="ghost" size="icon" disabled={edits.busy} onClick={() => setEditing(i)} aria-label={`Edit note for ${entry.title}`}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" variant="ghost" size="icon" disabled={edits.busy} onClick={() => edits.onRemove(i)} aria-label={`Remove ${entry.title} from this order`}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
+                      {entry.title}
+                    </button>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {entry.mediaType === 'tv' ? 'Series' : 'Film'}
+                      {year ? ` · ${year}` : ' · TBA'}
+                      {!released ? ' · Unreleased' : ''}
+                    </p>
+                  </div>
+
+                  <span
+                    className={cn(
+                      'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 font-mono text-xs font-medium',
+                      CHIP[entry.state],
+                    )}
+                  >
+                    {entry.state === 'watched' && <Check className="h-3 w-3" aria-hidden="true" />}
+                    {notInterested ? 'Not interested' : stateLabel(entry)}
+                  </span>
                 </div>
-              )}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+
+                {editing === i && edits ? (
+                  <NoteEditor
+                    initial={entry.note ?? ''}
+                    onCancel={() => setEditing(null)}
+                    onSave={async (note) => {
+                      const failure = await edits.onNote(i, note);
+                      if (!failure) setEditing(null);
+                      return failure;
+                    }}
+                  />
+                ) : (
+                  entry.note && <p className="break-words text-xs sm:text-sm text-muted-foreground">{entry.note}</p>
+                )}
+
+                {(edits || ((onAddToLibrary || onSeenIt || onDismiss) && entry.state === 'not-in-library')) && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    {onAddToLibrary && entry.state === 'not-in-library' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={adding}
+                        onClick={() => onAddToLibrary(entry)}
+                        className="min-h-10 gap-1.5"
+                      >
+                        {adding ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+                        {adding ? 'Adding…' : 'Add to library'}
+                      </Button>
+                    )}
+                    {onSeenIt && entry.state === 'not-in-library' && released && (
+                      <WatchedWhenMenu
+                        releaseDate={releaseDate || undefined}
+                        releaseText={entry.mediaType === 'tv' ? "On each episode's air date" : undefined}
+                        disabled={adding}
+                        onPick={(when) => onSeenIt(entry, when)}
+                        variant="outline"
+                        size="default"
+                        className="min-h-10 gap-1.5 text-sm"
+                      >
+                        <Check className="h-4 w-4" aria-hidden="true" />
+                        Seen it
+                      </WatchedWhenMenu>
+                    )}
+                    {onDismiss && entry.state === 'not-in-library' && !notInterested && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={adding}
+                        onClick={() => onDismiss(entry)}
+                        className="min-h-10 gap-1.5 text-muted-foreground"
+                      >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                        Not interested
+                      </Button>
+                    )}
+                    {edits && (
+                      <>
+                        <Button type="button" variant="ghost" size="icon" disabled={edits.busy || i === 0} onClick={() => edits.onMove(i, i - 1)} aria-label={`Move ${entry.title} up`}>
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" disabled={edits.busy || i === view.entries.length - 1} onClick={() => edits.onMove(i, i + 1)} aria-label={`Move ${entry.title} down`}>
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" disabled={edits.busy} onClick={() => setEditing(i)} aria-label={`Edit note for ${entry.title}`}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" disabled={edits.busy} onClick={() => edits.onRemove(i)} aria-label={`Remove ${entry.title} from this order`}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }

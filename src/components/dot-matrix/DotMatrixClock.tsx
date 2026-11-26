@@ -16,7 +16,7 @@ const DotMatrixDigit = ({
   isFlipping: boolean;
 }) => {
   return (
-    <span className={`dot-matrix-digit-wrapper ${char === ':' ? '' : 'dot-matrix-clock-number'} ${isFlipping ? 'flipping' : ''}`}>
+    <span className={`dot-matrix-digit-wrapper ${isFlipping ? 'flipping' : ''}`}>
       <span className="dot-matrix-digit dot-matrix-digit-front">
         {isFlipping ? prevChar : char}
       </span>

@@ -45,7 +45,12 @@ function buildCorsHeaders(req: Request) {
 // empty on every call. Measured: 90 requests in 2 seconds all passed, with a
 // diagnostic header reporting a map size of 0 every time.
 const WINDOW_SECONDS = 60
-const MAX_REQUESTS_PER_WINDOW = 60
+const MAX_REQUESTS_PER_WINDOW = 120
+// Interactive single-title detail lookups ("Add to library" / "Seen it") get
+// their own bucket so background Discover or Franchise bursts cannot lock out
+// adding items.
+const DETAIL_LIMIT = 60
+const DETAIL_ENDPOINT_PATTERN = /^(movie|tv)\/\d+$/
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -148,8 +153,11 @@ serve(async (req) => {
     }
 
     const reqEndpoint = new URL(req.url).searchParams.get('endpoint') || 'unknown'
+    const isDetailLookup = DETAIL_ENDPOINT_PATTERN.test(reqEndpoint)
+    const rateLimitKey = isDetailLookup ? `${callerKey(req)}:details` : callerKey(req)
+    const rateLimitCap = isDetailLookup ? DETAIL_LIMIT : MAX_REQUESTS_PER_WINDOW
 
-    if (await isRateLimited(callerKey(req))) {
+    if (await isRateLimited(rateLimitKey, rateLimitCap)) {
         void recordApiUsage({
             provider: reqEndpoint.startsWith('wikidata/') ? 'wikidata' : 'tmdb',
             endpoint: usageEndpoint(reqEndpoint),

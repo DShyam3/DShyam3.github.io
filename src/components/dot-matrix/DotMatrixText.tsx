@@ -15,8 +15,6 @@ export const DotMatrixText = ({
   className = '',
   wrap = true,
 }: DotMatrixTextProps) => {
-  const parts = text.split(/(\d+)/);
-
   return (
     <span
       className={`dot-matrix-text dot-matrix-text-${size} ${className}`}
@@ -24,14 +22,7 @@ export const DotMatrixText = ({
         whiteSpace: wrap ? 'normal' : 'nowrap',
       }}
     >
-      <span>
-        {parts.map((part, index) =>
-          /^\d+$/.test(part) ? (
-            <span className="dot-matrix-number" key={index}>{part}</span>
-          ) : part,
-        )}
-      </span>
+      <span>{text}</span>
     </span>
   );
 };
-

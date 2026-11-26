@@ -24,6 +24,8 @@ export function OrderCard({
   view,
   actions,
   busy = false,
+  open: controlledOpen,
+  onToggle: controlledToggle,
   onOpen,
   onAddToLibrary,
   onSeenIt,
@@ -35,12 +37,16 @@ export function OrderCard({
   actions?: OrderActions;
   /** A change to this order, or the read that follows it, is in flight. */
   busy?: boolean;
+  open?: boolean;
+  onToggle?: () => void;
   onOpen: (entry: OrderEntryView) => void;
   onAddToLibrary?: (entry: OrderEntryView) => void;
   onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
   isAdding?: (key: string) => boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const handleToggle = controlledToggle ?? (() => setLocalOpen((value) => !value));
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(order.name);
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -50,11 +56,22 @@ export function OrderCard({
   return (
     <FranchiseCard
       name={order.name}
+      kindLabel="Viewing Order"
       summary={`${view.watched} of ${view.total} watched`}
+      watchedCount={view.watched}
+      totalCount={view.total}
       nextUp={view.nextUp?.title}
-      strip={view.entries.map((e) => ({ key: e.key, poster: e.poster, mediaType: e.mediaType, watched: e.state === 'watched' }))}
+      nextUpYear={view.nextUp?.releaseDate?.slice(0, 4) ?? null}
+      strip={view.entries.map((e) => ({
+        key: e.key,
+        title: e.title,
+        poster: e.poster,
+        mediaType: e.mediaType,
+        watched: e.state === 'watched',
+        inProgress: e.state === 'in-progress',
+      }))}
       open={open}
-      onToggle={() => setOpen((value) => !value)}
+      onToggle={handleToggle}
     >
       {actions && (
         <div className="flex flex-wrap items-center gap-2">

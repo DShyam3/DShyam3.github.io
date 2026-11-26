@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { ChevronsDownUp, ChevronsUpDown, Search, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { CountLabel } from '@/components/shared/CountLabel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MetricTile } from '@/components/ui/metric-tile';
+import { NativeSelect } from '@/components/ui/native-select';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
+import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
 import { CollectionCard } from '@/features/watchlist/components/franchise/CollectionCard';
@@ -47,18 +51,32 @@ import { visibleLibraryFor } from '@/features/watchlist/library-state';
 import { tvSeedIdsOf } from '@/features/watchlist/wikidata-cache-query';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 /** Postgres unique_violation: the film or show is already in this order. */
 const UNIQUE_VIOLATION = '23505';
 const COLLECTIONS_PER_BATCH = 20;
 
 type FranchiseCategory = 'all' | 'film-series' | 'tv-spinoffs' | 'orders' | 'library';
+type FranchiseProgress = 'all' | 'in-progress' | 'completed' | 'not-started';
+type FranchiseSort = 'largest' | 'progress' | 'alphabetical';
+
+const PROGRESS_OPTIONS: readonly { key: FranchiseProgress; label: string }[] = [
+  { key: 'all', label: 'All status' },
+  { key: 'in-progress', label: 'In progress' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'not-started', label: 'Not started' },
+];
+
+const SORT_OPTIONS: readonly { key: FranchiseSort; label: string }[] = [
+  { key: 'largest', label: 'Largest' },
+  { key: 'progress', label: 'Most watched' },
+  { key: 'alphabetical', label: 'A–Z' },
+];
 
 /** A collection's name and its films' titles, for the search box. */
 const collectionSearchText = (c: { name: string; films: { title: string }[] }) =>
   [c.name, ...c.films.map((f) => f.title)].join(' ').toLowerCase();
-type FranchiseProgress = 'all' | 'in-progress' | 'completed';
-type FranchiseSort = 'largest' | 'alphabetical';
 
 /** Franchises: viewing orders for film series and cinematic universes. */
 export default function WatchlistFranchises() {
@@ -79,6 +97,8 @@ export default function WatchlistFranchises() {
   const [progressFilter, setProgressFilter] = useState<FranchiseProgress>('all');
   const [sortBy, setSortBy] = useState<FranchiseSort>('largest');
   const [searchQuery, setSearchQuery] = useState('');
+  const [openCards, setOpenCards] = useState<Set<string>>(() => new Set());
+
   // Searching asks TMDB for every matching collection, so it waits for a
   // pause in typing rather than asking on each key.
   const [settledQuery, setSettledQuery] = useState('');
@@ -86,6 +106,15 @@ export default function WatchlistFranchises() {
     const timer = setTimeout(() => setSettledQuery(searchQuery), 250);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const toggleCard = (cardKey: string) => {
+    setOpenCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(cardKey)) next.delete(cardKey);
+      else next.add(cardKey);
+      return next;
+    });
+  };
 
   const visibleWatchlist = useMemo(() => visibleLibraryFor(watchlist, isAdmin), [watchlist, isAdmin]);
   const lookup = useMemo(() => libraryLookup(visibleWatchlist, new Date()), [visibleWatchlist]);
@@ -131,7 +160,15 @@ export default function WatchlistFranchises() {
     const filtered = normalizedQuery
       ? openCollections.filter((c) => collectionSearchText(c).includes(normalizedQuery))
       : openCollections;
-    if (sortBy !== 'largest') return filtered;
+    if (sortBy === 'alphabetical') return filtered;
+    if (sortBy === 'progress') {
+      return [...filtered].sort(
+        (a, b) =>
+          (b.films.length ? b.watched / b.films.length : 0) - (a.films.length ? a.watched / a.films.length : 0) ||
+          b.films.length - a.films.length ||
+          a.name.localeCompare(b.name),
+      );
+    }
     return [...filtered].sort((a, b) => b.films.length - a.films.length || a.name.localeCompare(b.name));
   }, [openCollections, normalizedQuery, sortBy]);
   const activeCollections = useMemo(
@@ -290,7 +327,6 @@ export default function WatchlistFranchises() {
 
   const loading = libraryLoading || orders.isPending;
   const customFranchises = useMemo(() => customFranchisesFromLibrary(visibleWatchlist, lookup), [visibleWatchlist, lookup]);
-  const [openCustomFranchises, setOpenCustomFranchises] = useState<Set<string>>(() => new Set());
 
   const orderItems = useMemo(
     () => savedOrders.map((order) => ({ order, view: buildOrderView(order.entries, lookup) })),
@@ -307,19 +343,35 @@ export default function WatchlistFranchises() {
 
   const matchesFilters = (name: string, watched: number, total: number) => {
     if (normalizedQuery && !name.toLowerCase().includes(normalizedQuery)) return false;
-    if (progressFilter === 'in-progress') return watched < total;
-    if (progressFilter === 'completed') return total > 0 && watched === total;
+    if (progressFilter === 'in-progress') return watched > 0 && watched < total;
+    if (progressFilter === 'completed') return total > 0 && watched >= total;
+    if (progressFilter === 'not-started') return total > 0 && watched === 0;
     return true;
   };
 
-  const bySort = <T,>(items: T[], totalOf: (item: T) => number, nameOf: (item: T) => string) =>
-    sortBy === 'largest'
-      ? [...items].sort((a, b) => totalOf(b) - totalOf(a) || nameOf(a).localeCompare(nameOf(b)))
-      : [...items].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  const bySort = <T,>(
+    items: T[],
+    watchedOf: (item: T) => number,
+    totalOf: (item: T) => number,
+    nameOf: (item: T) => string,
+  ) => {
+    if (sortBy === 'alphabetical') {
+      return [...items].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+    }
+    if (sortBy === 'progress') {
+      return [...items].sort((a, b) => {
+        const pctA = totalOf(a) > 0 ? watchedOf(a) / totalOf(a) : 0;
+        const pctB = totalOf(b) > 0 ? watchedOf(b) / totalOf(b) : 0;
+        return pctB - pctA || totalOf(b) - totalOf(a) || nameOf(a).localeCompare(nameOf(b));
+      });
+    }
+    return [...items].sort((a, b) => totalOf(b) - totalOf(a) || nameOf(a).localeCompare(nameOf(b)));
+  };
 
   const filteredCustomFranchises = useMemo(
     () => bySort(
       customFranchises.filter((g) => matchesFilters(g.name, g.view.watched, g.view.total)),
+      (g) => g.view.watched,
       (g) => g.view.total,
       (g) => g.name,
     ),
@@ -329,6 +381,7 @@ export default function WatchlistFranchises() {
   const filteredOrders = useMemo(
     () => bySort(
       orderItems.filter((item) => matchesFilters(item.order.name, item.view.watched, item.view.total)),
+      (item) => item.view.watched,
       (item) => item.view.total,
       (item) => item.order.name,
     ),
@@ -338,6 +391,7 @@ export default function WatchlistFranchises() {
   const filteredTvFranchises = useMemo(
     () => bySort(
       tvFranchiseItems.filter((item) => matchesFilters(item.franchise.name, item.view.watched, item.view.total)),
+      (item) => item.view.watched,
       (item) => item.view.total,
       (item) => item.franchise.name,
     ),
@@ -353,6 +407,7 @@ export default function WatchlistFranchises() {
           item.view.total,
         ),
       ),
+      (item) => item.view.watched,
       (item) => item.view.total,
       (item) => item.universe.name,
     ),
@@ -362,6 +417,7 @@ export default function WatchlistFranchises() {
   const filteredCollections = useMemo(
     () => bySort(
       multiPartCollections.filter((item) => matchesFilters(collectionSearchText(item.collection), item.watched, item.total)),
+      (item) => item.watched,
       (item) => item.total,
       (item) => item.collection.name,
     ),
@@ -375,301 +431,561 @@ export default function WatchlistFranchises() {
   const totalCount =
     customFranchises.length + savedOrders.length + openTvFranchises.length + filmSeriesCount;
 
-  return (
-    <AppShell title="Watchlist" subtitle="Franchises" toolbar={<WatchlistNav current="franchises" />}>
-    <DismissedContext.Provider value={notInterested}>
-    <div className="space-y-6 pb-8">
-      <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/40 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Franchise categories">
-            {(
-              [
-                { id: 'all', label: 'All', count: totalCount },
-                { id: 'film-series', label: 'Film Series', count: filmSeriesCount },
-                { id: 'tv-spinoffs', label: 'TV & Spin-offs', count: openTvFranchises.length },
-                { id: 'orders', label: 'Viewing Orders', count: savedOrders.length },
-                ...(customFranchises.length > 0
-                  ? [{ id: 'library' as const, label: 'Library Franchises', count: customFranchises.length }]
-                  : []),
-              ] as const
-            ).map((cat) => (
-              <Button
+  // Deterministic summary stats across all loaded franchise groups
+  const overviewStats = useMemo(() => {
+    const groups: { watched: number; total: number }[] = [
+      ...customFranchises.map((g) => ({ watched: g.view.watched, total: g.view.total })),
+      ...orderItems.map((o) => ({ watched: o.view.watched, total: o.view.total })),
+      ...tvFranchiseItems.map((t) => ({ watched: t.view.watched, total: t.view.total })),
+      ...filmUniverseItems.map((u) => ({ watched: u.view.watched, total: u.view.total })),
+      ...multiPartCollections.map((c) => ({ watched: c.watched, total: c.total })),
+    ];
+    let completed = 0;
+    let inProgress = 0;
+    let watchedEntries = 0;
+    let totalEntries = 0;
+    for (const g of groups) {
+      if (g.total <= 0) continue;
+      watchedEntries += g.watched;
+      totalEntries += g.total;
+      if (g.watched >= g.total) completed += 1;
+      else if (g.watched > 0) inProgress += 1;
+    }
+    const overallPct = totalEntries > 0 ? Math.round((watchedEntries / totalEntries) * 100) : 0;
+    return { completed, inProgress, watchedEntries, totalEntries, overallPct };
+  }, [customFranchises, orderItems, tvFranchiseItems, filmUniverseItems, multiPartCollections]);
+
+  const visibleCardKeys = useMemo(() => {
+    const keys: string[] = [];
+    if (showCategory('library')) {
+      for (const g of filteredCustomFranchises) keys.push(`custom:${g.name}`);
+    }
+    if (showCategory('orders')) {
+      for (const { order } of filteredOrders) keys.push(`order:${order.id}`);
+    }
+    if (showCategory('tv-spinoffs')) {
+      for (const { franchise } of filteredTvFranchises) keys.push(`tv:${franchise.key}`);
+    }
+    if (showCategory('film-series')) {
+      for (const { universe } of filteredFilmUniverses) keys.push(`universe:${universe.id}`);
+      for (const { collection } of filteredCollections) keys.push(`collection:${collection.collectionId}`);
+    }
+    return keys;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showCategory reads categoryFilter.
+  }, [
+    categoryFilter,
+    filteredCustomFranchises,
+    filteredOrders,
+    filteredTvFranchises,
+    filteredFilmUniverses,
+    filteredCollections,
+  ]);
+
+  const allVisibleOpen =
+    visibleCardKeys.length > 0 && visibleCardKeys.every((key) => openCards.has(key));
+
+  const toggleAllVisible = () => {
+    setOpenCards((prev) => {
+      const next = new Set(prev);
+      if (allVisibleOpen) {
+        for (const key of visibleCardKeys) next.delete(key);
+      } else {
+        for (const key of visibleCardKeys) next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const categoryButtons = [
+    { id: 'all' as const, label: 'All', count: totalCount },
+    { id: 'film-series' as const, label: 'Film Series', count: filmSeriesCount },
+    { id: 'tv-spinoffs' as const, label: 'TV & Spin-offs', count: openTvFranchises.length },
+    { id: 'orders' as const, label: 'Viewing Orders', count: savedOrders.length },
+    ...(customFranchises.length > 0
+      ? [{ id: 'library' as const, label: 'Library Franchises', count: customFranchises.length }]
+      : []),
+  ];
+
+  const toolbar = (
+    <div className="watchlist-toolbar space-y-2.5 py-2">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <WatchlistNav current="franchises" />
+        {isAdmin ? (
+          <NewOrderForm
+            onCreate={(name) => run(() => createOrder({ name }), 'Could not create the order')}
+          />
+        ) : null}
+      </div>
+
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <NativeSelect
+          aria-label="Franchise categories"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value as FranchiseCategory)}
+          wrapperClassName="w-full sm:hidden"
+        >
+          {categoryButtons.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.label} ({cat.count})
+            </option>
+          ))}
+        </NativeSelect>
+
+        <div
+          className="hidden sm:flex flex-wrap items-center gap-1 rounded-full border border-border/70 bg-card/60 p-1"
+          role="group"
+          aria-label="Franchise categories"
+        >
+          {categoryButtons.map((cat) => {
+            const active = categoryFilter === cat.id;
+            return (
+              <button
                 key={cat.id}
                 type="button"
-                size="sm"
-                variant={categoryFilter === cat.id ? 'secondary' : 'ghost'}
+                aria-pressed={active}
                 onClick={() => setCategoryFilter(cat.id)}
-                className="gap-1.5"
+                className={cn(
+                  't-press inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs sm:text-sm font-medium transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                  active
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-foreground/80 hover:bg-muted/70 hover:text-foreground',
+                )}
               >
                 <span>{cat.label}</span>
-                <span className="text-xs text-muted-foreground">{cat.count}</span>
-              </Button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Sort franchises">
-              {(
-                [
-                  { id: 'largest', label: 'Largest' },
-                  { id: 'alphabetical', label: 'A–Z' },
-                ] as const
-              ).map((option) => (
-                <Button
-                  key={option.id}
-                  type="button"
-                  size="sm"
-                  variant={sortBy === option.id ? 'secondary' : 'ghost'}
-                  onClick={() => setSortBy(option.id)}
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 py-0.5 font-mono text-xs tabular-nums',
+                    active
+                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                      : 'bg-muted text-muted-foreground',
+                  )}
                 >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Completion status">
-            {(
-              [
-                { id: 'all', label: 'All status' },
-                { id: 'in-progress', label: 'In progress' },
-                { id: 'completed', label: 'Completed' },
-              ] as const
-            ).map((status) => (
-              <Button
-                key={status.id}
-                type="button"
-                size="sm"
-                variant={progressFilter === status.id ? 'secondary' : 'ghost'}
-                onClick={() => setProgressFilter(status.id)}
-              >
-                {status.label}
-              </Button>
-            ))}
-            </div>
-          </div>
+                  {cat.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="relative max-w-sm">
-          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <Input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Filter franchises…"
-            aria-label="Filter franchises"
-            className="pl-8"
+        <div className="flex flex-1 basis-64 flex-wrap items-center justify-end gap-2">
+          <div className="relative min-w-[13rem] flex-1 max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter franchises or titles…"
+              aria-label="Filter franchises"
+              className={cn('h-11 w-full pl-9', searchQuery && 'pr-10')}
+            />
+            {searchQuery ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="group/clear absolute right-0 top-0 h-11 w-11 text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                aria-label="Clear franchise filter"
+                onClick={() => setSearchQuery('')}
+              >
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors group-hover/clear:bg-secondary group-hover/clear:text-secondary-foreground group-focus-visible/clear:ring-2 group-focus-visible/clear:ring-ring">
+                  <X className="h-4 w-4" />
+                </span>
+              </Button>
+            ) : null}
+          </div>
+
+          <NativeSelect
+            aria-label="Completion status"
+            value={progressFilter}
+            onChange={(e) => setProgressFilter(e.target.value as FranchiseProgress)}
+            wrapperClassName="w-auto sm:hidden"
+          >
+            {PROGRESS_OPTIONS.map((opt) => (
+              <option key={opt.key} value={opt.key}>
+                {opt.label}
+              </option>
+            ))}
+          </NativeSelect>
+          <SegmentedControl
+            label="Completion status"
+            options={PROGRESS_OPTIONS}
+            value={progressFilter}
+            onChange={setProgressFilter}
+            className="hidden sm:inline-flex"
+          />
+
+          <NativeSelect
+            aria-label="Sort franchises"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as FranchiseSort)}
+            wrapperClassName="w-auto sm:hidden"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.key} value={opt.key}>
+                {opt.label}
+              </option>
+            ))}
+          </NativeSelect>
+          <SegmentedControl
+            label="Sort franchises"
+            options={SORT_OPTIONS}
+            value={sortBy}
+            onChange={setSortBy}
+            className="hidden sm:inline-flex"
           />
         </div>
       </div>
-
-      {showCategory('library') && filteredCustomFranchises.length > 0 && (
-        <section aria-labelledby="custom-franchises-heading" className="min-w-0 space-y-3">
-          <h2 id="custom-franchises-heading"><DotMatrixText text="LIBRARY FRANCHISES" size="xs" /></h2>
-          <p className="text-sm text-muted-foreground">
-            Films and series grouped by the franchise field stored in your library.
-          </p>
-          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
-            {filteredCustomFranchises.map((group) => (
-              <FranchiseCard
-                key={group.name}
-                name={group.name}
-                summary={`${group.view.watched} of ${group.view.total} watched`}
-                nextUp={group.view.nextUp?.title}
-                strip={group.view.entries.map((e) => ({ key: e.key, poster: e.poster, mediaType: e.mediaType, watched: e.state === 'watched' }))}
-                open={openCustomFranchises.has(group.name)}
-                onToggle={() =>
-                  setOpenCustomFranchises((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(group.name)) next.delete(group.name);
-                    else next.add(group.name);
-                    return next;
-                  })
-                }
-              >
-                <EntryList view={group.view} onOpen={openEntry} />
-              </FranchiseCard>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {showCategory('orders') && (
-        <section aria-labelledby="orders-heading" className="min-w-0 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="orders-heading"><DotMatrixText text="YOUR VIEWING ORDERS" size="xs" /></h2>
-            {isAdmin && (
-              <NewOrderForm
-                onCreate={(name) => run(() => createOrder({ name }), 'Could not create the order')}
-              />
-            )}
-          </div>
-          {loading && <p role="status" className="text-sm text-muted-foreground">Loading viewing orders…</p>}
-          {orders.isError && <SectionFailure>Could not load viewing orders</SectionFailure>}
-          {!loading && !orders.isError && filteredOrders.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              {savedOrders.length === 0 ? 'No viewing orders yet.' : 'No viewing orders match the current filter.'}
-            </p>
-          )}
-          {!loading && filteredOrders.length > 0 && (
-            <div className="space-y-3">
-              {filteredOrders.map(({ order, view }) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  view={view}
-                  actions={isAdmin ? actionsFor(order) : undefined}
-                  busy={busyOrders.has(order.id)}
-                  onOpen={openEntry}
-                  onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
-                  onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
-                  isAdding={isAdding}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {showCategory('tv-spinoffs') && (
-        <section aria-labelledby="tv-spinoffs-heading" className="min-w-0 space-y-3">
-          <h2 id="tv-spinoffs-heading"><DotMatrixText text="TV SERIES & SPIN-OFFS IN YOUR LIBRARY" size="xs" /></h2>
-          <p className="text-sm text-muted-foreground">
-            Connected series and spin-offs discovered from your TV library, in release order. Save one as a viewing order to reorder it or add films.
-          </p>
-          {tvSpinoffsQuery.isPending && <p role="status" className="text-sm text-muted-foreground">Finding connected series &amp; spin-offs…</p>}
-          {!tvSpinoffsQuery.isPending && filteredTvFranchises.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              {openTvFranchises.length === 0 ? 'No unsaved TV spin-off groups found.' : 'No TV spin-off groups match the current filter.'}
-            </p>
-          )}
-          {filteredTvFranchises.length > 0 && (
-            <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
-              {filteredTvFranchises.map(({ franchise }) => (
-                <TvFranchiseCard
-                  key={franchise.key}
-                  franchise={franchise}
-                  lookup={lookup}
-                  onOpen={openEntry}
-                  onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
-                  onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
-                  isAdding={isAdding}
-                  onSave={
-                    isAdmin
-                      ? async (f, view) => {
-                          await runWithToast(
-                            () => createOrder({ name: f.name.slice(0, 120), entries: view.entries }),
-                            'Could not save the viewing order',
-                          );
-                        }
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {showCategory('film-series') && (
-        <section aria-labelledby="series-heading" className="min-w-0 space-y-3">
-          <h2 id="series-heading"><DotMatrixText text="FILM SERIES IN YOUR LIBRARY" size="xs" /></h2>
-          <p className="text-sm text-muted-foreground">
-            Shared film universes (such as the Marvel Cinematic Universe) and TMDB collections in release order (2 or more films). Save one as a viewing order to reorder it or add series.
-          </p>
-          {(collectionsChecking || filmUniversesQuery.isPending) && multiPartCollections.length === 0 && openFilmUniverses.length === 0 && (
-            <p role="status" className="text-sm text-muted-foreground">Checking TMDB for film series…</p>
-          )}
-          {!libraryLoading && !collectionsChecking && !filmUniversesQuery.isPending && filteredFilmUniverses.length === 0 && filteredCollections.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              {!normalizedQuery && progressFilter === 'all'
-                ? 'Film series appear here as the nightly sync fills them in.'
-                : 'No film series match the current filter.'}
-            </p>
-          )}
-          {(filteredFilmUniverses.length > 0 || filteredCollections.length > 0) && (
-            <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
-              {filteredFilmUniverses.map(({ universe }) => (
-                <TvFranchiseCard
-                  key={`universe:${universe.id}`}
-                  franchise={{ key: `universe:${universe.id}`, name: universe.name, entries: universe.entries }}
-                  lookup={lookup}
-                  onOpen={openEntry}
-                  onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
-                  onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
-                  isAdding={isAdding}
-                  onSave={
-                    isAdmin
-                      ? async (f, view) => {
-                          await runWithToast(
-                            () => createOrder({ name: f.name.slice(0, 120), entries: view.entries }),
-                            'Could not save the viewing order',
-                          );
-                        }
-                      : undefined
-                  }
-                />
-              ))}
-              {filteredCollections.map(({ collection, prefetched }) => (
-                <CollectionCard
-                  key={collection.collectionId}
-                  collection={collection}
-                  lookup={lookup}
-                  getCollection={getCollection}
-                  prefetchedCollection={prefetched}
-                  onOpen={openEntry}
-                  onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
-                  onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
-                  isAdding={isAdding}
-                  onSave={
-                    isAdmin
-                      ? async (c, view) => {
-                          await runWithToast(
-                            () => createOrder({ name: c.name.slice(0, 120), tmdbCollectionId: c.collectionId, entries: view.entries }),
-                            'Could not save the viewing order',
-                          );
-                        }
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          )}
-          {hasMoreCollections && (
-            <div className="flex justify-center pt-1">
-              <Button variant="outline" onClick={() => setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH)}>
-                Show more film series
-              </Button>
-            </div>
-          )}
-        </section>
-      )}
-
-      {deleteDialog}
-      {selectedItem && (
-        <WatchlistDetailDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setSelected(null);
-          }}
-          item={selectedItem}
-          status={getAutoStatus(selectedItem)}
-          toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
-          isEpisodeWatched={isEpisodeWatched}
-          isSeasonWatched={isSeasonWatched}
-        />
-      )}
-      {previewEntry && (
-        <EntryPreviewDialog
-          entry={previewEntry}
-          onOpenChange={(open) => {
-            if (!open) setPreviewEntry(null);
-          }}
-          onAddToLibrary={isAdmin ? (entry) => addToLibrary(entry) : undefined}
-          onSeenIt={isAdmin ? (entry, when) => addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
-          adding={isAdding(previewEntry.key)}
-        />
-      )}
     </div>
-    </DismissedContext.Provider>
+  );
+
+  return (
+    <AppShell title="Watchlist" subtitle="Franchises" toolbar={toolbar}>
+      <DismissedContext.Provider value={notInterested}>
+        <div className="space-y-6 pb-8">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <MetricTile
+              label="Franchises tracked"
+              value={totalCount}
+              variant="gradient"
+              loading={loading}
+              detail={[
+                `${filmSeriesCount} film series`,
+                `${openTvFranchises.length} TV universes`,
+                `${savedOrders.length} orders`,
+                ...(customFranchises.length > 0 ? [`${customFranchises.length} library`] : []),
+              ].join(' · ')}
+            />
+            <MetricTile
+              label="In progress"
+              value={overviewStats.inProgress}
+              loading={loading}
+              detail="Started with entries still to watch"
+            />
+            <MetricTile
+              label="Completed"
+              value={overviewStats.completed}
+              tone={overviewStats.completed > 0 ? 'positive' : 'neutral'}
+              loading={loading}
+              detail="Every listed installment watched"
+            />
+            <MetricTile
+              label="Entries watched"
+              value={overviewStats.watchedEntries}
+              suffix={overviewStats.totalEntries > 0 ? ` / ${overviewStats.totalEntries}` : undefined}
+              loading={loading}
+              detail={`${overviewStats.overallPct}% completion across loaded franchises`}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
+            <div className="space-y-0.5">
+              <CountLabel
+                count={loading ? undefined : visibleCardKeys.length}
+                noun={
+                  normalizedQuery || progressFilter !== 'all'
+                    ? visibleCardKeys.length === 1
+                      ? 'matching franchise'
+                      : 'matching franchises'
+                    : visibleCardKeys.length === 1
+                      ? 'loaded franchise'
+                      : 'loaded franchises'
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Click any franchise card to inspect its release order, check what is up next, or save a custom viewing order.
+              </p>
+            </div>
+
+            {visibleCardKeys.length > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={toggleAllVisible}
+                className="gap-1.5 font-mono text-xs"
+              >
+                {allVisibleOpen ? (
+                  <>
+                    <ChevronsDownUp className="h-3.5 w-3.5" aria-hidden="true" />
+                    Collapse all
+                  </>
+                ) : (
+                  <>
+                    <ChevronsUpDown className="h-3.5 w-3.5" aria-hidden="true" />
+                    Expand all
+                  </>
+                )}
+              </Button>
+            ) : null}
+          </div>
+
+          {showCategory('library') && filteredCustomFranchises.length > 0 && (
+            <section aria-labelledby="custom-franchises-heading" className="min-w-0 space-y-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div className="space-y-1">
+                  <h2 id="custom-franchises-heading" className="flex items-center gap-2">
+                    <DotMatrixText text="LIBRARY FRANCHISES" size="xs" />
+                    <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                      {filteredCustomFranchises.length}
+                    </span>
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Films and series grouped by the franchise field stored in your library.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+                {filteredCustomFranchises.map((group) => {
+                  const cardKey = `custom:${group.name}`;
+                  return (
+                    <FranchiseCard
+                      key={group.name}
+                      name={group.name}
+                      kindLabel="Library Franchise"
+                      summary={`${group.view.watched} of ${group.view.total} watched`}
+                      watchedCount={group.view.watched}
+                      totalCount={group.view.total}
+                      nextUp={group.view.nextUp?.title}
+                      nextUpYear={group.view.nextUp?.releaseDate?.slice(0, 4) ?? null}
+                      strip={group.view.entries.map((e) => ({
+                        key: e.key,
+                        title: e.title,
+                        poster: e.poster,
+                        mediaType: e.mediaType,
+                        watched: e.state === 'watched',
+                        inProgress: e.state === 'in-progress',
+                      }))}
+                      open={openCards.has(cardKey)}
+                      onToggle={() => toggleCard(cardKey)}
+                    >
+                      <EntryList view={group.view} onOpen={openEntry} />
+                    </FranchiseCard>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {showCategory('orders') && (
+            <section aria-labelledby="orders-heading" className="min-w-0 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <h2 id="orders-heading" className="flex items-center gap-2">
+                    <DotMatrixText text="YOUR VIEWING ORDERS" size="xs" />
+                    <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                      {filteredOrders.length}
+                    </span>
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Custom film and series sequences you have saved and ordered by hand.
+                  </p>
+                </div>
+              </div>
+              {loading && <p role="status" className="text-sm text-muted-foreground">Loading viewing orders…</p>}
+              {orders.isError && <SectionFailure>Could not load viewing orders</SectionFailure>}
+              {!loading && !orders.isError && filteredOrders.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {savedOrders.length === 0 ? 'No viewing orders yet.' : 'No viewing orders match the current filter.'}
+                </p>
+              )}
+              {!loading && filteredOrders.length > 0 && (
+                <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+                  {filteredOrders.map(({ order, view }) => {
+                    const cardKey = `order:${order.id}`;
+                    return (
+                      <OrderCard
+                        key={order.id}
+                        order={order}
+                        view={view}
+                        open={openCards.has(cardKey)}
+                        onToggle={() => toggleCard(cardKey)}
+                        actions={isAdmin ? actionsFor(order) : undefined}
+                        busy={busyOrders.has(order.id)}
+                        onOpen={openEntry}
+                        onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
+                        onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+                        isAdding={isAdding}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {showCategory('tv-spinoffs') && (
+            <section aria-labelledby="tv-spinoffs-heading" className="min-w-0 space-y-3">
+              <div className="space-y-1">
+                <h2 id="tv-spinoffs-heading" className="flex items-center gap-2">
+                  <DotMatrixText text="TV SERIES & SPIN-OFFS IN YOUR LIBRARY" size="xs" />
+                  <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                    {filteredTvFranchises.length}
+                  </span>
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Connected series and spin-offs discovered from your TV library, in release order. Save one as a viewing order to reorder it or add films.
+                </p>
+              </div>
+              {tvSpinoffsQuery.isPending && <p role="status" className="text-sm text-muted-foreground">Finding connected series &amp; spin-offs…</p>}
+              {!tvSpinoffsQuery.isPending && filteredTvFranchises.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {openTvFranchises.length === 0 ? 'No unsaved TV spin-off groups found.' : 'No TV spin-off groups match the current filter.'}
+                </p>
+              )}
+              {filteredTvFranchises.length > 0 && (
+                <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+                  {filteredTvFranchises.map(({ franchise }) => {
+                    const cardKey = `tv:${franchise.key}`;
+                    return (
+                      <TvFranchiseCard
+                        key={franchise.key}
+                        franchise={franchise}
+                        kindLabel="TV Universe"
+                        lookup={lookup}
+                        open={openCards.has(cardKey)}
+                        onToggle={() => toggleCard(cardKey)}
+                        onOpen={openEntry}
+                        onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
+                        onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+                        isAdding={isAdding}
+                        onSave={
+                          isAdmin
+                            ? async (f, view) => {
+                                await runWithToast(
+                                  () => createOrder({ name: f.name.slice(0, 120), entries: view.entries }),
+                                  'Could not save the viewing order',
+                                );
+                              }
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {showCategory('film-series') && (
+            <section aria-labelledby="series-heading" className="min-w-0 space-y-3">
+              <div className="space-y-1">
+                <h2 id="series-heading" className="flex items-center gap-2">
+                  <DotMatrixText text="FILM SERIES IN YOUR LIBRARY" size="xs" />
+                  <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                    {filteredFilmUniverses.length + filteredCollections.length}
+                  </span>
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Shared film universes (such as the Marvel Cinematic Universe) and TMDB collections in release order (2 or more films). Save one as a viewing order to reorder it or add series.
+                </p>
+              </div>
+              {(collectionsChecking || filmUniversesQuery.isPending) && multiPartCollections.length === 0 && openFilmUniverses.length === 0 && (
+                <p role="status" className="text-sm text-muted-foreground">Checking TMDB for film series…</p>
+              )}
+              {!libraryLoading && !collectionsChecking && !filmUniversesQuery.isPending && filteredFilmUniverses.length === 0 && filteredCollections.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {!normalizedQuery && progressFilter === 'all'
+                    ? 'Film series appear here as the nightly sync fills them in.'
+                    : 'No film series match the current filter.'}
+                </p>
+              )}
+              {(filteredFilmUniverses.length > 0 || filteredCollections.length > 0) && (
+                <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+                  {filteredFilmUniverses.map(({ universe }) => {
+                    const cardKey = `universe:${universe.id}`;
+                    return (
+                      <TvFranchiseCard
+                        key={cardKey}
+                        franchise={{ key: cardKey, name: universe.name, entries: universe.entries }}
+                        kindLabel="Film Universe"
+                        lookup={lookup}
+                        open={openCards.has(cardKey)}
+                        onToggle={() => toggleCard(cardKey)}
+                        onOpen={openEntry}
+                        onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
+                        onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+                        isAdding={isAdding}
+                        onSave={
+                          isAdmin
+                            ? async (f, view) => {
+                                await runWithToast(
+                                  () => createOrder({ name: f.name.slice(0, 120), entries: view.entries }),
+                                  'Could not save the viewing order',
+                                );
+                              }
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
+                  {filteredCollections.map(({ collection, prefetched }) => {
+                    const cardKey = `collection:${collection.collectionId}`;
+                    return (
+                      <CollectionCard
+                        key={collection.collectionId}
+                        collection={collection}
+                        lookup={lookup}
+                        getCollection={getCollection}
+                        prefetchedCollection={prefetched}
+                        open={openCards.has(cardKey)}
+                        onToggle={() => toggleCard(cardKey)}
+                        onOpen={openEntry}
+                        onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
+                        onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+                        isAdding={isAdding}
+                        onSave={
+                          isAdmin
+                            ? async (c, view) => {
+                                await runWithToast(
+                                  () => createOrder({ name: c.name.slice(0, 120), tmdbCollectionId: c.collectionId, entries: view.entries }),
+                                  'Could not save the viewing order',
+                                );
+                              }
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              )}
+              {hasMoreCollections && (
+                <div className="flex justify-center pt-1">
+                  <Button variant="outline" onClick={() => setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH)}>
+                    Show more film series
+                  </Button>
+                </div>
+              )}
+            </section>
+          )}
+
+          {deleteDialog}
+          {selectedItem && (
+            <WatchlistDetailDialog
+              open
+              onOpenChange={(open) => {
+                if (!open) setSelected(null);
+              }}
+              item={selectedItem}
+              status={getAutoStatus(selectedItem)}
+              toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
+              isEpisodeWatched={isEpisodeWatched}
+              isSeasonWatched={isSeasonWatched}
+            />
+          )}
+          {previewEntry && (
+            <EntryPreviewDialog
+              entry={previewEntry}
+              onOpenChange={(open) => {
+                if (!open) setPreviewEntry(null);
+              }}
+              onAddToLibrary={isAdmin ? (entry) => addToLibrary(entry) : undefined}
+              onSeenIt={isAdmin ? (entry, when) => addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+              adding={isAdding(previewEntry.key)}
+            />
+          )}
+        </div>
+      </DismissedContext.Provider>
     </AppShell>
   );
 }

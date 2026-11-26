@@ -16,7 +16,10 @@ import {
   interleaveUpcoming,
   keepFirstSeenOrder,
   knownDiscoveryKeys,
+  LIKELY_SEEN_POOL_PAGES,
   likelySeenConsensus,
+  likelySeenLanguage,
+  likelySeenTmdbPage,
   takeTurns,
   weekIndex,
   type DiscoveryItem,
@@ -51,6 +54,7 @@ import { tvSeedIdsOf } from './wikidata-cache-query';
 import { useNotSeen } from './useNotSeen';
 import {
   buildTasteProfiles,
+  libraryTasteTitles,
   tasteScore,
   tasteSummary,
   tasteTitles,
@@ -227,6 +231,50 @@ function seedSources(seeds: DiscoverySeed[], page: number, media: DiscoveryMedia
   }];
 }
 
+/** Likely seen pool pages that also read a library language's most-voted titles. */
+const LIKELY_SEEN_LANGUAGE_PAGES = 3;
+const POOL_LANGUAGE = 'likely-seen:language';
+
+/**
+ * One page of Likely seen's widely watched pool: TMDB's most-voted released
+ * films and series on the page `likelySeenTmdbPage` picks and, for its first
+ * pages, the most-voted in the library's own language other than English,
+ * films and series apart (`likelySeenLanguage`).
+ */
+function likelySeenPoolSources(
+  index: number,
+  week: number,
+  today: string,
+  languages: Readonly<Record<DiscoveryMedia, string | null>>,
+): Source[] {
+  const released = (media: DiscoveryMedia) => (media === 'movie' ? { 'release_date.lte': today } : { 'first_air_date.lte': today });
+  const page = String(likelySeenTmdbPage(index, week));
+  const sources: Source[] = (['movie', 'tv'] as const).map((media) => ({
+    endpoint: `discover/${media}`,
+    params: { ...released(media), sort_by: 'vote_count.desc', include_adult: 'false', page },
+    media,
+    reason: 'Widely watched on TMDB — have you seen this already?',
+    shortReason: 'Widely watched',
+    kind: 'recommendation' as const,
+  }));
+  if (index >= LIKELY_SEEN_LANGUAGE_PAGES) return sources;
+  for (const media of ['movie', 'tv'] as const) {
+    const language = languages[media];
+    if (!language) continue;
+    const name = languageDisplayName(language);
+    sources.push({
+      endpoint: `discover/${media}`,
+      params: { ...released(media), with_original_language: language, sort_by: 'vote_count.desc', include_adult: 'false', page: String(index + 1) },
+      media,
+      reason: `One of the most watched ${name} ${media === 'movie' ? 'films' : 'series'} on TMDB — have you seen it already?`,
+      shortReason: `Widely watched · ${name}`,
+      kind: 'recommendation',
+      seedKey: POOL_LANGUAGE,
+    });
+  }
+  return sources;
+}
+
 export interface DiscoveryFranchiseGroup {
   key: string;
   name: string;
@@ -253,12 +301,13 @@ export interface DiscoveryFranchiseGroup {
 //   YOU MIGHT LIKE's wildcards) go at once.
 // - COMING SOON pages until its grid is full, at most 10 pages (20 calls).
 // - YOU MIGHT LIKE and Likely seen page until full, at most 6 and 5 pages
-//   automatically per visit; Show more is the owner's own call.
+//   automatically per visit; Show more is the owner's own call. A Likely
+//   seen page is two calls, three or four for its first
+//   LIKELY_SEEN_LANGUAGE_PAGES while a library language has a pool.
 const COLLECTIONS_PER_BATCH = 12;
 const FRANCHISES_PER_STEP = 6;
 const MAX_UPCOMING_PAGES = 10;
 const TARGET_UPCOMING = 12;
-const LIKELY_SEEN_ROTATION_WEEKS = 15;
 const TARGET_RECOMMENDATIONS = 12;
 const TARGET_LIKELY_SEEN = 12;
 const AUTO_PAGE_CAP = 6;
@@ -433,43 +482,35 @@ export function useDiscovery(type: LibraryType) {
 
   // Rotating pool of widely-watched released titles so "Have you already
   // watched?" always has familiar films and series to log or dismiss.
-  const likelySeenStartPage = (week % LIKELY_SEEN_ROTATION_WEEKS) + 1;
+  // The library's own language other than English, films and series apart,
+  // read from the library alone: answers move with every click, and a pool
+  // keyed on them would start over.
+  const likelySeenLanguages = useMemo(() => {
+    const profiles = buildTasteProfiles(libraryTasteTitles(watchlist, favourites, isAdmin, today));
+    return { movie: likelySeenLanguage(profiles.movie.language), tv: likelySeenLanguage(profiles.tv.language) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
+  }, [watchlist, favourites, isAdmin, week]);
   const likelySeenPool = useInfiniteQuery({
-    queryKey: ['watchlist', 'discovery', 'likely-seen-pool', week],
+    queryKey: ['watchlist', 'discovery', 'likely-seen-pool', 'v2', week, likelySeenLanguages.movie, likelySeenLanguages.tv],
     enabled: !loading,
     staleTime: 60 * 60 * 1000,
     retry: false,
-    initialPageParam: likelySeenStartPage,
-    queryFn: ({ pageParam }) => load([
-      {
-        endpoint: 'discover/movie',
-        params: { 'release_date.lte': start, sort_by: 'vote_count.desc', include_adult: 'false', page: String(pageParam) },
-        media: 'movie' as const,
-        reason: 'Widely watched on TMDB — have you seen this already?',
-        shortReason: 'Widely watched',
-        kind: 'recommendation' as const,
-      },
-      {
-        endpoint: 'discover/tv',
-        params: { 'first_air_date.lte': start, sort_by: 'vote_count.desc', include_adult: 'false', page: String(pageParam) },
-        media: 'tv' as const,
-        reason: 'Widely watched on TMDB — have you seen this already?',
-        shortReason: 'Widely watched',
-        kind: 'recommendation' as const,
-      },
-    ]),
-    getNextPageParam: (_lastPage, pages, lastParam) => (
-      pages.length < LIKELY_SEEN_ROTATION_WEEKS
-        ? (lastParam % LIKELY_SEEN_ROTATION_WEEKS) + 1
-        : undefined
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => load(likelySeenPoolSources(pageParam, week, start, likelySeenLanguages)),
+    getNextPageParam: (_lastPage, _pages, lastParam) => (
+      lastParam + 1 < LIKELY_SEEN_POOL_PAGES ? lastParam + 1 : undefined
     ),
   });
 
-  const likelySeenPoolItems = useMemo(() => {
-    const pages = likelySeenPool.data?.pages ?? [];
-    const items = pages.flatMap((page) => (type === 'all' ? interleaveUpcoming(page.items) : page.items));
-    return items.filter((item) => type === 'all' || item.media === type);
-  }, [likelySeenPool.data?.pages, type]);
+  // Each page's most-voted titles take turns with its language's.
+  const likelySeenPoolItems = useMemo(() => (likelySeenPool.data?.pages ?? []).flatMap((page) => {
+    const items = page.items.filter((item) => type === 'all' || item.media === type);
+    const alternate = (list: DiscoveryItem[]) => (type === 'all' ? interleaveUpcoming(list) : list);
+    return takeTurns([
+      alternate(items.filter((item) => item.seedKey !== POOL_LANGUAGE)),
+      alternate(items.filter((item) => item.seedKey === POOL_LANGUAGE)),
+    ]);
+  }), [likelySeenPool.data?.pages, type]);
 
   // --- "Have you already watched?" grouped franchises & spin-offs ----------
   // A visitor's cards read only what a visitor's seeds do: a hidden or

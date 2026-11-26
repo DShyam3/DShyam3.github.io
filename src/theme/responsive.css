@@ -34,6 +34,12 @@
     grid-template-rows: minmax(0, 1fr);
     gap: .75rem;
   }
+  .workspace-shell-grid[data-rail="collapsed"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-shell-grid[data-rail="collapsed"] > .workspace-left-rail {
+    display: none;
+  }
   .workspace-left-rail {
     display: flex;
   }
@@ -50,6 +56,9 @@
      detail panes do not feel cramped next to a wide middle column. */
   .workspace-shell-grid[data-inspector="open"] {
     grid-template-columns: 14.5rem minmax(0, 1fr) clamp(22rem, 26vw, 44rem);
+  }
+  .workspace-shell-grid[data-rail="collapsed"][data-inspector="open"] {
+    grid-template-columns: minmax(0, 1fr) clamp(22rem, 26vw, 44rem);
   }
   .workspace-shell-grid[data-inspector="open"] > .workspace-right-inspector {
     display: flex;
@@ -382,8 +391,14 @@ html[data-wide-mode="centered"] {
   html:not([data-wide-mode="centered"]) .workspace-shell-grid {
     grid-template-columns: 14.5rem minmax(0, 1fr);
   }
+  html:not([data-wide-mode="centered"]) .workspace-shell-grid[data-rail="collapsed"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
   html:not([data-wide-mode="centered"]) .workspace-shell-grid[data-inspector="open"] {
     grid-template-columns: 14.5rem minmax(0, 1fr) clamp(24rem, 22vw, 52rem);
+  }
+  html:not([data-wide-mode="centered"]) .workspace-shell-grid[data-rail="collapsed"][data-inspector="open"] {
+    grid-template-columns: minmax(0, 1fr) clamp(24rem, 22vw, 52rem);
   }
   html:not([data-wide-mode="centered"]) .ultrawide-toolbar {
     justify-content: flex-start;

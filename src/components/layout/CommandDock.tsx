@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useNavigate } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import {
   SFArrowUpRight,
   SFDisplay,
   SFMoonStarsFill,
+  SFSquareGrid2x2Fill,
   SFSunMaxFill,
   SFXmark,
 } from '@/components/ui/sf-symbols';
@@ -49,7 +50,7 @@ export function CommandDock() {
   const links = useSiteNavLinks();
   const navigate = useNavigate();
   const { resolvedTheme, setTheme } = useTheme();
-  const { largerDisplay, toggleDisplaySize } = useDisplayMode();
+  const { largerDisplay, toggleDisplaySize, railCollapsed, toggleRail } = useDisplayMode();
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const returnFocus = useReturnFocus();
@@ -122,11 +123,19 @@ export function CommandDock() {
       },
       {
         key: 'action:display',
-        label: largerDisplay ? 'Switch to Standard reading size' : 'Switch to Larger reading size (125%)',
+        label: largerDisplay ? 'Standard reading size' : 'Larger reading size',
         hint: largerDisplay ? 'Standard' : 'Larger',
         keywords: 'display size zoom text font larger standard reading',
         Icon: SFDisplay,
         run: () => toggleDisplaySize(),
+      },
+      {
+        key: 'action:rail',
+        label: railCollapsed ? 'Show apps sidebar' : 'Hide apps sidebar',
+        hint: railCollapsed ? 'Sidebar' : 'Standalone',
+        keywords: 'sidebar rail focus standalone mode apps switcher',
+        Icon: SFSquareGrid2x2Fill,
+        run: () => toggleRail(),
       },
     ];
     if (!normalizedQuery) return all;
@@ -135,7 +144,7 @@ export function CommandDock() {
         item.label.toLowerCase().includes(normalizedQuery) ||
         item.keywords.includes(normalizedQuery),
     );
-  }, [resolvedTheme, setTheme, largerDisplay, toggleDisplaySize, normalizedQuery]);
+  }, [resolvedTheme, setTheme, largerDisplay, toggleDisplaySize, railCollapsed, toggleRail, normalizedQuery]);
 
   const handleSelectRoute = (to: string) => {
     returnFocus.forget();
@@ -168,7 +177,7 @@ export function CommandDock() {
             <span className="flex items-center gap-2 min-w-0 truncate">
               <AppIcon icon={SFAppleTerminalFill} className="h-3.5 w-3.5 text-primary shrink-0" />
               <span className="truncate">
-                <DotMatrixText text="Search sections and records" size="ui" wrap={false} />
+                <DotMatrixText text="Search apps and records" size="ui" wrap={false} />
               </span>
             </span>
             <kbd className="shrink-0 rounded border border-border/70 bg-background/80 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
@@ -194,7 +203,7 @@ export function CommandDock() {
             className="!fixed left-1/2 top-3 z-50 flex max-h-[82dvh] w-[calc(100%-1.5rem)] max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border/75 bg-popover/95 shadow-2xl focus:outline-none sm:top-6 sm:w-[calc(100%-3rem)] md:top-16"
           >
             <DialogPrimitive.Title className="sr-only">
-              Search sections and records
+              Search apps and records
             </DialogPrimitive.Title>
 
             <Command
@@ -208,8 +217,8 @@ export function CommandDock() {
                 ref={inputRef}
                 value={query}
                 onValueChange={setQuery}
-                placeholder="Search sections and records"
-                aria-label="Search sections and records"
+                placeholder="Search apps and records"
+                aria-label="Search apps and records"
                 aria-controls={listId}
                 autoComplete="off"
                 spellCheck={false}
@@ -242,27 +251,28 @@ export function CommandDock() {
               <CommandList id={listId} aria-label="Results">
                 {filteredLinks.length > 0 ? (
                   <CommandGroup
-                    heading={<span className="readout-label"><DotMatrixText text={`Sections (${filteredLinks.length})`} size="ui" /></span>}
+                    heading={<span className="readout-label"><DotMatrixText text={`Apps (${filteredLinks.length})`} size="ui" /></span>}
                     className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-1.5"
                   >
                     {filteredLinks.map((link) => {
-                      const badge = String(links.indexOf(link) + 1).padStart(2, '0');
                       const itemValue = `route:${link.to}`;
                       const SectionIcon = getSectionIcon(link.to);
+                      const accentStyle = link.accentHsl
+                        ? ({ '--section-colour': link.accentHsl } as CSSProperties)
+                        : undefined;
                       return (
                         <CommandItem
                           key={link.to}
                           value={itemValue}
+                          data-section={link.id}
+                          style={accentStyle}
                           onSelect={() => handleSelectRoute(link.to)}
                           className="gap-2 text-xs"
                         >
                           <span className="flex items-center gap-2 min-w-0">
-                            <AppIcon icon={SectionIcon} className="h-3.5 w-3.5 text-primary" />
-                            <DotMatrixText
-                              text={badge}
-                              size="ui"
-                              wrap={false}
-                              className="tabular-nums text-muted-foreground"
+                            <AppIcon
+                              icon={SectionIcon}
+                              className="h-3.5 w-3.5 text-[hsl(var(--section-colour))]"
                             />
                             <span className="truncate text-foreground">
                               <DotMatrixText text={link.label} size="ui" wrap={false} />
@@ -275,8 +285,8 @@ export function CommandDock() {
                   </CommandGroup>
                 ) : (
                   <div role="presentation" className="space-y-2">
-                    <p className="readout-label"><DotMatrixText text="Sections (0)" size="ui" /></p>
-                    <p className="text-xs text-muted-foreground px-1">No section matches.</p>
+                    <p className="readout-label"><DotMatrixText text="Apps (0)" size="ui" /></p>
+                    <p className="text-xs text-muted-foreground px-1">No app matches.</p>
                   </div>
                 )}
 
@@ -344,7 +354,7 @@ export function CommandDock() {
                 {quickActions.length > 0 ? (
                   <CommandGroup
                     heading={<span className="readout-label"><DotMatrixText text={`Quick actions (${quickActions.length})`} size="ui" /></span>}
-                    className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-1.5"
+                    className="mt-3 border-t border-border/50 pt-3 [&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-1.5"
                   >
                     {quickActions.map((action) => {
                       const Icon = action.Icon;

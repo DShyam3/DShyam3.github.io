@@ -1,23 +1,7 @@
 import * as React from 'react';
 import type { LucideIcon, LucideProps } from 'lucide-react';
-import {
-  SFBanknoteFill,
-  SFBooksVerticalFill,
-  SFCompassDrawing,
-  SFGlobeEuropeAfricaFill,
-  SFHammerFill,
-  SFLightbulbFill,
-  SFLinkCircleFill,
-  SFNewspaperFill,
-  SFPersonCropCircleFill,
-  SFPhotoFill,
-  SFShippingboxFill,
-  SFSparkles,
-  SFTvFill,
-  SFForkKnife,
-  SFWaveformPathEcg,
-  type SFSymbolComponent,
-} from './sf-symbols';
+import { SFCompassDrawing, type SFSymbolComponent } from './sf-symbols';
+import { ALL_APP_MANIFESTS } from '@/apps/useActiveApp';
 import { cn } from '@/lib/utils';
 
 export type AnyIconComponent = SFSymbolComponent | LucideIcon;
@@ -81,26 +65,12 @@ export const AppIcon = React.forwardRef<SVGSVGElement, AppIconProps>(
 AppIcon.displayName = 'AppIcon';
 
 /**
- * Canonical Apple SF Symbol registry for every site section so `WorkspaceRail`,
- * `NavMenu`, and `CommandDock` all render authentic Apple SF Symbols.
+ * Canonical Apple SF Symbol map derived from `ALL_APP_MANIFESTS` so adding an
+ * app to the registry automatically wires its icon everywhere.
  */
-export const SECTION_ICONS: Record<string, SFSymbolComponent> = {
-  '/': SFPersonCropCircleFill,
-  '/projects': SFHammerFill,
-  '/finance': SFBanknoteFill,
-  '/travel': SFGlobeEuropeAfricaFill,
-  '/inventory': SFShippingboxFill,
-  '/links': SFLinkCircleFill,
-  '/books': SFBooksVerticalFill,
-  '/articles': SFNewspaperFill,
-  '/inspiration': SFSparkles,
-  '/photos': SFPhotoFill,
-  '/recipes': SFForkKnife,
-  '/beliefs': SFCompassDrawing,
-  '/thoughts': SFLightbulbFill,
-  '/watchlist': SFTvFill,
-  '/dev': SFWaveformPathEcg,
-};
+export const SECTION_ICONS: Record<string, SFSymbolComponent> = Object.fromEntries(
+  ALL_APP_MANIFESTS.map((app) => [app.basePath, app.icon]),
+);
 
 export function getSectionIcon(path: string): SFSymbolComponent {
   return SECTION_ICONS[path] ?? SFCompassDrawing;

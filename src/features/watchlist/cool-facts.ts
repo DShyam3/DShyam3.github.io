@@ -26,11 +26,31 @@ export interface LabelCount {
   count: number;
 }
 
+export interface LongestMovieHighlight {
+  title: string;
+  minutes: number;
+  year?: number;
+  imageUrl?: string;
+}
+
+export interface MostWatchedShowHighlight {
+  title: string;
+  episodes: number;
+  minutes: number;
+  imageUrl?: string;
+}
+
 export interface CoolFactsSummary {
   watchedMoviesCount: number;
   watchedShowsCount: number;
+  completedShowsCount: number;
   watchedEpisodesCount: number;
   totalWatchedMinutes: number;
+  movieWatchedMinutes: number;
+  showWatchedMinutes: number;
+  averageMovieMinutes: number;
+  longestWatchedMovie: LongestMovieHighlight | null;
+  mostWatchedShow: MostWatchedShowHighlight | null;
   topCast: WatchedPersonStat[];
   topDirectors: WatchedPersonStat[];
   topCreators: WatchedPersonStat[];
@@ -39,18 +59,24 @@ export interface CoolFactsSummary {
   topDecades: LabelCount[];
 }
 
-function watchedEpisodesForShow(item: WatchlistItem): { count: number; minutes: number } {
+function watchedEpisodesForShow(item: WatchlistItem): {
+  count: number;
+  minutes: number;
+  totalRegularEpisodes: number;
+} {
   let count = 0;
   let minutes = 0;
+  let totalRegularEpisodes = 0;
   for (const season of item.seasons ?? []) {
     if (season.season_number <= 0) continue;
     for (const ep of season.episodes) {
+      totalRegularEpisodes += 1;
       if (!ep.watched) continue;
       count += 1;
       minutes += ep.runtime ?? 0;
     }
   }
-  return { count, minutes };
+  return { count, minutes, totalRegularEpisodes };
 }
 
 function addPersonCounts(
@@ -122,8 +148,13 @@ export function computeCoolFacts(
 ): CoolFactsSummary {
   let watchedMoviesCount = 0;
   let watchedShowsCount = 0;
+  let completedShowsCount = 0;
   let watchedEpisodesCount = 0;
-  let totalWatchedMinutes = 0;
+  let movieWatchedMinutes = 0;
+  let showWatchedMinutes = 0;
+  let moviesWithRuntimeCount = 0;
+  let longestWatchedMovie: LongestMovieHighlight | null = null;
+  let mostWatchedShow: MostWatchedShowHighlight | null = null;
 
   const castMap = new Map<string, WatchedPersonStat>();
   const directorMap = new Map<string, WatchedPersonStat>();
@@ -140,14 +171,48 @@ export function computeCoolFacts(
     if (isMovie) {
       if (!item.watched) continue;
       watchedMoviesCount += 1;
-      totalWatchedMinutes += item.runtime ?? 0;
+      const runtime = item.runtime ?? 0;
+      movieWatchedMinutes += runtime;
+      if (runtime > 0) {
+        moviesWithRuntimeCount += 1;
+        if (
+          !longestWatchedMovie ||
+          runtime > longestWatchedMovie.minutes ||
+          (runtime === longestWatchedMovie.minutes && item.title.localeCompare(longestWatchedMovie.title) < 0)
+        ) {
+          longestWatchedMovie = {
+            title: item.title,
+            minutes: runtime,
+            year: item.year,
+            imageUrl: item.image_url,
+          };
+        }
+      }
     } else {
       const epStats = watchedEpisodesForShow(item);
       if (epStats.count === 0) continue;
       episodesWatched = epStats.count;
       watchedShowsCount += 1;
+      if (item.watched || (epStats.totalRegularEpisodes > 0 && epStats.count >= epStats.totalRegularEpisodes)) {
+        completedShowsCount += 1;
+      }
       watchedEpisodesCount += epStats.count;
-      totalWatchedMinutes += epStats.minutes;
+      showWatchedMinutes += epStats.minutes;
+      if (
+        !mostWatchedShow ||
+        epStats.count > mostWatchedShow.episodes ||
+        (epStats.count === mostWatchedShow.episodes && epStats.minutes > mostWatchedShow.minutes) ||
+        (epStats.count === mostWatchedShow.episodes &&
+          epStats.minutes === mostWatchedShow.minutes &&
+          item.title.localeCompare(mostWatchedShow.title) < 0)
+      ) {
+        mostWatchedShow = {
+          title: item.title,
+          episodes: epStats.count,
+          minutes: epStats.minutes,
+          imageUrl: item.image_url,
+        };
+      }
     }
 
     const key = `${item.category}:${item.id}`;
@@ -167,16 +232,26 @@ export function computeCoolFacts(
     }
   }
 
+  const totalWatchedMinutes = movieWatchedMinutes + showWatchedMinutes;
+  const averageMovieMinutes =
+    moviesWithRuntimeCount > 0 ? Math.round(movieWatchedMinutes / moviesWithRuntimeCount) : 0;
+
   return {
     watchedMoviesCount,
     watchedShowsCount,
+    completedShowsCount,
     watchedEpisodesCount,
     totalWatchedMinutes,
+    movieWatchedMinutes,
+    showWatchedMinutes,
+    averageMovieMinutes,
+    longestWatchedMovie,
+    mostWatchedShow,
     topCast: rankPeople(castMap, 10),
     topDirectors: rankPeople(directorMap, 10),
     topCreators: rankPeople(creatorMap, 10),
-    topGenres: rankBuckets(genreMap, 6),
-    topPlatforms: rankBuckets(platformMap, 6),
-    topDecades: rankBuckets(decadeMap, 5),
+    topGenres: rankBuckets(genreMap, 8),
+    topPlatforms: rankBuckets(platformMap, 8),
+    topDecades: rankBuckets(decadeMap, 8),
   };
 }

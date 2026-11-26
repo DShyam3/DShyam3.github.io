@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { AppIcon, getSectionIcon } from '@/components/ui/icon';
@@ -143,25 +143,24 @@ export function NavMenu({ className }: { className?: string }) {
         className="navigation-panel app-scroll absolute left-2 right-2 top-full z-40 mt-2 max-h-[65dvh] overflow-y-auto rounded-lg border border-border bg-background p-2 shadow-[0_2px_4px_-2px_hsl(30_10%_15%/0.12),0_18px_40px_-12px_hsl(30_10%_15%/0.28)] sm:p-3 md:left-0 md:right-0 dark:shadow-[0_2px_4px_-2px_hsl(0_0%_0%/0.5),0_18px_40px_-12px_hsl(0_0%_0%/0.7)]"
       >
         <nav
-          aria-label="Site"
-          // Two columns on a phone, four once there is room. Thirteen labels
-          // in one column would have been taller than a phone screen. The
-          // grid carries no negative margin: a row's hover fill is the panel's
-          // padding box inset, so the highlight stops short of the border
-          // instead of running out past it.
+          aria-label="App switcher"
           className="grid grid-cols-2 gap-x-1 gap-y-0.5 sm:grid-cols-3 lg:grid-cols-4"
         >
           {links.map((link) => {
             const active = location.pathname === link.to || (link.to !== '/' && location.pathname.startsWith(`${link.to}/`));
             const SectionIcon = getSectionIcon(link.to);
+            const accentStyle = link.accentHsl
+              ? ({ '--section-colour': link.accentHsl } as CSSProperties)
+              : undefined;
             return (
               <Link
                 key={link.to}
                 to={link.to}
-                data-section={link.to.slice(1) || 'about'}
+                data-section={link.id}
+                style={accentStyle}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'nav-link rounded-lg px-3 py-2.5 transition-colors hover:bg-secondary/60',
+                  'nav-link min-w-0 overflow-hidden rounded-lg px-2 py-2.5 gap-1.5 transition-colors hover:bg-secondary/60',
                   active && 'nav-link-active bg-secondary/60',
                 )}
               >
@@ -169,15 +168,18 @@ export function NavMenu({ className }: { className?: string }) {
                   icon={SectionIcon}
                   active={active}
                   className={cn(
-                    'h-3.5 w-3.5',
+                    'h-3.5 w-3.5 shrink-0',
                     active ? 'text-[hsl(var(--ribbon-foreground))]' : 'text-[hsl(var(--section-colour))]',
                   )}
                 />
-                <DotMatrixText
-                  text={link.label.toUpperCase()}
-                  size="xs"
-                  className="nav-label"
-                />
+                <span className="min-w-0 truncate">
+                  <DotMatrixText
+                    text={link.label.toUpperCase()}
+                    size="ui"
+                    wrap={false}
+                    className="nav-label"
+                  />
+                </span>
               </Link>
             );
           })}

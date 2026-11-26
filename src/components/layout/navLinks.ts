@@ -1,30 +1,39 @@
+import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { ALL_APP_MANIFESTS } from '@/apps/useActiveApp';
+import type { AppGroup, AppManifest } from '@/apps/types';
 
 export interface SiteNavLink {
+  id: string;
   to: string;
   label: string;
+  tagline: string;
+  group: AppGroup;
   requiresAuth?: boolean;
+  accentHsl?: string;
 }
 
-const ALL_LINKS: SiteNavLink[] = [
-  { to: '/', label: 'About' },
-  { to: '/projects', label: 'Projects' },
-  { to: '/finance', label: 'Finance', requiresAuth: true },
-  { to: '/travel', label: 'Travel' },
-  { to: '/inventory', label: 'Inventory' },
-  { to: '/links', label: 'Links' },
-  { to: '/books', label: 'Books' },
-  { to: '/articles', label: 'Articles' },
-  { to: '/inspiration', label: 'Inspiration' },
-  { to: '/photos', label: 'Photos' },
-  { to: '/recipes', label: 'Recipes' },
-  { to: '/beliefs', label: 'Beliefs', requiresAuth: true },
-  { to: '/thoughts', label: 'Thoughts' },
-  { to: '/watchlist', label: 'Watchlist' },
-];
+function toNavLink(app: AppManifest): SiteNavLink {
+  return {
+    id: app.id,
+    to: app.basePath,
+    label: app.name,
+    tagline: app.tagline,
+    group: app.group,
+    requiresAuth: app.requiresAuth,
+    accentHsl: app.accentHsl,
+  };
+}
 
-/** The site's destinations, minus the ones this visitor cannot open. */
+/** The suite's registered apps and pages, minus any this visitor cannot open. */
 export function useSiteNavLinks(): SiteNavLink[] {
   const { isAdmin } = useAuth();
-  return ALL_LINKS.filter((link) => !link.requiresAuth || isAdmin);
+  return useMemo(
+    () =>
+      ALL_APP_MANIFESTS
+        .filter((app) => app.showInNav !== false && app.group !== 'system')
+        .filter((app) => !app.requiresAuth || isAdmin)
+        .map(toNavLink),
+    [isAdmin],
+  );
 }

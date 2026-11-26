@@ -111,6 +111,55 @@ export function takeTurns<T>(lists: readonly (readonly T[])[]): T[] {
   return result;
 }
 
+/**
+ * Likely seen's widely watched pool reads TMDB's most-voted titles, films and
+ * series apart: the top pages, which rotate weekly, and the pages below them.
+ * A large library already holds nearly every title on the top pages, so the
+ * pool takes turns between the two from its first page, then walks the rest.
+ */
+export const LIKELY_SEEN_TOP_PAGES = 15;
+/** The pool's last TMDB page: the top 1,000, still titles with thousands of votes. */
+export const LIKELY_SEEN_POOL_PAGES = 50;
+
+/**
+ * The TMDB page the pool's `index`th page reads (0-based). Even indices walk
+ * the top pages from the week's start, odd ones the deeper pages from theirs;
+ * once the top pages are spent, the deeper ones carry on alone. Every page
+ * from 1 to `LIKELY_SEEN_POOL_PAGES` is read once.
+ */
+export function likelySeenTmdbPage(index: number, week: number): number {
+  const top = LIKELY_SEEN_TOP_PAGES;
+  const deep = LIKELY_SEEN_POOL_PAGES - top;
+  const topStart = ((week % top) + top) % top;
+  const deepStart = ((week % deep) + deep) % deep;
+  const deepPage = (n: number) => top + 1 + ((deepStart + n) % deep);
+  if (index < 2 * top) {
+    return index % 2 === 0 ? 1 + ((topStart + index / 2) % top) : deepPage((index - 1) / 2);
+  }
+  return deepPage(index - top);
+}
+
+/** A language's least share of a taste profile before Likely seen reads its most-voted titles. */
+export const LIKELY_SEEN_LANGUAGE_MIN_SHARE = 0.03;
+
+/**
+ * The language, other than English, whose most-voted titles Likely seen also
+ * reads: the profile's strongest, if it holds `LIKELY_SEEN_LANGUAGE_MIN_SHARE`
+ * of it. English needs no pool of its own, since the most-voted titles are
+ * mostly English already; `xx` is TMDB's "no language". Ties go to the
+ * earlier code.
+ */
+export function likelySeenLanguage(language: ReadonlyMap<string, number>): string | null {
+  let best: string | null = null;
+  let bestShare = LIKELY_SEEN_LANGUAGE_MIN_SHARE;
+  for (const [code, share] of language) {
+    if (code === 'en' || code === 'xx' || share < bestShare || (share === bestShare && best !== null && code > best)) continue;
+    best = code;
+    bestShare = share;
+  }
+  return best;
+}
+
 export const MAX_SUGGESTIONS_PER_SEED = 4;
 /** Wildcards on one page of suggestions for one media: a few, not a seed's share. */
 export const WILDCARDS_PER_PAGE = 2;

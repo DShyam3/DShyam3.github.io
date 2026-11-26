@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -6,6 +6,8 @@ import { WorkspaceRail } from '@/components/layout/WorkspaceRail';
 import { WorkspaceInspector } from '@/components/layout/WorkspaceInspector';
 import { CommandDock } from '@/components/layout/CommandDock';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
+import { useDisplayMode } from '@/contexts/DisplayModeContext';
+import { useActiveApp } from '@/apps/useActiveApp';
 
 /** The largest share of the middle card a pinned toolbar may take. */
 const PIN_MAX_SHARE = 0.25;
@@ -31,7 +33,7 @@ interface AppShellProps {
 }
 
 /**
- * The site's frame: header and footer stay put, and every route's content
+ * The suite's frame: header and footer stay put, and every app's content
  * sits in one middle card between them that owns the scrolling.
  */
 export function AppShell({
@@ -42,12 +44,17 @@ export function AppShell({
   toolbar,
 }: AppShellProps) {
   const { pathname } = useLocation();
-  const section = pathname.split('/')[1] || 'about';
+  const activeApp = useActiveApp();
+  const section = activeApp?.id ?? (pathname.split('/')[1] || 'about');
   const { target, dockedDetail } = useWorkspaceInspector();
+  const { railCollapsed } = useDisplayMode();
   const inspectorOpen = Boolean(target) || Boolean(dockedDetail);
   const mainRef = useRef<HTMLElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const hasToolbar = Boolean(toolbar);
+  const accentStyle = activeApp?.accentHsl
+    ? ({ '--section-colour': activeApp.accentHsl } as CSSProperties)
+    : undefined;
 
   // Whether the toolbar pins depends on how its controls wrap, which CSS
   // cannot read: four rows of filters on a tablet would take a third of the
@@ -77,6 +84,7 @@ export function AppShell({
   return (
     <div
       data-section={section}
+      style={accentStyle}
       className="app-shell h-[100dvh] flex flex-col bg-background overflow-clip"
     >
       <a
@@ -91,9 +99,11 @@ export function AppShell({
       </div>
 
       {/* The inspector column exists only while a record is picked; otherwise
-          the centre takes its width. */}
+          the centre takes its width. Collapsing the left rail gives the active
+          app the full viewport width in standalone mode. */}
       <div
         data-inspector={inspectorOpen ? 'open' : 'closed'}
+        data-rail={railCollapsed ? 'collapsed' : 'open'}
         className="app-frame-slot workspace-shell-grid flex-1 min-h-0"
       >
         <WorkspaceRail />
