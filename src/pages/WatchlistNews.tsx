@@ -4,6 +4,13 @@ import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
 import { PosterCard } from '@/features/watchlist/components/PosterCard';
@@ -47,7 +54,7 @@ import { useSchedule, type ScheduleItem as ScheduleEntry } from '@/features/watc
 import { useAuth } from '@/contexts/AuthContext';
 import { SmartScheduleDialog, scheduleReleaseDate } from '@/features/watchlist/components/SmartScheduleDialog';
 import './WatchlistNews.css';
-import { DiscoverySection } from '@/features/watchlist/components/DiscoverySection';
+import { DISCOVER_SECTION_OPTIONS, DiscoverySection, type DiscoverSection } from '@/features/watchlist/components/DiscoverySection';
 import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
 import { LIBRARY_TYPE_OPTIONS, type LibraryType, isFollowedState } from '@/features/watchlist/library-state';
 import { readDeclinedReleases, YourWeek } from '@/features/watchlist/components/YourWeek';
@@ -464,8 +471,12 @@ const WatchlistNews = () => {
   const [newsWindow, setNewsWindow] = useState<UpdatesWindow>(readStoredNewsWindow);
   const [newsPanel, setNewsPanel] = useState<NewsPanel>(() => readStored('watchlist-news-panel', ['following', 'discover'], 'following'));
   const [newsType, setNewsType] = useState<LibraryType>(() => readStored('watchlist-news-type', ['all', 'movie', 'tv'], 'all'));
+  const [discoverSection, setDiscoverSection] = useState<DiscoverSection>(() =>
+    readStored('watchlist-discover-section', ['all', 'coming_soon', 'already_watched', 'might_like'], 'all'),
+  );
   useEffect(() => writeStored('watchlist-news-panel', newsPanel), [newsPanel]);
   useEffect(() => writeStored('watchlist-news-type', newsType), [newsType]);
+  useEffect(() => writeStored('watchlist-discover-section', discoverSection), [discoverSection]);
   const typeMatches = (entityType: EntityRef['entityType']) =>
     newsType === 'all' || (newsType === 'movie' ? entityType === 'movie' : entityType === 'tv_show');
 
@@ -727,7 +738,7 @@ const WatchlistNews = () => {
     >
       <div className={cn('curated-news py-2', newsPanel === 'following' ? 'curated-news-following flex flex-col gap-4' : 'space-y-8 py-4')}>
         <div className="shrink-0">
-          <div className={cn('grid gap-2 sm:hidden', newsPanel === 'following' ? 'grid-cols-2' : 'grid-cols-1 max-w-[11rem]')}>
+          <div className="grid grid-cols-2 gap-2 sm:hidden">
             <NativeSelect
               aria-label="Show films, series or both"
               wrapperClassName="min-w-0"
@@ -739,7 +750,7 @@ const WatchlistNews = () => {
                 <option key={option.key} value={option.key}>{option.label}</option>
               ))}
             </NativeSelect>
-            {newsPanel === 'following' && (
+            {newsPanel === 'following' ? (
               <NativeSelect
                 aria-label="News time range"
                 wrapperClassName="min-w-0"
@@ -751,11 +762,36 @@ const WatchlistNews = () => {
                   <option key={option.key} value={option.key}>{option.label}</option>
                 ))}
               </NativeSelect>
+            ) : (
+              <NativeSelect
+                aria-label="Discover section"
+                wrapperClassName="min-w-0"
+                className="rounded-full border border-border/70 bg-card/60 pl-3 pr-8 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                value={discoverSection}
+                onChange={(event) => setDiscoverSection(event.target.value as DiscoverSection)}
+              >
+                {DISCOVER_SECTION_OPTIONS.map((option) => (
+                  <option key={option.key} value={option.key}>{option.label}</option>
+                ))}
+              </NativeSelect>
             )}
           </div>
           <div className="ultrawide-toolbar hidden flex-wrap items-center justify-between gap-3 sm:flex">
             <SegmentedControl label="Show films, series or both" options={LIBRARY_TYPE_OPTIONS} value={newsType} onChange={setNewsType} />
-            {newsPanel === 'following' && <SegmentedControl label="News time range" options={NEWS_WINDOW_OPTIONS} value={newsWindow} onChange={setNewsWindow} />}
+            {newsPanel === 'following' ? (
+              <SegmentedControl label="News time range" options={NEWS_WINDOW_OPTIONS} value={newsWindow} onChange={setNewsWindow} />
+            ) : (
+              <Select value={discoverSection} onValueChange={(value) => setDiscoverSection(value as DiscoverSection)}>
+                <SelectTrigger aria-label="Discover section" className="h-11 w-[235px] shrink-0 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DISCOVER_SECTION_OPTIONS.map((option) => (
+                    <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
         {newsPanel === 'following' ? (
@@ -809,7 +845,7 @@ const WatchlistNews = () => {
               {updatesLoading ? <p role="status" className="text-sm text-muted-foreground">Loading updates…</p> : <UpdatesList rows={visibleUpdates} activeWindow={newsWindow} today={today} onSelect={openDetail} failed={updatesFailed} />}
             </div>
           </div>
-        ) : <DiscoverySection type={newsType} />}
+        ) : <DiscoverySection type={newsType} section={discoverSection} />}
       </div>
 
       {selectedItem && (
