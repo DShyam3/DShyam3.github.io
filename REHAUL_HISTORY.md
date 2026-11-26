@@ -3388,3 +3388,15 @@ Four decisions, each with its reason:
 4. **The preview image (og:image) is not built.** Links have no image column and no place on the card to show one. Adding both is a schema change and a card redesign, and neither is needed for the fill to be useful.
 
 Closure: shipped in commits 4a1555dc, e712976b, b45e5509 and 4a26f7bb on main; `links-metadata` deployed and `links-check` redeployed to hosted Supabase. A paste on the live site while signed in, a real clipboard paste and a real phone are not yet verified.
+
+### Rate what you’ve watched: three provisional calls confirmed as built — 2026-11-26
+
+The owner confirmed the three calls made provisionally for Discover's rating queue (`rating-queue.ts`, `RateWatchedEntry.tsx`). The code already matched them, so nothing changed in the tree. Context on the hosted database that day: 429 watched films with no rating, 0 film or series ratings in `watchlist_ratings`, and 0 hidden titles.
+
+1. **A series is asked for its overall rating only once it is `Completed`, `Caught up` or `Stopped watching`, never mid-season.** A low score given mid-season would drop the show from the suggestion seeds for good, since a rating under 6 never seeds. Library's "Finished — rate the show?" already waits the same way, so the two prompts agree.
+
+2. **Hidden titles (`library_state === 'hidden'`) are never asked.** Hiding keeps a title out of the taste profile, and a rating would bring it back in.
+
+3. **Skips are kept per browser (localStorage `watchlist-rating-queue-skips`), not synced like Discover's other answers.** A skip only moves a title to the back of the queue and never hides it, so a device not knowing another device's skip costs little. Syncing would need a new owner-only table and a hosted migration for no real gain.
+
+Closure: no code change. The queue's behaviour is as built; the signed-in browser check of the queue is still open in `REHAUL_PLAN.md` under Discover as taste data.

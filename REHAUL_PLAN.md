@@ -436,14 +436,6 @@ Decided, with reasons:
    (hidden titles included), Seen it's rating offer on a Discover tile, and the
    Rate what you’ve watched queue (its count per tab, order, number keys, S, 0 as 10,
    skips kept and ordered last on reopen). Only the signed-out view has been checked.
-2. **Rate what you’ve watched — open choices for the owner.** Built
-   (`rating-queue.ts`, `RateWatchedEntry.tsx`), verified on the local stack only.
-   Three calls were made provisionally, to confirm or change:
-   - Series are asked only once `Completed`, `Caught up` or `Stopped watching`, not
-     mid-season.
-   - Hidden titles are never asked.
-   - Skips are kept per browser, not synced like Discover's other answers.
-
 ### Watchlist Diary, Franchises, import and public ratings — what is left
 
 Merged to main, deployed, and migration `20261118190243_watchlist_tracking` applied to hosted. Decisions are in `REHAUL_HISTORY.md` under 2026-11-18.
