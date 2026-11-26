@@ -1,5 +1,6 @@
 import { DetailSection } from '@/components/cards/CardDetailDialog';
 import { uploadPhoto } from '@/lib/storage';
+import { LinkCheckStatus } from './components/LinkCheckStatus';
 import { buildHighDpiFaviconUrl, parseLinkUrl, resolveLinkIcon } from './link-icons';
 import type { CollectionConfig, CollectionRow } from './types';
 
@@ -33,6 +34,11 @@ export const linksCollection: CollectionConfig<LinkRow> = {
   noun: { singular: 'Link', plural: 'Links' },
 
   searchFields: ['name', 'description'],
+
+  // The daily link check, for the owner only: its results are readable by no
+  // one else. Every link, not the filtered ones, so a failing link is never
+  // hidden by a category filter.
+  summary: (_shown, isAdmin, all) => (isAdmin ? <LinkCheckStatus links={all} /> : null),
 
   facets: [{ key: 'category', field: 'category', options: CATEGORIES }],
 

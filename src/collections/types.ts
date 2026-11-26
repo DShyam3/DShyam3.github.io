@@ -276,8 +276,12 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
   /** Sort orders the reader can toggle between. */
   sortOptions?: SortOptionDef<T>[];
 
-  /** Extra content in the row above the grid, e.g. a total valuation. */
-  summary?: (items: T[], isAdmin: boolean) => ReactNode;
+  /**
+   * Extra content in the row above the grid, e.g. a total valuation. `items`
+   * is what the search and filters show; `all` is every row, for a figure
+   * that should not change with them.
+   */
+  summary?: (items: T[], isAdmin: boolean, all: T[]) => ReactNode;
 
   /**
    * Cards that are not stored rows, drawn first in the grid: a thought that is

@@ -288,6 +288,7 @@ uppercase-label question that `REHAUL_PLAN.md` carried until 11 September
 | Collection card | Consistent image ratio, tinted text area, modest hover lift | `item-card`, `card-body` |
 | Navigation | Pill control, frosted menu, coloured destination markers | `NavMenu`, `navigation-panel` |
 | Filters | Compact toolbar: primary facet select, search with a clear button, Filters popover whose trigger counts facets moved off their default, sort select | `FilterBar`, `CollectionPage` (sort) |
+| Toolbar panel | A small panel opened from a toolbar button: a bottom drawer on a phone, a popover anchored to the button elsewhere, scrolling inside itself. Use it rather than writing the Drawer/Popover switch again | `ResponsivePopover` (Filters, Links' failing-links panel) |
 | Finance summary | Large actual figure, explanation, optional secondary figure | `SurfaceHero`, `finance-hero` |
 | Dialog | Frosted container over a dimmed, blurred backdrop | `DialogContent`, `glass-dialog` |
 | Native select | A plain `<select>` at 44px, its browser arrow hidden and a `ChevronDown` drawn in the muted foreground colour; no fixed-colour arrow images | `NativeSelect` |

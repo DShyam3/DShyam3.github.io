@@ -142,7 +142,7 @@ function CollectionPageView<T extends CollectionRow, R>({
               />
             </div>
             <div className="flex min-w-0 flex-wrap items-center gap-1">
-              {config.summary?.(items, isAdmin)}
+              {config.summary?.(items, isAdmin, all)}
               {customToolbarContent !== undefined ? (
                 customToolbarContent
               ) : (

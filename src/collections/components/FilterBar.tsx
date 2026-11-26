@@ -1,17 +1,9 @@
 import type { ReactNode } from 'react';
 import { Filter, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ResponsivePopover } from '@/components/ui/responsive-popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { ALL } from '../facets';
 import type { CollectionConfig, CollectionRow, FacetDef } from '../types';
 
@@ -35,7 +27,6 @@ export function FilterBar<T extends CollectionRow, R>({
   setSearch,
   sortControl,
 }: FilterBarProps<T, R>) {
-  const isMobile = useIsMobile();
   const showSearch = Boolean(config.searchFields?.length);
   const [primaryFacet, ...extraFacets] = config.facets.filter((facet) => !facet.hiddenWhen?.(filters));
   const activeFilterCount = extraFacets.filter(
@@ -101,41 +92,17 @@ export function FilterBar<T extends CollectionRow, R>({
         </div>
       )}
       {extraFacets.length > 0 && (
-        isMobile ? (
-          <Drawer>
-            <DrawerTrigger asChild>
-              <Button variant="outline" className="h-11 gap-2">
-                <Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}
-              </Button>
-            </DrawerTrigger>
-            <DrawerContent aria-label={`${config.noun.plural} filters`}>
-              <DrawerHeader className="text-left">
-                <DrawerTitle>Filter {config.noun.plural.toLowerCase()}</DrawerTitle>
-              </DrawerHeader>
-              <div className="app-scroll space-y-3 overflow-y-auto px-4 pb-6">
-                {extraFacets.map((facet) => facetSelect(facet))}
-              </div>
-            </DrawerContent>
-          </Drawer>
-        ) : (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="h-11 gap-2">
-                <Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              collisionPadding={12}
-              className="w-80 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain space-y-3"
-              style={{ maxHeight: 'min(480px, var(--radix-popover-content-available-height))' }}
-              aria-label={`${config.noun.plural} filters`}
-            >
-              <h3 className="font-medium">Filter {config.noun.plural.toLowerCase()}</h3>
-              {extraFacets.map((facet) => facetSelect(facet))}
-            </PopoverContent>
-          </Popover>
-        )
+        <ResponsivePopover
+          trigger={
+            <Button variant="outline" className="h-11 gap-2">
+              <Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}
+            </Button>
+          }
+          title={`Filter ${config.noun.plural.toLowerCase()}`}
+          label={`${config.noun.plural} filters`}
+        >
+          {extraFacets.map((facet) => facetSelect(facet))}
+        </ResponsivePopover>
       )}
       {sortControl}
     </div>
