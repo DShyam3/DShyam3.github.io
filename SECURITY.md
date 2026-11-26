@@ -131,8 +131,11 @@ attack surface of this site is Supabase, and it was audited separately
   SHA-256 hash with a ten-minute expiry, and bound to the exact redirect URI
   and finance profile. The browser verifies its tab-scoped copy first; the
   function atomically consumes the matching state before exchanging a code.
-- **Outbound fetches (SSRF)**: one function, `links-check`, requests a host
-  that data rather than code chooses; it is covered in the next bullet.
+- **Outbound fetches (SSRF)**: two functions, `links-check` and
+  `links-metadata`, request a host that data rather than code chooses; they
+  are covered in the next two bullets, and share one redirect loop
+  (`_shared/public-fetch.ts`) and one set of address rules
+  (`_shared/public-address.ts`).
   `merchant-logo-cache` talks to exactly two hosts, fixed in code:
   `api.brandfetch.io` and `cdn.brandfetch.io`. No URL, host or path is ever
   read from the request body, so it cannot be steered. The domain that brand
@@ -163,6 +166,26 @@ attack surface of this site is Supabase, and it was audited separately
   the address. What bounds it: the function sends no credentials and no body,
   reads no response body, and keeps only the status code where only the owner
   can see it.
+- **Reading a pasted link (`links-metadata`)** takes a URL from the request
+  body, so the owner alone may call it: no Authorization header is a 401, and
+  `requireAdmin` refuses anyone else. The URL, at most 2,048 characters, and
+  every redirect it leads to pass the same rules as the daily check. It sends
+  one GET with no credentials and no cookies, refuses a response that declares
+  any type but `text/html` or `application/xhtml+xml` (one that declares none
+  is read), stops at the end of `<head>` or after 512 KiB, and stops waiting
+  on the network after 8 seconds. The head is parsed in one forward pass with
+  every value capped, so a hostile page cannot make the parse itself run on
+  (tested against 512 KiB of unclosed comments, scripts and tags). What comes
+  back is two cleaned strings -- a name
+  of at most 80 characters and a description of at most 280 -- or a reason
+  code; the page itself is neither stored nor passed on. The strings are
+  another site's text: they land in the add form as plain values for the
+  owner to check, and React renders them as text, never as HTML. Accepted
+  risk: the same rebinding gap as the daily check, and here the head of the
+  page is read, so a page that rebinds to an internal address could have that
+  address's title returned. Only the owner can call it and only the owner sees
+  the answer, so it reveals nothing to anyone who did not already hold the
+  owner's session.
 - **Merchant logos, and why they are not hotlinked**: rendering a logo straight
   from a third-party CDN would send that CDN one request per transaction row,
   with the user's IP and referrer, describing where they shop. The logo is
