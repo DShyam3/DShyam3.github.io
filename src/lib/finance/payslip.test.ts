@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  calendarYearOf, checkPayslip, compareToModel, deductionRate, effectiveTaxRate, formatPayslipLineLabel, inCalendarYear, inTaxYear,
+  calendarYearOf, checkPayslip, compareToModel, deductionRate, effectiveTaxRate, findDuplicatePayslip, formatPayslipLineLabel, inCalendarYear, inTaxYear,
   studentLoanExpectedInTaxYear, studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
 } from './payslip';
 
@@ -254,5 +254,28 @@ describe('studentLoanExpectedInTaxYear', () => {
   it('gives no figure when a payslip is not a number, rather than skipping it', () => {
     expect(studentLoanExpectedInTaxYear([...owner, slip({ id: 'bad', payDate: '2026-11-30', gross: Number.NaN })], 2026, plan2))
       .toBeUndefined();
+  });
+});
+
+describe('findDuplicatePayslip', () => {
+  const existing = [
+    slip({ id: 'oi-nov', payDate: '2026-11-30', employer: 'OceanInfinity' }),
+    slip({ id: 'anon-oct', payDate: '2026-10-31', employer: undefined }),
+  ];
+
+  it('matches same pay date and employer case-insensitively with trimming', () => {
+    expect(findDuplicatePayslip(existing, { payDate: '2026-11-30', employer: ' oceaninfinity ' })?.id).toBe('oi-nov');
+  });
+
+  it('matches when both employers are blank', () => {
+    expect(findDuplicatePayslip(existing, { payDate: '2026-10-31', employer: '' })?.id).toBe('anon-oct');
+  });
+
+  it('ignores the row currently being edited', () => {
+    expect(findDuplicatePayslip(existing, { payDate: '2026-11-30', employer: 'OceanInfinity', excludeId: 'oi-nov' })).toBeUndefined();
+  });
+
+  it('does not match a different employer on the same date', () => {
+    expect(findDuplicatePayslip(existing, { payDate: '2026-11-30', employer: 'Capgemini' })).toBeUndefined();
   });
 });

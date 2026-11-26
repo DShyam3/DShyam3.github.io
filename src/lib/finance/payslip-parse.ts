@@ -15,6 +15,8 @@
  * — which is why every field is optional in the result.
  */
 
+import type { PayslipLine } from './payslip';
+
 export interface ParsedPayslip {
   gross?: number;
   /**
@@ -28,12 +30,15 @@ export interface ParsedPayslip {
   pensionEmployee?: number;
   pensionEmployer?: number;
   studentLoan?: number;
+  otherDeductions?: number;
   net?: number;
   payDate?: string;
   employer?: string;
+  /** Named benefit/sacrifice deductions recognised on the payslip. */
+  lines?: PayslipLine[];
 }
 
-type Field = Exclude<keyof ParsedPayslip, 'payDate' | 'employer'>;
+type Field = Exclude<keyof ParsedPayslip, 'payDate' | 'employer' | 'lines'>;
 
 /**
  * Fields that are magnitudes, whatever sign the payslip prints.
@@ -43,7 +48,7 @@ type Field = Exclude<keyof ParsedPayslip, 'payDate' | 'employer'>;
  * amount, and keeping the minus would have it added back by every total.
  * Tax is deliberately not in this list: a negative there is a refund.
  */
-const MAGNITUDE_FIELDS = new Set<Field>(['pensionEmployee', 'pensionEmployer']);
+const MAGNITUDE_FIELDS = new Set<Field>(['pensionEmployee', 'pensionEmployer', 'otherDeductions']);
 
 /**
  * Label patterns per field, and order is load-bearing.
@@ -142,7 +147,19 @@ const RULES: { field: Field | null; pattern: RegExp }[] = [
   // "Total Payable", so there was nothing to gain by trying to squeeze both
   // into one alternative and something to lose in readability.
   { field: 'gross', pattern: /\btotal\s+(?:earnings|gross|payments?|pay)\b|\bgross\s+(?:pay|earnings|total)\b|\bgross\b|\bearnings\b(?!\s+for\b)/i },
+  // Named employee benefit deductions and non-pension salary sacrifices.
+  // Excludes notional P11D/BIK lines, employer-paid benefits, and cash
+  // allowances (e.g. "Car Allowance", "Holiday Pay") via `isBenefitDeductionLabel`.
+  {
+    field: 'otherDeductions',
+    pattern: /\b(?:cycle\s*(?:to\s*work|2\s*work)|cyclescheme|bike\s+scheme|childcare(?:\s+vouchers?)?|nursery(?:\s+scheme)?|gym(?:\s+(?:membership|wellness|fitness))?|fitness(?:\s+club)?|dental(?:\s+(?:cover|plan|insurance))?|denplan|private\s+medical|medical\s+(?:insurance|cover|plan)|health\s*(?:care|insurance|cash\s+plan)|cash\s+plan|bupa|axa|vitality|life\s+(?:assurance|insurance)|critical\s+illness|income\s+protection|tech(?:nology)?\s+scheme|holiday\s+(?:buy|purchase)|buy\s+(?:extra\s+)?holiday|extra\s+holiday|season\s+ticket|travel\s+loan|give\s+as\s+you\s+earn|\bgaye\b|payroll\s+giving|charit(?:y|able)\s+giving|trade\s+union|\bunion\b(?:\s+dues)?|car\s+(?:scheme|lease)|(?:ev|electric\s+(?:car|vehicle)|vehicle)\s+(?:scheme|lease)|sharesave|\bsaye\b|share\s+(?:incentive|purchase)|parking|flex(?:ible)?\s+benefit)(?:\s+(?:salary\s+)?sacr(?:ifice)?)?/i,
+  },
 ];
+
+const NOT_EMPLOYEE_DEDUCTION = /\b(?:employer|ers|er|company|notional|p11d|bik|benefit\s+in\s+kind|allowance)\b|\bholiday\s+pay\b/i;
+
+const isBenefitDeductionLabel = (label: string): boolean =>
+  !NOT_EMPLOYEE_DEDUCTION.test(label);
 
 /**
  * Words naming a salary-sacrifice scheme other than pension.
@@ -316,28 +333,38 @@ export function parsePayslipText(text: string): ParsedPayslip {
        states each figure once, and later mentions are totals or footnotes. */
     let cursor = 0;
     while (cursor < line.length) {
-      let chosen: { field: Field | null; end: number; at: number; sacrifice: boolean } | null = null;
+      let chosen: { field: Field | null; end: number; at: number; text: string; sacrifice: boolean } | null = null;
       for (const rule of WALK_RULES) {
         const { field, pattern } = rule;
-        if (field !== null && result[field] !== undefined) continue;
+        if (field !== null && field !== 'otherDeductions' && result[field] !== undefined) continue;
         const match = pattern.exec(line.slice(cursor));
         pattern.lastIndex = 0;
         if (!match) continue;
         if (!chosen || match.index < chosen.at) {
-          chosen = { field, at: match.index, end: match.index + match[0].length, sacrifice: rule === SACRIFICE_RULE };
+          chosen = { field, at: match.index, end: match.index + match[0].length, text: match[0], sacrifice: rule === SACRIFICE_RULE };
         }
       }
       if (!chosen) break;
       // A sacrifice whose own label names another scheme is walked past
       // unclaimed, like the employer's NI.
-      const refused = chosen.sacrifice
-        && namesOtherSacrificeScheme(labelBefore(line.slice(cursor, cursor + chosen.end)));
+      const contextLabel = labelBefore(line.slice(cursor, cursor + chosen.end));
+      const labelTail = line.slice(cursor + chosen.end).split(/\s+-?£?\s?\d/)[0] ?? '';
+      const refused = (chosen.sacrifice && namesOtherSacrificeScheme(contextLabel))
+        || (chosen.field === 'otherDeductions' && !isBenefitDeductionLabel(`${contextLabel} ${labelTail}`));
       // `field: null` (the employer's NI) is recognised only to be denied to
       // the employee's rule below it — nothing is ever stored for it.
       if (chosen.field !== null && !refused) {
         const amount = amountAfter(line.slice(cursor), chosen.end);
         if (amount !== null) {
-          result[chosen.field] = MAGNITUDE_FIELDS.has(chosen.field) ? Math.abs(amount) : amount;
+          const value = MAGNITUDE_FIELDS.has(chosen.field) ? Math.abs(amount) : amount;
+          if (chosen.field === 'otherDeductions') {
+            if (value > 0) {
+              result.otherDeductions = Math.round(((result.otherDeductions ?? 0) + value) * 100) / 100;
+              result.lines = [...(result.lines ?? []), { label: chosen.text.trim(), amount: value, kind: 'benefit' }];
+            }
+          } else {
+            result[chosen.field] = value;
+          }
         }
       }
       cursor += chosen.end;
@@ -507,8 +534,10 @@ export function parsePositionedPayslip(lines: PositionedLine[]): ParsedPayslip {
       // A `field: null` heading (the employer's NI) has nothing to fill --
       // it is recognised only so the employee's rule cannot claim it either.
       const rule = WALK_RULES.find(r => r.pattern.test(run.text));
-      if (!rule || rule.field === null || result[rule.field] !== undefined) continue;
+      if (!rule || rule.field === null) continue;
+      if (rule.field !== 'otherDeductions' && result[rule.field] !== undefined) continue;
       if (rule === SACRIFICE_RULE && namesOtherSacrificeScheme(run.text)) continue;
+      if (rule.field === 'otherDeductions' && !isBenefitDeductionLabel(run.text)) continue;
       const field = rule.field;
 
       for (let j = i + 1; j <= i + MAX_ROWS_BELOW && j < ordered.length; j++) {
@@ -521,7 +550,15 @@ export function parsePositionedPayslip(lines: PositionedLine[]): ParsedPayslip {
           if (!best || drift < best.drift) best = { drift, value };
         }
         if (best) {
-          result[field] = MAGNITUDE_FIELDS.has(field) ? Math.abs(best.value) : best.value;
+          const value = MAGNITUDE_FIELDS.has(field) ? Math.abs(best.value) : best.value;
+          if (field === 'otherDeductions') {
+            if (value > 0) {
+              result.otherDeductions = Math.round(((result.otherDeductions ?? 0) + value) * 100) / 100;
+              result.lines = [...(result.lines ?? []), { label: run.text.trim(), amount: value, kind: 'benefit' }];
+            }
+          } else {
+            result[field] = value;
+          }
           break;
         }
       }

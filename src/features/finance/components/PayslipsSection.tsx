@@ -18,16 +18,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import {
-  checkPayslip, compareToModel, findPayslipReimbursementCandidates, findPayslipTransactionCandidates, isReimbursementLine, studentLoanExpectedInTaxYear, studentLoanPaidInTaxYear,
+  checkPayslip, compareToModel, findDuplicatePayslip, findPayslipReimbursementCandidates, findPayslipTransactionCandidates, isReimbursementLine, studentLoanExpectedInTaxYear, studentLoanPaidInTaxYear,
   unambiguousPayslipMatches,
-  calendarYearOf, inCalendarYear, inTaxYear, sumPayslips, taxYearOf, type Payslip,
+  calendarYearOf, inCalendarYear, inTaxYear, sumPayslips, taxYearOf, type Payslip, type PayslipLine,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format-date';
 import { toISODate } from '@/lib/finance/dates';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileText, Link2, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Eye, EyeOff, FileText, Link2, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
 import { extractPayslipFromPdf } from '../payslip-pdf';
+import { useGlobalFiguresHidden } from '../useHiddenFigures';
 import { PayslipImportDialog } from './PayslipImportDialog';
 import { PayslipDetailDialog } from './PayslipDetailDialog';
 import { employerLogo } from '../employer-logo';
@@ -144,6 +145,9 @@ export function PayslipsSection() {
   const [isReading, setIsReading] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [readCount, setReadCount] = useState<number | null>(null);
+  const [parsedLines, setParsedLines] = useState<PayslipLine[] | undefined>();
+  const [revealFigures, setRevealFigures] = useState(false);
+  const globalFiguresHidden = useGlobalFiguresHidden();
   // The file whose read is in flight. A read that finishes after another file
   // was chosen, or after the dialog closed, is dropped rather than applied.
   const readingFile = useRef<File | null>(null);
@@ -151,6 +155,11 @@ export function PayslipsSection() {
   // date on a new payslip, or the date on a row with no figures captured. Once
   // someone types a date it is theirs.
   const datePlaceholder = useRef(true);
+
+  const duplicatePayslip = useMemo(
+    () => findDuplicatePayslip(payslips, { payDate: draft.payDate, employer: draft.employer, excludeId: editing?.id }),
+    [payslips, draft.payDate, draft.employer, editing?.id],
+  );
 
   // Shown live in the dialog rather than after saving: a payslip that does not
   // reconcile is almost always a typo, and the moment to catch it is while the
@@ -376,6 +385,8 @@ export function PayslipsSection() {
     setEditing(null);
     setDraft(emptyDraft());
     setStoragePath(undefined);
+    setParsedLines(undefined);
+    setRevealFigures(false);
     void handleFile(null);
     datePlaceholder.current = true;
     setIsOpen(true);
@@ -385,6 +396,8 @@ export function PayslipsSection() {
     setEditing(p);
     setDraft(draftFrom(p));
     setStoragePath(p.storagePath);
+    setParsedLines(undefined);
+    setRevealFigures(false);
     void handleFile(null);
     datePlaceholder.current = p.gross === 0 && p.net === 0;
     setIsOpen(true);
@@ -393,7 +406,7 @@ export function PayslipsSection() {
   const handleSave = async () => {
     // Not while the PDF is still being read: saving then stores the blank form,
     // and the figures the read finds a moment later land in a closed dialog.
-    if (!draft.payDate || isSaving || isReading) return;
+    if (!draft.payDate || isSaving || isReading || duplicatePayslip) return;
     setIsSaving(true);
     let uploadedPath: string | undefined;
     try {
@@ -407,7 +420,7 @@ export function PayslipsSection() {
         // Not on this form, so carried over rather than blanked. The line items
         // describe the document they were read from, so a new one drops them.
         notes: editing?.notes,
-        lines: uploadedPath ? undefined : editing?.lines,
+        lines: parsedLines ?? (uploadedPath ? undefined : editing?.lines),
       });
       if (outcome !== 'saved') {
         // The failure has its own toast; the dialog stays open to retry. A
@@ -443,6 +456,7 @@ export function PayslipsSection() {
     readingFile.current = file;
     setPendingFile(file);
     setReadCount(null);
+    setParsedLines(undefined);
     setIsReading(false);
     if (!file || file.type !== 'application/pdf') return;
     setIsReading(true);
@@ -455,6 +469,7 @@ export function PayslipsSection() {
       const payDate = parsed.payDate ?? fromName.payDate;
       const employer = parsed.employer ?? fromName.employer;
       setReadCount(parsedFieldCount(parsed));
+      setParsedLines(parsed.lines);
       setDraft(d => ({
         ...d,
         payDate: datePlaceholder.current && payDate ? payDate : d.payDate,
@@ -465,6 +480,7 @@ export function PayslipsSection() {
         pensionEmployee: fill(d.pensionEmployee, parsed.pensionEmployee),
         pensionEmployer: fill(d.pensionEmployer, parsed.pensionEmployer),
         studentLoan: fill(d.studentLoan, parsed.studentLoan),
+        otherDeductions: fill(d.otherDeductions, parsed.otherDeductions),
         net: fill(d.net, parsed.net),
       }));
     } catch (err) {
@@ -751,12 +767,29 @@ export function PayslipsSection() {
         </>
       )}
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-md p-6 font-mono">
+      <Dialog open={isOpen} onOpenChange={open => { setIsOpen(open); if (!open) setRevealFigures(false); }}>
+        <DialogContent
+          data-reveal-figures={revealFigures ? 'true' : undefined}
+          className="sm:rounded-lg border border-border/40 bg-card max-w-md p-6 font-mono"
+        >
           <DialogHeader>
-            <DialogTitle className="text-sm uppercase tracking-wider font-semibold text-foreground">
-              {editing ? 'Edit payslip' : 'Add payslip'}
-            </DialogTitle>
+            <div className="flex items-center justify-between gap-2 pr-8">
+              <DialogTitle className="text-sm uppercase tracking-wider font-semibold text-foreground">
+                {editing ? 'Edit payslip' : 'Add payslip'}
+              </DialogTitle>
+              {globalFiguresHidden && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRevealFigures(v => !v)}
+                  className="h-7 px-2 text-xs gap-1.5 text-muted-foreground hover:text-foreground shrink-0"
+                >
+                  {revealFigures ? <EyeOff className="h-3.5 w-3.5" aria-hidden="true" /> : <Eye className="h-3.5 w-3.5" aria-hidden="true" />}
+                  {revealFigures ? 'Hide figures' : 'Show figures'}
+                </Button>
+              )}
+            </div>
             <DialogDescription className="text-xs text-muted-foreground">
               Attach a payslip and its figures are read here, in this tab.
               Nothing is sent anywhere.
@@ -847,13 +880,34 @@ export function PayslipsSection() {
                     : readCount === 0
                       ? 'No figures found in this PDF — type them in, then save.'
                       : readCount !== null
-                        ? `Read ${readCount} of 7 figures — check them, then save.`
+                        ? `Read ${readCount} of 7 figures${parsedLines?.length ? ` + ${parsedLines.length} benefit${parsedLines.length === 1 ? '' : 's'}` : ''} — check them, then save.`
                         : pendingFile.type === 'application/pdf'
                           ? `${pendingFile.name} — uploaded when you save`
                           : `${pendingFile.name} — images are archived, not read. Type the figures in.`}
                 </p>
               )}
             </div>
+
+            {duplicatePayslip && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    Already added for {formatDate(duplicatePayslip.payDate)}
+                    {duplicatePayslip.employer ? ` (${duplicatePayslip.employer})` : ''}.
+                  </span>
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openEdit(duplicatePayslip)}
+                  className="h-7 px-2 text-xs border-destructive/40 text-destructive hover:bg-destructive/15"
+                >
+                  Edit existing
+                </Button>
+              </div>
+            )}
 
             <div className={cn(
               'rounded-lg border px-3 py-2 text-xs',
@@ -887,7 +941,7 @@ export function PayslipsSection() {
             {/* Saveable even when it does not reconcile: it is your payslip, and
                 a real one that disagrees with the arithmetic is exactly the
                 thing worth recording. */}
-            <Button type="button" disabled={isSaving || isReading} onClick={() => void handleSave()} className="rounded-lg bg-primary text-primary-foreground text-xs h-8">
+            <Button type="button" disabled={isSaving || isReading || Boolean(duplicatePayslip)} onClick={() => void handleSave()} className="rounded-lg bg-primary text-primary-foreground text-xs h-8">
               {isSaving ? 'Saving…' : isReading ? 'Reading…' : 'Save'}
             </Button>
           </DialogFooter>

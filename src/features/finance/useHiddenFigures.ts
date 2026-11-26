@@ -1,10 +1,12 @@
-import { useLayoutEffect, useState } from 'react';
+import { useLayoutEffect, useState, useSyncExternalStore } from 'react';
 import { figureSpans } from './hidden-figures';
 
 const STORAGE_KEY = 'finance-figures';
 const HIGHLIGHT = 'finance-figure';
 /** Marks SVG text holding a figure; highlights do not paint inside SVG, so CSS covers it. */
 const SVG_MARK = 'data-hidden-figure';
+/** Marks a container (such as a modal card) whose figures are temporarily revealed. */
+const REVEAL_ATTR = 'data-reveal-figures';
 /** The SVG blur the stylesheet points marked `<text>` at. */
 const BLUR_ID = 'finance-figure-blur';
 /** Text that is never painted, so never worth a range. */
@@ -76,10 +78,15 @@ function hideFigures(root: HTMLElement): () => void {
     }
   };
 
+  const isRevealed = (node: Node | null): boolean => {
+    const element = node instanceof Element ? node : node?.parentElement ?? null;
+    return Boolean(element?.closest(`[${REVEAL_ATTR}="true"]`));
+  };
+
   const paint = (node: Text) => {
     forget(node);
     const parent = node.parentElement;
-    if (!parent || SKIP.has(parent.nodeName)) return;
+    if (!parent || SKIP.has(parent.nodeName) || isRevealed(parent)) return;
     if (parent instanceof SVGElement) return paintSvg(parent);
     // Repaint the figure after a sign, or after a node that was one: its range may start here.
     const next = node.nextSibling;
@@ -143,6 +150,10 @@ function hideFigures(root: HTMLElement): () => void {
          18). React 19 sets a property instead, which no observer sees;
          revisit this if React moves. */
       if (mutation.type === 'attributes') {
+        if (mutation.attributeName === REVEAL_ATTR) {
+          scan(mutation.target);
+          continue;
+        }
         if (mutation.target instanceof Element && mutation.target.matches(SHADOW_FIGURE)) paintShadow(mutation.target);
         continue;
       }
@@ -156,7 +167,7 @@ function hideFigures(root: HTMLElement): () => void {
     for (const node of ranges.keys()) if (!node.isConnected) forget(node);
     for (const element of marked) if (!element.isConnected) marked.delete(element);
   });
-  observer.observe(root, { childList: true, characterData: true, subtree: true, attributeFilter: ['data'] });
+  observer.observe(root, { childList: true, characterData: true, subtree: true, attributeFilter: ['data', REVEAL_ATTR] });
 
   return () => {
     observer.disconnect();
@@ -189,4 +200,19 @@ export function useHiddenFigures() {
   }, [hidden]);
 
   return { supported, hidden, toggle: () => setHidden(value => !value) };
+}
+
+const subscribeGlobalFigures = (onStoreChange: () => void) => {
+  if (typeof document === 'undefined') return () => {};
+  const observer = new MutationObserver(onStoreChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-finance-figures'] });
+  return () => observer.disconnect();
+};
+
+const getGlobalFiguresSnapshot = () =>
+  typeof document !== 'undefined' && document.documentElement.dataset.financeFigures === 'hidden';
+
+/** True while the page-wide hidden-figures mask is active. */
+export function useGlobalFiguresHidden(): boolean {
+  return useSyncExternalStore(subscribeGlobalFigures, getGlobalFiguresSnapshot, () => false);
 }

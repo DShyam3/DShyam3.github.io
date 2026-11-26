@@ -608,3 +608,39 @@ describe('parsePayslipText — P45 running totals', () => {
     expect(parsePayslipText(text).gross).toBe(3000);
   });
 });
+
+describe('parsePayslipText — benefit deductions', () => {
+  it('sums named benefit and sacrifice deductions into otherDeductions and lines', () => {
+    const text = `
+      Pay Date 30/11/2026
+      Gross Pay 4,500.00
+      Cycle to Work Salary Sacrifice -83.33
+      Dental Cover 25.00
+      Gym Membership 45.00
+      PAYE Tax 650.00
+      National Insurance 220.00
+      Net Pay 3,476.67
+    `;
+    const parsed = parsePayslipText(text);
+    expect(parsed.otherDeductions).toBe(153.33);
+    expect(parsed.pensionEmployee).toBeUndefined();
+    expect(parsed.lines).toEqual([
+      { label: 'Cycle to Work Salary Sacrifice', amount: 83.33, kind: 'benefit' },
+      { label: 'Dental Cover', amount: 25, kind: 'benefit' },
+      { label: 'Gym Membership', amount: 45, kind: 'benefit' },
+    ]);
+  });
+
+  it('ignores notional P11D/BIK lines, employer-paid benefits, and cash allowances', () => {
+    const text = `
+      Car Allowance 300.00
+      Holiday Pay 200.00
+      Employer Private Medical 120.00
+      Private Medical BIK 95.00
+      P11D Dental 30.00
+    `;
+    const parsed = parsePayslipText(text);
+    expect(parsed.otherDeductions).toBeUndefined();
+    expect(parsed.lines).toBeUndefined();
+  });
+});

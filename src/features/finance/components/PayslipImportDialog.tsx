@@ -20,10 +20,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/features/finance/utils/calculations';
-import { checkPayslip, parsePayslipFilename, parsedFieldCount, type Payslip } from '@/lib/finance';
+import { checkPayslip, findDuplicatePayslip, parsePayslipFilename, parsedFieldCount, type Payslip } from '@/lib/finance';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format-date';
-import { AlertTriangle, Ban, Check, Upload } from 'lucide-react';
+import { AlertTriangle, Ban, Check, Eye, EyeOff, Upload } from 'lucide-react';
+import { useGlobalFiguresHidden } from '../useHiddenFigures';
 
 interface Row {
   file: File;
@@ -59,7 +60,9 @@ const rowFrom = async (file: File): Promise<Row> => {
       pensionEmployee: parsed.pensionEmployee ?? 0,
       pensionEmployer: parsed.pensionEmployer ?? 0,
       studentLoan: parsed.studentLoan ?? 0,
+      otherDeductions: parsed.otherDeductions ?? 0,
       net: parsed.net ?? 0,
+      lines: parsed.lines,
     };
     return {
       file,
@@ -86,6 +89,8 @@ export function PayslipImportDialog({ open, onOpenChange }: {
   const [isReading, setIsReading] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [revealFigures, setRevealFigures] = useState(false);
+  const globalFiguresHidden = useGlobalFiguresHidden();
 
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -97,7 +102,9 @@ export function PayslipImportDialog({ open, onOpenChange }: {
     // Sequential, not Promise.all: pdf.js spins up a worker per document and
     // twenty at once makes the tab unresponsive on the machine doing the work.
     for (const file of list) {
-      parsed.push(await rowFrom(file));
+      const row = await rowFrom(file);
+      const duplicate = findDuplicatePayslip(payslips, { payDate: row.slip.payDate, employer: row.slip.employer });
+      parsed.push(duplicate ? { ...row, include: false } : row);
       setProgress({ done: parsed.length, total: list.length });
     }
     setRows(parsed.sort((a, b) => a.slip.payDate.localeCompare(b.slip.payDate)));
@@ -155,10 +162,27 @@ export function PayslipImportDialog({ open, onOpenChange }: {
     setRows(rs => rs.map((r, i) => (i === index ? { ...r, include: !r.include } : r)));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-2xl p-6 font-mono">
+    <Dialog open={open} onOpenChange={next => { onOpenChange(next); if (!next) setRevealFigures(false); }}>
+      <DialogContent
+        data-reveal-figures={revealFigures ? 'true' : undefined}
+        className="sm:rounded-lg border border-border/40 bg-card max-w-2xl p-6 font-mono"
+      >
         <DialogHeader>
-          <DialogTitle className="text-sm uppercase tracking-wider font-semibold text-foreground">Import payslips</DialogTitle>
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <DialogTitle className="text-sm uppercase tracking-wider font-semibold text-foreground">Import payslips</DialogTitle>
+            {globalFiguresHidden && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setRevealFigures(v => !v)}
+                className="h-7 px-2 text-xs gap-1.5 text-muted-foreground hover:text-foreground shrink-0"
+              >
+                {revealFigures ? <EyeOff className="h-3.5 w-3.5" aria-hidden="true" /> : <Eye className="h-3.5 w-3.5" aria-hidden="true" />}
+                {revealFigures ? 'Hide figures' : 'Show figures'}
+              </Button>
+            )}
+          </div>
           <DialogDescription className="text-xs text-muted-foreground">
             Every file is read here, in this tab. Check what it found before importing.
           </DialogDescription>
@@ -212,6 +236,7 @@ export function PayslipImportDialog({ open, onOpenChange }: {
             <div className="space-y-1 max-h-[45dvh] overflow-y-auto pr-1">
               {rows.map((row, i) => {
                 const check = checkPayslip(row.slip);
+                const duplicate = findDuplicatePayslip(payslips, { payDate: row.slip.payDate, employer: row.slip.employer });
                 // A file that yielded nothing is not a file that balances.
                 // Zero minus zero reconciles arithmetically and means nothing,
                 // and a tick against £0.00 is a pass claimed from no data.
@@ -244,8 +269,10 @@ export function PayslipImportDialog({ open, onOpenChange }: {
                         {row.error
                           ? row.error
                           : !readAnything
-                            ? 'No text layer — archive it and type the figures in'
-                            : `${row.found}/7 read${row.dateFromName ? ', date from filename' : ''}${
+                            ? duplicate
+                              ? 'Already added — check to attach this PDF'
+                              : 'No text layer — archive it and type the figures in'
+                            : `${duplicate ? 'Already added (check to replace) · ' : ''}${row.found}/7 read${row.dateFromName ? ', date from filename' : ''}${
                                 check.reconciles ? '' : ` · off by ${formatGBP(check.difference)}`}`}
                       </div>
                     </div>

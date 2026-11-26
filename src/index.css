@@ -598,6 +598,11 @@
   text-shadow: 0 0 0.45em hsl(var(--foreground) / 0.75);
 }
 
+[data-finance-figures="hidden"] [data-reveal-figures="true"] input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]) {
+  color: inherit;
+  text-shadow: none;
+}
+
 [data-finance-figures="hidden"] text[data-hidden-figure] {
   filter: url(#finance-figure-blur);
 }

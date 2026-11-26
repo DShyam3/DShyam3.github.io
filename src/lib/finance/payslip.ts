@@ -279,3 +279,27 @@ export const compareToModel = (actual: number, modelled: number | null): ModelCo
     percentOff: modelled === 0 ? null : round2((difference / modelled) * 100),
   };
 };
+
+const normalizeEmployer = (employer?: string): string =>
+  (employer ?? '').trim().toLowerCase();
+
+/**
+ * Finds an existing payslip for the same pay date and employer.
+ *
+ * Matches the database's `(profile_id, employer, pay_date)` natural key
+ * case-insensitively after trimming so a duplicate PDF is caught before
+ * uploading to storage or hitting the unique constraint.
+ */
+export const findDuplicatePayslip = (
+  slips: readonly Payslip[],
+  candidate: { payDate?: string; employer?: string; excludeId?: string },
+): Payslip | undefined => {
+  const payDate = candidate.payDate?.trim();
+  if (!payDate) return undefined;
+  const employer = normalizeEmployer(candidate.employer);
+  return slips.find(
+    p => p.id !== candidate.excludeId
+      && p.payDate === payDate
+      && normalizeEmployer(p.employer) === employer,
+  );
+};
