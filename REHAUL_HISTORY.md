@@ -3373,4 +3373,4 @@ Four decisions, each with its reason:
 
 4. **Staleness is judged per link.** A link not checked for two days is reported, and a never-checked link counts from the day it was added. A run that reaches only part of the list still shows, and silence is never reported as health: a check that has stopped reads "Link check stalled".
 
-Closure: built in the worktree on branch `discover-dislikes`, uncommitted, on `origin/main` `90783ab1`. Not applied to hosted Supabase, not deployed to GitHub Pages, not checked on hardware. The ship order is in `STATE.md`.
+Closure: shipped in commits `1467d995` (table and cron migration), `7c35d266` (links-check function and SSRF guard), `274e3bef` (owner Links button) and `6b16f6a6` (docs) on `origin/main`. The function is deployed and the migration applied to hosted Supabase, recorded as version `20261126123059`. The first manual run checked all 7 links and none failed. The first scheduled run (2026-11-27 04:40 UTC) and an owner-signed-in check of the live Links view are not yet verified.
