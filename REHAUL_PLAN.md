@@ -585,9 +585,11 @@ releases, trip departures, warranty expiries and goal dates. Write it once,
 outside all surfaces, when a second surface needs one.
 
 **The change feed.** Snapshot or insert-timestamp, then diff. Powers watchlist
-announcements today; when dead links, subscription price rises or new books in a
-tracked series need signalling, `watchlist_events`'s shape scales — `{ surface,
+announcements today; when subscription price rises or new books in a tracked
+series need signalling, `watchlist_events`'s shape scales — `{ surface,
 entity_id, kind, occurred_at, payload }` — and one renderer serves them all.
+Dead links are not a change-feed user: a dead link is a condition held as state
+in `link_checks`, one row per link (see `REHAUL_HISTORY.md`, 2026-11-26).
 
 **Year in review, other surfaces.** The watchlist surface is built
 (`src/features/watchlist/year-review.ts`). Five remain feeding the same engine:
@@ -600,7 +602,6 @@ Unblocked; this is pure function territory.
 | Surface | Item | Note |
 |---|---|---|
 | Links | Auto-metadata on paste — title, favicon, description, OG image | the add form asks for all of it by hand today |
-| Links | Dead-link check on a cron, flag non-200 | a links page rots silently; highest value on this surface |
 | Links | Archived text on save | survives the source disappearing |
 | Links | Recently added rail, domain rollup | query only |
 | Books | Reading progress for books marked Currently Reading | |
@@ -758,8 +759,8 @@ accounts rather than per account.
 
 ### 8.I Still to build (the order)
 
-1. **Links dead-link check and auto-metadata**, the highest-value pair outside
-   the watchlist, and the only unblocked item here.
+1. **Links auto-metadata on paste** (title, favicon, description, OG image),
+   the only unblocked item here.
 2. **8.D primitives**, when a second surface needs the countdown or change feed.
    Do not refactor the watchlist's implementation on spec; refactor when you
    have two callers.

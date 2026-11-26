@@ -3360,3 +3360,17 @@ Closure: the picker, sync rule, and baseline migration are in commit `83c6bf9e` 
 The existing `franchise` field names one group and also guides TMDB/Wikidata franchise matching. Replacing it with a list would change that matching and make an existing correction ambiguous. The primary field stays; `additional_franchises` on films and shows holds extra owner-chosen Library Franchise memberships. Cards combine both fields and deduplicate each title within a card. A larger group is an explicit membership on each title, not a parent-child rule that silently changes smaller groups.
 
 Adding or removing a membership updates one database row atomically through an admin-only RPC. Saving the whole array from a title detail held open in another tab could erase a newer edit. The database checks each name and bounds the array as well as the UI. Two migrations, `20261125213300_watchlist_additional_franchises.sql` and `20261125214206_watchlist_franchise_membership_rpc.sql`, are applied to local and hosted Supabase according to the current handoff; the owner-signed-in UI is not browser verified.
+
+### Dead-link check: state per link, owner-only results, three failures before a flag — 2026-11-26
+
+Four decisions, each with its reason:
+
+1. **Link health is state, not events.** One row per link in `link_checks`, not rows in the change feed. A dead link is a condition to fix, not something that happened; an event per failed night would repeat the same news until someone acts. The change feed stays for announcements (8.D).
+
+2. **Results are owner-only, in their own table, not columns on `links`.** `links` is public. Public results would let anyone who controls a linked site's redirect, with DNS rebinding, read whether an internal address answered. Visitors have no use for the results either. `link_checks` is readable through `is_admin()` only, with no anon grant.
+
+3. **A link fails after 3 failed checks in a row, and 401, 403, 429 and Cloudflare challenges count as working.** One bad morning is not a dead link. A site that refuses robots is still there, so those answers are working. Accepted cost, both ways: a CDN that answers 403 for a deleted page (CloudFront in front of S3) is never flagged; a bot wall that answers a bare 503 (Amazon) is flagged.
+
+4. **Staleness is judged per link.** A link not checked for two days is reported, and a never-checked link counts from the day it was added. A run that reaches only part of the list still shows, and silence is never reported as health: a check that has stopped reads "Link check stalled".
+
+Closure: built in the worktree on branch `discover-dislikes`, uncommitted, on `origin/main` `90783ab1`. Not applied to hosted Supabase, not deployed to GitHub Pages, not checked on hardware. The ship order is in `STATE.md`.

@@ -136,6 +136,8 @@ Link icons resolve at high resolution, displaying an Apple ecosystem mark for
 generic Apple addresses when no custom icon is set. Link icons show whole on a
 white plate, with no outline.
 
+Each saved link is checked once a day, at 04:40 UTC. A link is failing after three failed checks in a row. A check fails when the final address, after up to five redirects, answers with a status outside 2xx, or does not answer at all: the domain does not resolve, the connection fails or times out, there are too many redirects, the address is not a web address, or it points at a private network address. Responses of 401, 403, 429 and Cloudflare bot challenges count as working. Only the signed-in owner sees the results. While any link is failing, the Links toolbar shows "N links failing"; it opens a list of each failing link, the reason, and the day it began failing, and each row opens the link (a drawer on a phone, a popover elsewhere). If no link is failing but a link has not been checked for over two days, or the check has never run, the button reads "Link check stalled" and says so. A link whose address is edited starts again from zero. Visitors see none of this.
+
 A link field in an admin form takes only an `http`, `https` or `mailto` address, and the form refuses any other value. A saved address of another kind shows without a link. Images uploaded to a collection must be JPEG, PNG, GIF, WebP or HEIC files, judged by their contents rather than their name.
 
 A stored image that stops loading shows the collection's placeholder tile, the
