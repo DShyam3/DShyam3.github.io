@@ -2293,6 +2293,44 @@ export type Database = {
         }
         Relationships: []
       }
+      link_checks: {
+        Row: {
+          check_error: string | null
+          check_failures: number
+          check_status: number | null
+          checked_at: string
+          failing_since: string | null
+          link_id: string
+          url: string
+        }
+        Insert: {
+          check_error?: string | null
+          check_failures?: number
+          check_status?: number | null
+          checked_at: string
+          failing_since?: string | null
+          link_id: string
+          url: string
+        }
+        Update: {
+          check_error?: string | null
+          check_failures?: number
+          check_status?: number | null
+          checked_at?: string
+          failing_since?: string | null
+          link_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_checks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: true
+            referencedRelation: "links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       links: {
         Row: {
           category: string
