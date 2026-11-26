@@ -1,0 +1,137 @@
+import { checkOutboundUrl, type OutboundRefusal, type Resolver } from '../_shared/public-address.ts'
+
+/**
+ * One link's check: the final HTTP status once redirects are followed, or why
+ * there was none. Kept apart from the handler so it runs under test with a
+ * fake fetch and resolver.
+ */
+
+export type CheckError = OutboundRefusal | 'timeout' | 'connection' | 'too_many_redirects'
+
+export interface LinkCheck {
+  /** Final HTTP status, or null when no response came back. */
+  status: number | null
+  error: CheckError | null
+  /** The answer was a bot challenge, whatever its status: a person gets through. */
+  challenged?: true
+}
+
+export interface CheckDeps {
+  fetch: typeof fetch
+  resolve: Resolver
+  /** Aborts the whole check, every hop included, when the time is up. */
+  signal: AbortSignal
+}
+
+/** Honest about what it is, so a site owner reading their logs can tell. */
+export const USER_AGENT = 'DShyamLinkCheck/1.0 (+https://dshyam3.github.io/links)'
+
+export const MAX_REDIRECTS = 5
+
+const REDIRECTS = new Set([301, 302, 303, 307, 308])
+
+/**
+ * Statuses that say the site is there but will not serve a robot: a login
+ * wall, a bot shield, a rate limit. The link still works for a person, so
+ * these are not failures. Everything else outside 2xx is.
+ */
+const REFUSES_ROBOTS = new Set([401, 403, 429])
+
+/**
+ * Whether the check found the link working.
+ *
+ * The cost of reading 401/403/429 and bot challenges as working: a dead page
+ * that a CDN answers with 403 (CloudFront in front of a deleted S3 object)
+ * is never flagged. A bot wall that answers 503 without saying so (Amazon's
+ * robot check) is flagged after three failed checks.
+ */
+export const isWorking = (check: LinkCheck): boolean =>
+  check.challenged === true ||
+  (check.status !== null &&
+    ((check.status >= 200 && check.status < 300) || REFUSES_ROBOTS.has(check.status)))
+
+async function request(deps: CheckDeps, url: URL, method: 'HEAD' | 'GET'): Promise<Response> {
+  const response = await deps.fetch(url, {
+    method,
+    // Never followed on trust: every hop is checked against the address rules
+    // before it is requested.
+    redirect: 'manual',
+    signal: deps.signal,
+    headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml,*/*;q=0.8' },
+  })
+  // Only the status is wanted; do not download the page.
+  await response.body?.cancel()
+  return response
+}
+
+/**
+ * Checks `url`. HEAD first, since it fetches no page; a server that answers
+ * HEAD with an error gets a GET as well, because enough of them mishandle HEAD
+ * that its error alone is not evidence.
+ */
+export async function checkLink(url: string, deps: CheckDeps): Promise<LinkCheck> {
+  let current = url
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const allowed = await checkOutboundUrl(current, deps.resolve, deps.signal)
+    if (!allowed.ok) {
+      return { status: null, error: deps.signal.aborted ? 'timeout' : allowed.reason }
+    }
+
+    let response: Response
+    try {
+      response = await request(deps, allowed.url, 'HEAD')
+      if (response.status >= 400) response = await request(deps, allowed.url, 'GET')
+    } catch {
+      return { status: null, error: deps.signal.aborted ? 'timeout' : 'connection' }
+    }
+
+    // Cloudflare marks a challenge page; it often comes as 503 or 403.
+    if (response.headers.get('cf-mitigated') === 'challenge') {
+      return { status: response.status, error: null, challenged: true }
+    }
+
+    const location = response.headers.get('location')
+    if (!REDIRECTS.has(response.status) || !location) return { status: response.status, error: null }
+    try {
+      current = new URL(location, allowed.url).href
+    } catch {
+      return { status: response.status, error: null }
+    }
+  }
+  return { status: null, error: 'too_many_redirects' }
+}
+
+/** A `link_checks` row, less its key. */
+export interface CheckRow {
+  /** The URL this result is for; a link whose URL has changed starts afresh. */
+  url: string
+  checked_at: string
+  check_status: number | null
+  check_error: CheckError | null
+  check_failures: number
+  failing_since: string | null
+}
+
+/**
+ * The row after checking `url`, finished at `now`. A working link clears the
+ * streak; a failing one extends it, keeping the date it began. A previous row
+ * for a different URL counts for nothing.
+ */
+export function nextCheckRow(
+  previous: Pick<CheckRow, 'url' | 'check_failures' | 'failing_since'> | null,
+  url: string,
+  check: LinkCheck,
+  now: string,
+): CheckRow {
+  const streak = previous?.url === url ? previous : { check_failures: 0, failing_since: null }
+  const working = isWorking(check)
+  return {
+    url,
+    checked_at: now,
+    check_status: check.status,
+    check_error: check.error,
+    // smallint column; a link failing daily for years stays in range.
+    check_failures: working ? 0 : Math.min(streak.check_failures + 1, 10_000),
+    failing_since: working ? null : (streak.failing_since ?? now),
+  }
+}

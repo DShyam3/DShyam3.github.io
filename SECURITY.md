@@ -131,8 +131,9 @@ attack surface of this site is Supabase, and it was audited separately
   SHA-256 hash with a ten-minute expiry, and bound to the exact redirect URI
   and finance profile. The browser verifies its tab-scoped copy first; the
   function atomically consumes the matching state before exchanging a code.
-- **Outbound fetches (SSRF)**: `merchant-logo-cache` is the only function that
-  requests anything from a host we do not run, and it talks to exactly two:
+- **Outbound fetches (SSRF)**: one function, `links-check`, requests a host
+  that data rather than code chooses; it is covered in the next bullet.
+  `merchant-logo-cache` talks to exactly two hosts, fixed in code:
   `api.brandfetch.io` and `cdn.brandfetch.io`. No URL, host or path is ever
   read from the request body, so it cannot be steered. The domain that brand
   search returns is never fetched directly either — it is handed back to
@@ -144,6 +145,24 @@ attack surface of this site is Supabase, and it was audited separately
   the remote host's `Content-Type`, capped at 256 KB, and SVG is refused:
   served from our own storage origin it could execute script if opened
   directly.
+- **The daily link check (`links-check`)** requests every URL in `links`, a
+  table only the owner can write; nothing in the request body names a URL.
+  Every URL, and every redirect it leads to (at most 5, never followed on
+  trust), must pass `_shared/public-address.ts` before it is requested: http or
+  https only, no credentials in the URL, no `localhost` or single-label name,
+  and every A and AAAA address the name resolves to on the public internet
+  (private, loopback, link-local and metadata, carrier-grade NAT, multicast,
+  documentation and reserved ranges are refused, including IPv4 written in hex
+  or octal and IPv4 inside IPv6). Only the status is read: the body is
+  cancelled unread. Results go to `link_checks`, which only the owner can
+  read (no anon grant; RLS `is_admin()` for authenticated), so a visitor
+  cannot use the check to probe anything. Accepted risk: `fetch` resolves the
+  name again, so a host that answers DNS differently a moment later
+  (rebinding) is not caught, and a redirect hop's host is chosen by whichever
+  site the owner linked to, not by the owner. The runtime has no way to pin
+  the address. What bounds it: the function sends no credentials and no body,
+  reads no response body, and keeps only the status code where only the owner
+  can see it.
 - **Merchant logos, and why they are not hotlinked**: rendering a logo straight
   from a third-party CDN would send that CDN one request per transaction row,
   with the user's IP and referrer, describing where they shop. The logo is
