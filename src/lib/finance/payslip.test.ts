@@ -278,4 +278,17 @@ describe('findDuplicatePayslip', () => {
   it('does not match a different employer on the same date', () => {
     expect(findDuplicatePayslip(existing, { payDate: '2026-11-30', employer: 'Capgemini' })).toBeUndefined();
   });
+
+  it('matches same month and employer when monthFallback is enabled for placeholder dates', () => {
+    expect(findDuplicatePayslip(existing, { payDate: '2026-11-01', employer: 'OceanInfinity', monthFallback: true })?.id).toBe('oi-nov');
+    expect(findDuplicatePayslip(existing, { payDate: '2026-11-01', employer: 'OceanInfinity', monthFallback: false })).toBeUndefined();
+  });
+
+  it('matches same pay date, gross, and net even when employer name differs', () => {
+    expect(findDuplicatePayslip(existing, { payDate: '2026-11-30', employer: 'Capgemini', gross: 4000, net: 2800 })?.id).toBe('oi-nov');
+  });
+
+  it('matches same month, gross, and net when monthFallback is enabled even if employer differs', () => {
+    expect(findDuplicatePayslip(existing, { payDate: '2026-11-01', employer: 'Capgemini', gross: 4000, net: 2800, monthFallback: true })?.id).toBe('oi-nov');
+  });
 });

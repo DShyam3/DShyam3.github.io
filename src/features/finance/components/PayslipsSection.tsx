@@ -22,14 +22,16 @@ import {
   unambiguousPayslipMatches,
   calendarYearOf, inCalendarYear, inTaxYear, sumPayslips, taxYearOf, type Payslip, type PayslipLine,
 } from '@/lib/finance';
+import type { PackageBenefit } from '@/lib/finance/types';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format-date';
 import { toISODate } from '@/lib/finance/dates';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Eye, EyeOff, FileText, Link2, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Eye, EyeOff, FileText, Link2, Paperclip, Pencil, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
 import { extractPayslipFromPdf } from '../payslip-pdf';
 import { useGlobalFiguresHidden } from '../useHiddenFigures';
 import { PayslipImportDialog } from './PayslipImportDialog';
+import { PayslipRescanDialog } from './PayslipRescanDialog';
 import { PayslipDetailDialog } from './PayslipDetailDialog';
 import { employerLogo } from '../employer-logo';
 import { parsedFieldCount, parsePayslipFilename, type ParsedPayslip } from '@/lib/finance';
@@ -119,6 +121,8 @@ export function PayslipsSection() {
     deletePayslipReimbursementLink,
     profileId,
     settings,
+    setSettings,
+    saveDataToSupabase,
   } = useFinanceData();
   const { planRules, repaymentThreshold } = useStudentLoanRules();
   const { askDelete, deleteDialog } = useDeleteConfirm();
@@ -144,21 +148,31 @@ export function PayslipsSection() {
   const [isSaving, setIsSaving] = useState(false);
   const [isReading, setIsReading] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isRescanOpen, setIsRescanOpen] = useState(false);
   const [readCount, setReadCount] = useState<number | null>(null);
   const [parsedLines, setParsedLines] = useState<PayslipLine[] | undefined>();
+  const [payrolledBenefits, setPayrolledBenefits] = useState<{ label: string; monthlyAmount: number }[]>([]);
   const [revealFigures, setRevealFigures] = useState(false);
   const globalFiguresHidden = useGlobalFiguresHidden();
   // The file whose read is in flight. A read that finishes after another file
   // was chosen, or after the dialog closed, is dropped rather than applied.
   const readingFile = useRef<File | null>(null);
-  // Whether the pay date is still a stand-in the document may replace: today's
-  // date on a new payslip, or the date on a row with no figures captured. Once
-  // someone types a date it is theirs.
+  // Whether the pay date or employer is still a stand-in the document may
+  // replace: today's date / blank on a new payslip, or a previous file's
+  // auto-filled values. Once someone types into either field it is theirs.
   const datePlaceholder = useRef(true);
+  const employerPlaceholder = useRef(true);
 
   const duplicatePayslip = useMemo(
-    () => findDuplicatePayslip(payslips, { payDate: draft.payDate, employer: draft.employer, excludeId: editing?.id }),
-    [payslips, draft.payDate, draft.employer, editing?.id],
+    () => findDuplicatePayslip(payslips, {
+      payDate: draft.payDate,
+      employer: draft.employer,
+      gross: num(draft.gross),
+      net: num(draft.net),
+      excludeId: editing?.id,
+      monthFallback: datePlaceholder.current,
+    }),
+    [payslips, draft.payDate, draft.employer, draft.gross, draft.net, editing?.id],
   );
 
   // Shown live in the dialog rather than after saving: a payslip that does not
@@ -386,9 +400,11 @@ export function PayslipsSection() {
     setDraft(emptyDraft());
     setStoragePath(undefined);
     setParsedLines(undefined);
+    setPayrolledBenefits([]);
     setRevealFigures(false);
     void handleFile(null);
     datePlaceholder.current = true;
+    employerPlaceholder.current = true;
     setIsOpen(true);
   };
 
@@ -397,9 +413,11 @@ export function PayslipsSection() {
     setDraft(draftFrom(p));
     setStoragePath(p.storagePath);
     setParsedLines(undefined);
+    setPayrolledBenefits([]);
     setRevealFigures(false);
     void handleFile(null);
     datePlaceholder.current = p.gross === 0 && p.net === 0;
+    employerPlaceholder.current = !(p.employer ?? '').trim();
     setIsOpen(true);
   };
 
@@ -457,6 +475,7 @@ export function PayslipsSection() {
     setPendingFile(file);
     setReadCount(null);
     setParsedLines(undefined);
+    setPayrolledBenefits([]);
     setIsReading(false);
     if (!file || file.type !== 'application/pdf') return;
     setIsReading(true);
@@ -470,19 +489,29 @@ export function PayslipsSection() {
       const employer = parsed.employer ?? fromName.employer;
       setReadCount(parsedFieldCount(parsed));
       setParsedLines(parsed.lines);
-      setDraft(d => ({
-        ...d,
-        payDate: datePlaceholder.current && payDate ? payDate : d.payDate,
-        employer: d.employer.trim() === '' && employer ? employer : d.employer,
-        gross: fill(d.gross, parsed.gross),
-        incomeTax: fill(d.incomeTax, parsed.incomeTax),
-        nationalInsurance: fill(d.nationalInsurance, parsed.nationalInsurance),
-        pensionEmployee: fill(d.pensionEmployee, parsed.pensionEmployee),
-        pensionEmployer: fill(d.pensionEmployer, parsed.pensionEmployer),
-        studentLoan: fill(d.studentLoan, parsed.studentLoan),
-        otherDeductions: fill(d.otherDeductions, parsed.otherDeductions),
-        net: fill(d.net, parsed.net),
-      }));
+      setPayrolledBenefits(parsed.payrolledBenefits ?? []);
+      setDraft(d => {
+        // When adding a new payslip and switching PDFs, start fresh from the
+        // new file so figures from the previous PDF do not bleed into this one.
+        const base = editing ? d : {
+          ...d,
+          gross: '', incomeTax: '', nationalInsurance: '',
+          pensionEmployee: '', pensionEmployer: '', studentLoan: '', otherDeductions: '', net: '',
+        };
+        return {
+          ...base,
+          payDate: datePlaceholder.current && payDate ? payDate : base.payDate,
+          employer: (base.employer.trim() === '' || employerPlaceholder.current) && employer ? employer : base.employer,
+          gross: fill(base.gross, parsed.gross),
+          incomeTax: fill(base.incomeTax, parsed.incomeTax),
+          nationalInsurance: fill(base.nationalInsurance, parsed.nationalInsurance),
+          pensionEmployee: fill(base.pensionEmployee, parsed.pensionEmployee),
+          pensionEmployer: fill(base.pensionEmployer, parsed.pensionEmployer),
+          studentLoan: fill(base.studentLoan, parsed.studentLoan),
+          otherDeductions: fill(base.otherDeductions, parsed.otherDeductions),
+          net: fill(base.net, parsed.net),
+        };
+      });
     } catch (err) {
       if (readingFile.current !== file) return;
       // A PDF that cannot be read is not a failure worth blocking on: the
@@ -517,6 +546,43 @@ export function PayslipsSection() {
     });
   };
 
+  const missingPackageBenefits = useMemo(() => {
+    const existing = new Set((settings.packageBenefits ?? []).map(b => b.name.trim().toLowerCase()));
+    return payrolledBenefits.filter(b => {
+      const lower = b.label.toLowerCase();
+      if (existing.has(lower)) return false;
+      if (lower.includes('medical') && [...existing].some(n => n.includes('medical'))) return false;
+      if (lower.includes('dental') && [...existing].some(n => n.includes('dental'))) return false;
+      if (lower.includes('travel') && [...existing].some(n => n.includes('travel'))) return false;
+      return true;
+    });
+  }, [payrolledBenefits, settings.packageBenefits]);
+
+  const addDetectedPackageBenefits = () => {
+    if (missingPackageBenefits.length === 0) return;
+    const now = Date.now();
+    const added: PackageBenefit[] = missingPackageBenefits.map((b, idx) => {
+      const lower = b.label.toLowerCase();
+      const emoji = lower.includes('medical') ? '🏥' : lower.includes('dental') ? '🦷' : lower.includes('travel') ? '✈️' : '🎁';
+      return {
+        id: `benefit_${now}_${idx}`,
+        name: b.label,
+        amount: Math.round(b.monthlyAmount * 12 * 100) / 100,
+        type: 'monetary',
+        kind: 'benefit-in-kind',
+        emoji,
+        notes: 'Payrolled Benefit in Kind (from payslip)',
+      };
+    });
+    const updatedSettings = { ...settings, packageBenefits: [...(settings.packageBenefits ?? []), ...added] };
+    setSettings(updatedSettings);
+    void saveDataToSupabase('settings', updatedSettings);
+    toast({
+      title: 'Added to Package Benefits',
+      description: added.map(a => `${a.name} (${formatGBP(a.amount)}/yr)`).join(', '),
+    });
+  };
+
   const set = (key: keyof Draft) => (value: string) => setDraft(d => ({ ...d, [key]: value }));
 
   return (
@@ -531,6 +597,12 @@ export function PayslipsSection() {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {payslips.some(p => p.storagePath?.toLowerCase().endsWith('.pdf')) && (
+            <Button size="sm" variant="outline" onClick={() => setIsRescanOpen(true)} className="h-8 rounded-lg text-xs font-mono gap-1.5 border-border/40 bg-background/30">
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+              Re-scan PDFs
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={() => setIsImportOpen(true)} className="h-8 rounded-lg text-xs font-mono gap-1.5 border-border/40 bg-background/30">
             <Upload className="h-3.5 w-3.5" />
             Import
@@ -804,7 +876,7 @@ export function PayslipsSection() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="payslip-employer" className="text-xs">Employer</Label>
-                <Input id="payslip-employer" value={draft.employer} onChange={e => set('employer')(e.target.value)} placeholder="Optional" className="rounded-lg h-9 border-primary/20 bg-background/50 text-xs" />
+                <Input id="payslip-employer" value={draft.employer} onChange={e => { employerPlaceholder.current = false; set('employer')(e.target.value); }} placeholder="Optional" className="rounded-lg h-9 border-primary/20 bg-background/50 text-xs" />
               </div>
             </div>
 
@@ -909,6 +981,24 @@ export function PayslipsSection() {
               </div>
             )}
 
+            {missingPackageBenefits.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-foreground">
+                <span className="min-w-0">
+                  Found {missingPackageBenefits.length} payrolled benefit{missingPackageBenefits.length === 1 ? '' : 's'}:{' '}
+                  {missingPackageBenefits.map(b => `${b.label} (${formatGBP(b.monthlyAmount)}/mo)`).join(', ')}.
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addDetectedPackageBenefits}
+                  className="h-7 px-2 text-xs border-primary/40 hover:bg-primary/15 shrink-0"
+                >
+                  Add to Package Benefits
+                </Button>
+              </div>
+            )}
+
             <div className={cn(
               'rounded-lg border px-3 py-2 text-xs',
               !hasFigures
@@ -967,6 +1057,8 @@ export function PayslipsSection() {
       />
 
       <PayslipImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
+
+      <PayslipRescanDialog open={isRescanOpen} onOpenChange={setIsRescanOpen} />
 
       {deleteDialog}
     </div>

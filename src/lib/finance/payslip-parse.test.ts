@@ -406,6 +406,12 @@ describe('parsePayslipText — student loan vocabulary', () => {
   it('does not crash on a bare "SL" with nothing after it', () => {
     expect(parsePayslipText('SL').studentLoan).toBeUndefined();
   });
+
+  it('does not mistake an NI number starting with SL for a student loan', () => {
+    const parsed = parsePayslipText('NI Number SL 236056A Net Pay 1,266.96');
+    expect(parsed.studentLoan).toBeUndefined();
+    expect(parsed.net).toBe(1266.96);
+  });
 });
 
 describe('parsePayslipText — a Total Pay gross and a Net Payable', () => {
@@ -642,5 +648,35 @@ describe('parsePayslipText — benefit deductions', () => {
     const parsed = parsePayslipText(text);
     expect(parsed.otherDeductions).toBeUndefined();
     expect(parsed.lines).toBeUndefined();
+  });
+
+  it('parses payrolled BIKs (same benefit in Payments and Deductions) and Ers Pension beside YTD', () => {
+    const oceanInfinity = `
+      Salary 4,583.33 Tax 822.46
+      Pension Salary Sacr... -229.17 National Insurance 254.58
+      Dental Insurance 40.35 Dental Insurance 40.35
+      Medical Insurance 112.00 Medical Insurance 112.00
+      Travel Insurance 7.78 Travel Insurance 7.78
+      Student Loan Plan 2 171.00
+      Taxable Pay 4,514.29 Taxable Pay 23,640.88
+      Ers NIC TP: 590.57 Ers NIC YTD: 3,146.80
+      Ers Pension TP: 475.53 Ers Pension YTD: 1,902.12
+      Pay Date 30/11/2026 Net Pay 3,106.12
+    `;
+    const parsed = parsePayslipText(oceanInfinity);
+    expect(parsed.payDate).toBe('2026-11-30');
+    expect(parsed.gross).toBe(4583.33);
+    expect(parsed.incomeTax).toBe(822.46);
+    expect(parsed.nationalInsurance).toBe(254.58);
+    expect(parsed.pensionEmployee).toBe(229.17);
+    expect(parsed.pensionEmployer).toBe(475.53);
+    expect(parsed.studentLoan).toBe(171);
+    expect(parsed.otherDeductions).toBeUndefined();
+    expect(parsed.net).toBe(3106.12);
+    expect(parsed.payrolledBenefits).toEqual([
+      { label: 'Dental Insurance', monthlyAmount: 40.35 },
+      { label: 'Medical Insurance', monthlyAmount: 112 },
+      { label: 'Travel Insurance', monthlyAmount: 7.78 },
+    ]);
   });
 });

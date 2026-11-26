@@ -36,9 +36,11 @@ export interface ParsedPayslip {
   employer?: string;
   /** Named benefit/sacrifice deductions recognised on the payslip. */
   lines?: PayslipLine[];
+  /** Payrolled Benefits-in-Kind (added to Taxable Pay and deducted back out). */
+  payrolledBenefits?: { label: string; monthlyAmount: number }[];
 }
 
-type Field = Exclude<keyof ParsedPayslip, 'payDate' | 'employer' | 'lines'>;
+type Field = Exclude<keyof ParsedPayslip, 'payDate' | 'employer' | 'lines' | 'payrolledBenefits'>;
 
 /**
  * Fields that are magnitudes, whatever sign the payslip prints.
@@ -85,7 +87,7 @@ const RULES: { field: Field | null; pattern: RegExp }[] = [
   // `namesOtherSacrificeScheme`. A bare "pension" already handles "Pension
   // Salary Sacrifice" without it, because "Pension" is the earlier label on
   // that line regardless.
-  { field: 'studentLoan', pattern: /\bstudent\s+loan|\bstud\s+loan|\bpost\s*grad(?:uate)?\s+loan|\bpg\s+loan|\bsl\b\s*(?=plan\b|\(|\d)/i },
+  { field: 'studentLoan', pattern: /\bstudent\s+loan|\bstud\s+loan|\bpost\s*grad(?:uate)?\s+loan|\bpg\s+loan|\bsl\b\s*(?=plan\b|\(|\d\b)/i },
   // Bare "SL" is gated on what follows it -- a plan reference, a digit, or an
   // opening bracket -- because "SL" on its own is too short a token to claim
   // unconditionally; a plain word spelled the same way elsewhere on a payslip
@@ -152,7 +154,7 @@ const RULES: { field: Field | null; pattern: RegExp }[] = [
   // allowances (e.g. "Car Allowance", "Holiday Pay") via `isBenefitDeductionLabel`.
   {
     field: 'otherDeductions',
-    pattern: /\b(?:cycle\s*(?:to\s*work|2\s*work)|cyclescheme|bike\s+scheme|childcare(?:\s+vouchers?)?|nursery(?:\s+scheme)?|gym(?:\s+(?:membership|wellness|fitness))?|fitness(?:\s+club)?|dental(?:\s+(?:cover|plan|insurance))?|denplan|private\s+medical|medical\s+(?:insurance|cover|plan)|health\s*(?:care|insurance|cash\s+plan)|cash\s+plan|bupa|axa|vitality|life\s+(?:assurance|insurance)|critical\s+illness|income\s+protection|tech(?:nology)?\s+scheme|holiday\s+(?:buy|purchase)|buy\s+(?:extra\s+)?holiday|extra\s+holiday|season\s+ticket|travel\s+loan|give\s+as\s+you\s+earn|\bgaye\b|payroll\s+giving|charit(?:y|able)\s+giving|trade\s+union|\bunion\b(?:\s+dues)?|car\s+(?:scheme|lease)|(?:ev|electric\s+(?:car|vehicle)|vehicle)\s+(?:scheme|lease)|sharesave|\bsaye\b|share\s+(?:incentive|purchase)|parking|flex(?:ible)?\s+benefit)(?:\s+(?:salary\s+)?sacr(?:ifice)?)?/i,
+    pattern: /\b(?:cycle\s*(?:to\s*work|2\s*work)|cyclescheme|bike\s+scheme|childcare(?:\s+vouchers?)?|nursery(?:\s+scheme)?|gym(?:\s+(?:membership|wellness|fitness))?|fitness(?:\s+club)?|dental(?:\s+(?:cover|plan|insurance))?|denplan|private\s+medical|medical\s+(?:insurance|cover|plan)|health\s*(?:care|insurance|cash\s+plan)|cash\s+plan|travel\s+insurance|bupa|axa|vitality|life\s+(?:assurance|insurance)|critical\s+illness|income\s+protection|tech(?:nology)?\s+scheme|holiday\s+(?:buy|purchase)|buy\s+(?:extra\s+)?holiday|extra\s+holiday|season\s+ticket|travel\s+loan|give\s+as\s+you\s+earn|\bgaye\b|payroll\s+giving|charit(?:y|able)\s+giving|trade\s+union|\bunion\b(?:\s+dues)?|car\s+(?:scheme|lease)|(?:ev|electric\s+(?:car|vehicle)|vehicle)\s+(?:scheme|lease)|sharesave|\bsaye\b|share\s+(?:incentive|purchase)|parking|flex(?:ible)?\s+benefit)(?:\s+(?:salary\s+)?sacr(?:ifice)?)?/i,
   },
 ];
 
@@ -303,15 +305,16 @@ const WALK_RULES = [...RULES, SACRIFICE_RULE];
 
 export function parsePayslipText(text: string): ParsedPayslip {
   const result: ParsedPayslip = {};
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
   // Lower is better; nothing found yet is worse than any match.
   let dateRank = Number.POSITIVE_INFINITY;
+  let payrolledBik = 0;
 
-  for (const line of lines) {
+  for (const rawLine of rawLines) {
     for (let rank = 0; rank < DATE_LABELS.length && rank < dateRank; rank++) {
-      if (!DATE_LABELS[rank].test(line)) continue;
-      const date = parseDate(line);
+      if (!DATE_LABELS[rank].test(rawLine)) continue;
+      const date = parseDate(rawLine);
       if (date) {
         result.payDate = date;
         dateRank = rank;
@@ -319,7 +322,16 @@ export function parsePayslipText(text: string): ParsedPayslip {
       break;
     }
 
-    if (CUMULATIVE.test(line)) continue;
+    // If a cumulative/YTD label appears on the right half of a two-column line
+    // (e.g. "Ers Pension TP: 475.53 Ers Pension YTD: 1,902.12"), keep only the
+    // period portion before it; if there is no amount before it, skip the line.
+    let line = rawLine;
+    const cumMatch = CUMULATIVE.exec(rawLine);
+    if (cumMatch) {
+      const beforeCum = rawLine.slice(0, cumMatch.index).trim();
+      if (!beforeCum || amountAfter(beforeCum, 0) === null) continue;
+      line = beforeCum;
+    }
 
     /* A line can carry more than one label. Two-column payslips run payments
        down the left and deductions down the right, so "Salary 4,000.00 Tax
@@ -331,6 +343,7 @@ export function parsePayslipText(text: string): ParsedPayslip {
        rule-order, or a later label could claim a figure belonging to one
        further left. First writer still wins across the document: a payslip
        states each figure once, and later mentions are totals or footnotes. */
+    const lineBenefits: { label: string; amount: number }[] = [];
     let cursor = 0;
     while (cursor < line.length) {
       let chosen: { field: Field | null; end: number; at: number; text: string; sacrifice: boolean } | null = null;
@@ -358,10 +371,7 @@ export function parsePayslipText(text: string): ParsedPayslip {
         if (amount !== null) {
           const value = MAGNITUDE_FIELDS.has(chosen.field) ? Math.abs(amount) : amount;
           if (chosen.field === 'otherDeductions') {
-            if (value > 0) {
-              result.otherDeductions = Math.round(((result.otherDeductions ?? 0) + value) * 100) / 100;
-              result.lines = [...(result.lines ?? []), { label: chosen.text.trim(), amount: value, kind: 'benefit' }];
-            }
+            if (value > 0) lineBenefits.push({ label: chosen.text.trim(), amount: value });
           } else {
             result[chosen.field] = value;
           }
@@ -369,9 +379,30 @@ export function parsePayslipText(text: string): ParsedPayslip {
       }
       cursor += chosen.end;
     }
+
+    // A benefit that appears with the exact same label and amount twice on the
+    // same line (once in Payments, once in Deductions) is a payrolled
+    // Benefit-in-Kind: added to Taxable Pay for tax and subtracted back out
+    // before Net, so it is not an employee deduction from Salary.
+    if (
+      lineBenefits.length === 2
+      && lineBenefits[0].label.toLowerCase() === lineBenefits[1].label.toLowerCase()
+      && Math.abs(lineBenefits[0].amount - lineBenefits[1].amount) < 0.01
+    ) {
+      payrolledBik = Math.round((payrolledBik + lineBenefits[0].amount) * 100) / 100;
+      result.payrolledBenefits = [
+        ...(result.payrolledBenefits ?? []),
+        { label: lineBenefits[0].label, monthlyAmount: lineBenefits[0].amount },
+      ];
+    } else {
+      for (const b of lineBenefits) {
+        result.otherDeductions = Math.round(((result.otherDeductions ?? 0) + b.amount) * 100) / 100;
+        result.lines = [...(result.lines ?? []), { label: b.label, amount: b.amount, kind: 'benefit' }];
+      }
+    }
   }
 
-  return withDerivedGross(result);
+  return withDerivedGross(result, payrolledBik);
 }
 
 /**
@@ -380,14 +411,15 @@ export function parsePayslipText(text: string): ParsedPayslip {
  * Those state the sacrifice and the taxable pay that remains, but often have
  * no row called gross at all. Reading a bare "Salary" line instead was tried
  * and read an annual figure — twelve times the month's pay, and plausible
- * enough to chart. Adding the sacrifice back to taxable pay is arithmetic
+ * enough to chart. Adding the sacrifice back to taxable pay (and subtracting
+ * any payrolled Benefits-in-Kind that were added to taxable pay) is arithmetic
  * rather than a guess, and it only runs when the payslip stated no gross.
  */
-const withDerivedGross = (parsed: ParsedPayslip): ParsedPayslip => {
+const withDerivedGross = (parsed: ParsedPayslip, payrolledBik = 0): ParsedPayslip => {
   if (parsed.gross !== undefined) return parsed;
   if (parsed.taxablePay === undefined) return parsed;
   const sacrifice = parsed.pensionEmployee ?? 0;
-  return { ...parsed, gross: Math.round((parsed.taxablePay + sacrifice) * 100) / 100 };
+  return { ...parsed, gross: Math.round((parsed.taxablePay + sacrifice - payrolledBik) * 100) / 100 };
 };
 
 /**

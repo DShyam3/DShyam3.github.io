@@ -103,7 +103,13 @@ export function PayslipImportDialog({ open, onOpenChange }: {
     // twenty at once makes the tab unresponsive on the machine doing the work.
     for (const file of list) {
       const row = await rowFrom(file);
-      const duplicate = findDuplicatePayslip(payslips, { payDate: row.slip.payDate, employer: row.slip.employer });
+      const duplicate = findDuplicatePayslip(payslips, {
+        payDate: row.slip.payDate,
+        employer: row.slip.employer,
+        gross: row.slip.gross,
+        net: row.slip.net,
+        monthFallback: row.dateFromName,
+      });
       parsed.push(duplicate ? { ...row, include: false } : row);
       setProgress({ done: parsed.length, total: list.length });
     }
@@ -236,7 +242,13 @@ export function PayslipImportDialog({ open, onOpenChange }: {
             <div className="space-y-1 max-h-[45dvh] overflow-y-auto pr-1">
               {rows.map((row, i) => {
                 const check = checkPayslip(row.slip);
-                const duplicate = findDuplicatePayslip(payslips, { payDate: row.slip.payDate, employer: row.slip.employer });
+                const duplicate = findDuplicatePayslip(payslips, {
+                  payDate: row.slip.payDate,
+                  employer: row.slip.employer,
+                  gross: row.slip.gross,
+                  net: row.slip.net,
+                  monthFallback: row.dateFromName,
+                });
                 // A file that yielded nothing is not a file that balances.
                 // Zero minus zero reconciles arithmetically and means nothing,
                 // and a tick against £0.00 is a pass claimed from no data.

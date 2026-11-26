@@ -245,6 +245,11 @@ export function PayslipDetailDialog({
             </p>
           )}
           {payslip.notes && <p className="text-xs text-muted-foreground">{payslip.notes}</p>}
+          {payslip.storagePath && (
+            <p className="text-xs text-muted-foreground truncate" title={payslip.storagePath}>
+              Archived file: {payslip.storagePath.split('/').pop()}
+            </p>
+          )}
         </div>
 
         <DialogFooter className="pt-3 gap-2 sm:gap-0">

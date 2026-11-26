@@ -292,14 +292,41 @@ const normalizeEmployer = (employer?: string): string =>
  */
 export const findDuplicatePayslip = (
   slips: readonly Payslip[],
-  candidate: { payDate?: string; employer?: string; excludeId?: string },
+  candidate: { payDate?: string; employer?: string; gross?: number; net?: number; excludeId?: string; monthFallback?: boolean },
 ): Payslip | undefined => {
   const payDate = candidate.payDate?.trim();
   if (!payDate) return undefined;
   const employer = normalizeEmployer(candidate.employer);
-  return slips.find(
+  const exact = slips.find(
     p => p.id !== candidate.excludeId
       && p.payDate === payDate
       && normalizeEmployer(p.employer) === employer,
   );
+  if (exact) return exact;
+  if (candidate.gross && candidate.net && candidate.gross > 0 && candidate.net > 0) {
+    const byFigures = slips.find(
+      p => p.id !== candidate.excludeId
+        && p.payDate === payDate
+        && Math.abs(p.gross - candidate.gross!) < 0.01
+        && Math.abs(p.net - candidate.net!) < 0.01,
+    );
+    if (byFigures) return byFigures;
+  }
+  if (!candidate.monthFallback) return undefined;
+  const monthPrefix = payDate.slice(0, 7);
+  const byMonthEmployer = slips.find(
+    p => p.id !== candidate.excludeId
+      && p.payDate.startsWith(monthPrefix)
+      && normalizeEmployer(p.employer) === employer,
+  );
+  if (byMonthEmployer) return byMonthEmployer;
+  if (candidate.gross && candidate.net && candidate.gross > 0 && candidate.net > 0) {
+    return slips.find(
+      p => p.id !== candidate.excludeId
+        && p.payDate.startsWith(monthPrefix)
+        && Math.abs(p.gross - candidate.gross!) < 0.01
+        && Math.abs(p.net - candidate.net!) < 0.01,
+    );
+  }
+  return undefined;
 };
