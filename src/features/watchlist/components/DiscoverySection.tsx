@@ -615,6 +615,14 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
   const noneRef = useRef<HTMLButtonElement>(null);
   const alreadyWatchedRef = useRef<HTMLElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
+  // While None of these's own line says "Finding more…", this one keeps quiet.
+  const findingMoreShown = noneMarked !== null && noneMarked.undo !== 'failed' && discovery.likelySeenLoadingMore;
+  const alreadyWatchedStatus = discovery.likelySeenLoading || (discovery.likelySeenSearching && !findingMoreShown)
+    ? 'Finding titles you may have seen…'
+    : !discovery.franchisesLoading && !discovery.franchisesFailed && !discovery.likelySeenSearching
+      && discovery.franchises.length === 0 && discovery.likelySeen.length === 0
+      ? 'No incomplete series, spin-offs or likely seen titles found in this view.'
+      : '';
   // The grid may empty under the button while the next page loads: focus
   // goes to Undo, which stays put, rather than falling to the page.
   useEffect(() => {
@@ -723,11 +731,6 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
             <Button variant="outline" size="sm" onClick={discovery.retryFranchises}>Retry</Button>
           </div>
         )}
-        {!discovery.franchisesLoading && !discovery.franchisesFailed && !discovery.likelySeenLoading && discovery.franchises.length === 0 && discovery.likelySeen.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No incomplete series, spin-offs or likely seen titles found in this view.
-          </p>
-        )}
         {discovery.franchises.length > 0 && (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] items-start gap-3">
             {discovery.franchises.map((group) => (
@@ -751,9 +754,8 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
             </Button>
           </div>
         )}
-        {discovery.likelySeenLoading && (
-          <p role="status" className="pt-2 text-sm text-muted-foreground">Finding titles you may have seen…</p>
-        )}
+        {/* One live region, always there, so its last word is heard too. */}
+        <p role="status" className="pt-2 text-sm text-muted-foreground empty:hidden">{alreadyWatchedStatus}</p>
         <TileGrid
           items={discovery.likelySeen}
           type={type}

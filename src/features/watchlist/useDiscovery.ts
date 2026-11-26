@@ -21,6 +21,7 @@ import {
   likelySeenLanguage,
   likelySeenPoolPageItems,
   likelySeenPoolSources,
+  likelySeenStillPaging,
   takeTurns,
   weekIndex,
   type DiscoveryItem,
@@ -57,7 +58,6 @@ import { tvSeedIdsOf } from './wikidata-cache-query';
 import { useNotSeen } from './useNotSeen';
 import {
   buildTasteProfiles,
-  libraryTasteTitles,
   tasteScore,
   tasteSummary,
   tasteTitles,
@@ -436,16 +436,15 @@ export function useDiscovery(type: LibraryType) {
 
   // Rotating pool of widely-watched released titles so "Have you already
   // watched?" always has familiar films and series to log or dismiss.
-  // The library's own language other than English, films and series apart,
-  // read from the library alone, since answers move with every click. Like
-  // YOU MIGHT LIKE's seeds, it is fixed when the first page loads and
-  // travels with the pages, so a rating or a Seen it cannot start the pool
-  // over.
-  const likelySeenLanguages = useMemo((): LikelySeenLanguages => {
-    const profiles = buildTasteProfiles(libraryTasteTitles(watchlist, favourites, isAdmin, today));
-    return { movie: likelySeenLanguage(profiles.movie.language), tv: likelySeenLanguage(profiles.tv.language) };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
-  }, [watchlist, favourites, isAdmin, week]);
+  // The language other than English the taste profile leans to, films and
+  // series apart: the library's, less what was turned down, so Not
+  // interested on a language's titles switches its pool off. Like YOU MIGHT
+  // LIKE's seeds, it is fixed when the first page loads and travels with the
+  // pages, so an answer, a rating or a Seen it cannot start the pool over.
+  const likelySeenLanguages = useMemo((): LikelySeenLanguages => ({
+    movie: likelySeenLanguage(liveTaste.movie.language),
+    tv: likelySeenLanguage(liveTaste.tv.language),
+  }), [liveTaste]);
   const likelySeenLanguagesRef = useRef(likelySeenLanguages);
   // Declared before the query, so the first fetch already sees them.
   useEffect(() => {
@@ -453,10 +452,12 @@ export function useDiscovery(type: LibraryType) {
   }, [likelySeenLanguages]);
   const likelySeenPool = useInfiniteQuery({
     queryKey: ['watchlist', 'discovery', 'likely-seen-pool', week],
-    // Ratings weigh the language, so the first page waits for them, as
-    // YOU MIGHT LIKE's does.
-    enabled: !loading && ratingsStatus !== 'loading',
-    staleTime: 60 * 60 * 1000,
+    // Ratings and answers weigh the language, so the first page waits for
+    // them, as YOU MIGHT LIKE's does.
+    enabled: !loading && ratingsStatus !== 'loading' && answersSettled,
+    // Never refetched in place: a refetch would read the languages afresh
+    // and swap tiles already on screen. The week in the key moves it on.
+    staleTime: Infinity,
     retry: false,
     initialPageParam: { index: 0, languages: null } as PoolParam,
     queryFn: async ({ pageParam }): Promise<PoolPage> => {
@@ -950,14 +951,25 @@ export function useDiscovery(type: LibraryType) {
   const likelySeenPageCount = likelySeenPool.data?.pages.length ?? 0;
   const [answeredAtPage, setAnsweredAtPage] = useState<number | null>(null);
   const answerPagesLeft = answeredAtPage === null ? 0 : answeredAtPage + LIKELY_SEEN_PAGES_PER_ANSWER - likelySeenPageCount;
+  // Automatic pages left this visit. Read in render: only the effect below
+  // moves the ref, as it asks for a page, and that fetch re-renders.
+  const likelySeenAutoPagesLeft = AUTO_LIKELY_SEEN_PAGES - autoLikelySeenRef.current;
+  const likelySeenPaging = likelySeenStillPaging({
+    ready: likelySeenReady,
+    shown: likelySeen.length,
+    target: TARGET_LIKELY_SEEN,
+    libraryLoading: loading,
+    failed: likelySeenError,
+    fetchingNext: likelySeenFetchingNext,
+    hasNext: likelySeenHasNext,
+    autoPagesLeft: likelySeenAutoPagesLeft,
+    answerPagesLeft,
+  });
   useEffect(() => {
-    if (!likelySeenReady || likelySeen.length >= TARGET_LIKELY_SEEN) return;
-    if (loading || likelySeenPending || likelySeenFetchingNext || likelySeenError || !likelySeenHasNext) return;
-    const autoSpent = autoLikelySeenRef.current >= AUTO_LIKELY_SEEN_PAGES;
-    if (autoSpent && answerPagesLeft <= 0) return;
-    if (!autoSpent) autoLikelySeenRef.current += 1;
+    if (!likelySeenPaging || likelySeenFetchingNext || likelySeenPending) return;
+    if (autoLikelySeenRef.current < AUTO_LIKELY_SEEN_PAGES) autoLikelySeenRef.current += 1;
     void fetchNextLikelySeen();
-  }, [likelySeenReady, likelySeen.length, loading, likelySeenPending, likelySeenFetchingNext, likelySeenError, likelySeenHasNext, fetchNextLikelySeen, answerPagesLeft]);
+  }, [likelySeenPaging, likelySeenFetchingNext, likelySeenPending, fetchNextLikelySeen]);
 
   // Page on until the grid is full: with a large library and many dismissals,
   // whole pages of popular releases can curate down to nothing.
@@ -1060,9 +1072,14 @@ export function useDiscovery(type: LibraryType) {
     },
     likelySeenLoading: !likelySeenReady,
     likelySeenLoadingMore: likelySeenFetchingNext,
-    // No page left that this visit will ask for: none at all, or the pages a
-    // "None of these" allowed are spent.
-    likelySeenExhausted: !likelySeenHasNext || (answeredAtPage !== null && answerPagesLeft <= 0),
+    /**
+     * No tiles yet, but more are on their way: pool pages, or people
+     * lookups past their wait, which join the grid when they are back.
+     */
+    likelySeenSearching: likelySeen.length === 0 && (likelySeenPaging || (likelySeenReady && !loading && !peopleSettled)),
+    // No page left that this visit will ask for: none at all, or the
+    // automatic ones and those a "None of these" allowed are all spent.
+    likelySeenExhausted: !likelySeenHasNext || (likelySeenAutoPagesLeft <= 0 && answerPagesLeft <= 0),
     taste: tasteWords,
     dismiss,
     skipMany,

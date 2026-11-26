@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { LIKELY_SEEN_POOL_PAGES, LIKELY_SEEN_TOP_PAGES, admitWildcards, curateDiscovery, discoverySeeds, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, keepHeldInPlace, LIKELY_SEEN_LANGUAGE_MIN_VOTES, likelySeenConsensus, likelySeenLanguage, likelySeenPoolPageItems, likelySeenPoolSources, likelySeenTmdbPage, type DiscoveryItem } from './discovery';
+import { LIKELY_SEEN_POOL_PAGES, LIKELY_SEEN_TOP_PAGES, admitWildcards, curateDiscovery, discoverySeeds, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, keepHeldInPlace, LIKELY_SEEN_LANGUAGE_MIN_VOTES, likelySeenConsensus, likelySeenLanguage, likelySeenPoolPageItems, likelySeenPoolSources, likelySeenStillPaging, likelySeenTmdbPage, type DiscoveryItem } from './discovery';
+import { buildTasteProfiles, tasteTitles } from './taste-profile';
+import type { DismissalAnswer, DismissalAnswers } from './discovery-answers';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -604,5 +606,60 @@ describe('likelySeenPoolPageItems', () => {
     const items = [vote(1), vote(2), vote(3, 'tv'), lang(10), lang(11, 'tv')];
     expect(ids(likelySeenPoolPageItems(items, 'all')))
       .toEqual(['movie:1', 'movie:10', 'tv:3', 'tv:11', 'movie:2']);
+  });
+});
+
+describe('likelySeenLanguage with answers', () => {
+  const today = new Date(2026, 10, 26);
+  const film = (id: number, language: string) => ({
+    id: String(id), title: `Film ${id}`, category: 'Movies', created_at: '2026-01-01', tmdb_id: id, original_language: language, genre_ids: [18], watched: true,
+  }) as WatchlistItem;
+  const library = [
+    ...Array.from({ length: 90 }, (_, i) => film(i + 1, 'en')),
+    ...Array.from({ length: 10 }, (_, i) => film(i + 101, 'hi')),
+  ];
+  const notInterested = (facts: { language: string } | null): DismissalAnswer => ({
+    reason: 'not_interested', source: 'likely_seen', answeredAt: '2026-11-26T21:40:00Z',
+    ...(facts ? { facts: { genreIds: [18], language: facts.language, year: 2010 } } : {}),
+  });
+  const pick = (answers: DismissalAnswers) => likelySeenLanguage(buildTasteProfiles(tasteTitles(library, [], answers, true, today)).movie.language);
+
+  it('keeps a language the library watches', () => {
+    expect(pick(new Map())).toBe('hi');
+  });
+
+  it('switches it off once Not interested answers pile up in it', () => {
+    const answers = new Map(Array.from({ length: 45 }, (_, i) => [`movie:${i + 1000}`, notInterested({ language: 'hi' })] as const));
+    expect(pick(answers)).toBeNull();
+  });
+
+  it('ignores answers without facts and answers on library titles', () => {
+    const answers = new Map<string, DismissalAnswer>([
+      ...Array.from({ length: 45 }, (_, i) => [`movie:${i + 1000}`, notInterested(null)] as const),
+      ...Array.from({ length: 10 }, (_, i) => [`movie:${i + 101}`, notInterested({ language: 'hi' })] as const),
+    ]);
+    expect(pick(answers)).toBe('hi');
+  });
+});
+
+describe('likelySeenStillPaging', () => {
+  const base = { ready: true, shown: 0, target: 12, libraryLoading: false, failed: false, fetchingNext: false, hasNext: true, autoPagesLeft: 3, answerPagesLeft: 0 };
+
+  it('is paging while a page is on its way or one is still to be asked for', () => {
+    expect(likelySeenStillPaging(base)).toBe(true);
+    expect(likelySeenStillPaging({ ...base, autoPagesLeft: 0, fetchingNext: true })).toBe(true);
+    expect(likelySeenStillPaging({ ...base, autoPagesLeft: 0, answerPagesLeft: 2 })).toBe(true);
+  });
+
+  it('is done once the pages it would ask for are spent or there are none', () => {
+    expect(likelySeenStillPaging({ ...base, autoPagesLeft: 0 })).toBe(false);
+    expect(likelySeenStillPaging({ ...base, hasNext: false })).toBe(false);
+  });
+
+  it('is not paging before the grid opens, when it is full, or after a failure', () => {
+    expect(likelySeenStillPaging({ ...base, ready: false })).toBe(false);
+    expect(likelySeenStillPaging({ ...base, shown: 12 })).toBe(false);
+    expect(likelySeenStillPaging({ ...base, failed: true, fetchingNext: true })).toBe(false);
+    expect(likelySeenStillPaging({ ...base, libraryLoading: true })).toBe(false);
   });
 });

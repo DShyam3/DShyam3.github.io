@@ -173,7 +173,7 @@ export function likelySeenLanguage(language: ReadonlyMap<string, number>): strin
 }
 
 export type LikelySeenLanguages = Readonly<Record<DiscoveryMedia, string | null>>;
-/** Pool pages that also read the library language's most-voted titles: its top 60. */
+/** Pool pages that also read the taste profile's language's most-voted titles: its top 60. */
 export const LIKELY_SEEN_LANGUAGE_PAGES = 3;
 /**
  * A language's most-voted titles run out of votes quickly: below this, a
@@ -185,9 +185,9 @@ const LIKELY_SEEN_LANGUAGE_KEY = 'likely-seen:language';
 /**
  * One page of Likely seen's widely watched pool: TMDB's most-voted released
  * films and series on the page `likelySeenTmdbPage` picks and, for the first
- * `LIKELY_SEEN_LANGUAGE_PAGES`, the most-voted in the library's own language
- * other than English, films and series apart (`likelySeenLanguage`). Two
- * calls, or up to four with a language.
+ * `LIKELY_SEEN_LANGUAGE_PAGES`, the most-voted in the language other than
+ * English the taste profile leans to, films and series apart
+ * (`likelySeenLanguage`). Two calls, or up to four with a language.
  */
 export function likelySeenPoolSources(
   index: number,
@@ -242,6 +242,28 @@ export function likelySeenPoolPageItems(items: readonly DiscoveryItem[], type: L
     alternate(shown.filter((item) => item.seedKey !== LIKELY_SEEN_LANGUAGE_KEY)),
     alternate(shown.filter((item) => item.seedKey === LIKELY_SEEN_LANGUAGE_KEY)),
   ]);
+}
+
+/**
+ * Whether Likely seen is still paging its pool for a grid short of `target`:
+ * a page on its way (which can wait a minute for Discover's share of calls),
+ * or one still to ask for, automatic or after a None of these. The paging
+ * effect asks for a page on exactly this, and an empty grid then says it is
+ * still looking, not that nothing was found.
+ */
+export function likelySeenStillPaging(state: {
+  ready: boolean;
+  shown: number;
+  target: number;
+  libraryLoading: boolean;
+  failed: boolean;
+  fetchingNext: boolean;
+  hasNext: boolean;
+  autoPagesLeft: number;
+  answerPagesLeft: number;
+}): boolean {
+  if (!state.ready || state.shown >= state.target || state.libraryLoading || state.failed) return false;
+  return state.fetchingNext || (state.hasNext && (state.autoPagesLeft > 0 || state.answerPagesLeft > 0));
 }
 
 export const MAX_SUGGESTIONS_PER_SEED = 4;
