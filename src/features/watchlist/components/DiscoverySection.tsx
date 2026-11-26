@@ -600,6 +600,8 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
   // Likely seen's last "None of these", for its status line and Undo.
   const [noneMarked, setNoneMarked] = useState<{ items: DiscoveryItem[]; undo: 'idle' | 'pending' | 'failed' } | null>(null);
   const undoRef = useRef<HTMLButtonElement>(null);
+  const noneRef = useRef<HTMLButtonElement>(null);
+  const alreadyWatchedRef = useRef<HTMLElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
   // The grid may empty under the button while the next page loads: focus
   // goes to Undo, which stays put, rather than falling to the page.
@@ -617,6 +619,9 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
     try {
       await discovery.unmarkNotSeen(noneMarked.items);
       setNoneMarked(null);
+      // Undo leaves with its status: focus goes back to the button it undid,
+      // once the titles are back, or to the section.
+      requestAnimationFrame(() => (noneRef.current ?? alreadyWatchedRef.current)?.focus());
     } catch {
       setNoneMarked({ ...noneMarked, undo: 'failed' });
     }
@@ -678,7 +683,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {comingSoon.length > 0 && <TileGrid items={comingSoon} onDismiss={(item) => discovery.dismiss(item, 'coming_soon')} />}
       </section>
 
-      <section className="space-y-4 min-w-0" aria-labelledby="discover-already-watched">
+      <section ref={alreadyWatchedRef} tabIndex={-1} className="space-y-4 min-w-0" aria-labelledby="discover-already-watched">
         <div className="space-y-1">
           <h2 id="discover-already-watched"><DotMatrixText text="HAVE YOU ALREADY WATCHED?" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">
@@ -740,7 +745,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           onNotSeen={discovery.markNotSeen}
           footer={(answerable) => answerable.length > 0 && (
             <div className="flex justify-center">
-              <Button variant="ghost" onClick={() => noneOfThese(answerable)}>
+              <Button ref={noneRef} variant="ghost" onClick={() => noneOfThese(answerable)}>
                 <EyeOff className="h-4 w-4" />
                 None of these
               </Button>
@@ -766,7 +771,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
                   ? 'Couldn’t undo. Try again.'
                   : `Marked ${noneMarked.items.length} not seen.`}
                 {noneMarked.undo !== 'failed' && discovery.likelySeenLoadingMore && ' Finding more…'}
-                {noneMarked.undo !== 'failed' && !discovery.likelySeenLoadingMore && discovery.likelySeen.length === 0 && !discovery.likelySeenHasMore && ' Nothing more to ask about for now.'}
+                {noneMarked.undo !== 'failed' && !discovery.likelySeenLoadingMore && discovery.likelySeen.length === 0 && discovery.likelySeenExhausted && ' No more titles found for now.'}
               </>
             )}
           </p>

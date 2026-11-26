@@ -264,6 +264,12 @@ const TARGET_LIKELY_SEEN = 12;
 const AUTO_PAGE_CAP = 6;
 const AUTO_EMPTY_ROUNDS = 2;
 const AUTO_LIKELY_SEEN_PAGES = 5;
+/**
+ * Pages a "None of these" may still ask for once the automatic ones are
+ * spent. With a large library a whole page of widely watched titles can
+ * curate down to nothing, so one page per click often showed none.
+ */
+const LIKELY_SEEN_PAGES_PER_ANSWER = 3;
 /** How well a suggestion fits a taste profile (taste-profile.ts). */
 const fitFor = (profile: TasteProfile) => (item: DiscoveryItem) => tasteScore(profile, {
   genre_ids: item.genre_ids,
@@ -935,13 +941,19 @@ export function useDiscovery(type: LibraryType) {
     hasNextPage: likelySeenHasNext,
     fetchNextPage: fetchNextLikelySeen,
   } = likelySeenPool;
+  // "None of these" re-arms paging for a few pages, counted from the pool's
+  // page count when it was pressed.
+  const likelySeenPageCount = likelySeenPool.data?.pages.length ?? 0;
+  const [answeredAtPage, setAnsweredAtPage] = useState<number | null>(null);
+  const answerPagesLeft = answeredAtPage === null ? 0 : answeredAtPage + LIKELY_SEEN_PAGES_PER_ANSWER - likelySeenPageCount;
   useEffect(() => {
     if (!likelySeenReady || likelySeen.length >= TARGET_LIKELY_SEEN) return;
     if (loading || likelySeenPending || likelySeenFetchingNext || likelySeenError || !likelySeenHasNext) return;
-    if (autoLikelySeenRef.current >= AUTO_LIKELY_SEEN_PAGES) return;
-    autoLikelySeenRef.current += 1;
+    const autoSpent = autoLikelySeenRef.current >= AUTO_LIKELY_SEEN_PAGES;
+    if (autoSpent && answerPagesLeft <= 0) return;
+    if (!autoSpent) autoLikelySeenRef.current += 1;
     void fetchNextLikelySeen();
-  }, [likelySeenReady, likelySeen.length, loading, likelySeenPending, likelySeenFetchingNext, likelySeenError, likelySeenHasNext, fetchNextLikelySeen]);
+  }, [likelySeenReady, likelySeen.length, loading, likelySeenPending, likelySeenFetchingNext, likelySeenError, likelySeenHasNext, fetchNextLikelySeen, answerPagesLeft]);
 
   // Page on until the grid is full: with a large library and many dismissals,
   // whole pages of popular releases can curate down to nothing.
@@ -1044,7 +1056,9 @@ export function useDiscovery(type: LibraryType) {
     },
     likelySeenLoading: !likelySeenReady,
     likelySeenLoadingMore: likelySeenFetchingNext,
-    likelySeenHasMore: Boolean(likelySeenHasNext),
+    // No page left that this visit will ask for: none at all, or the pages a
+    // "None of these" allowed are spent.
+    likelySeenExhausted: !likelySeenHasNext || (answeredAtPage !== null && answerPagesLeft <= 0),
     taste: tasteWords,
     dismiss,
     skipMany,
@@ -1053,7 +1067,7 @@ export function useDiscovery(type: LibraryType) {
     // next page itself rather than spending the automatic ones.
     noneOfTheseLikelySeen: (items: ReadonlyArray<AnswerTarget>) => {
       markManyNotSeen(items);
-      if (likelySeenHasNext && !likelySeenFetchingNext) void fetchNextLikelySeen();
+      setAnsweredAtPage(likelySeenPageCount);
     },
     unmarkNotSeen,
     resetDismissed: async () => { await Promise.all([resetDismissed(), resetNotSeen()]); },
