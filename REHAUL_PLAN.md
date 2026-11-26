@@ -601,7 +601,7 @@ Unblocked; this is pure function territory.
 
 | Surface | Item | Note |
 |---|---|---|
-| Links | Auto-metadata on paste — title, favicon, description, OG image | the add form asks for all of it by hand today |
+| Links | Preview image (og:image) | needs a column on `links` and a place on the card; name, description and icon already fill on paste |
 | Links | Archived text on save | survives the source disappearing |
 | Links | Recently added rail, domain rollup | query only |
 | Books | Reading progress for books marked Currently Reading | |
@@ -759,12 +759,10 @@ accounts rather than per account.
 
 ### 8.I Still to build (the order)
 
-1. **Links auto-metadata on paste** (title, favicon, description, OG image),
-   the only unblocked item here.
-2. **8.D primitives**, when a second surface needs the countdown or change feed.
+1. **8.D primitives**, when a second surface needs the countdown or change feed.
    Do not refactor the watchlist's implementation on spec; refactor when you
    have two callers.
-3. **Recipe JSON-LD import**, after the quantity shape is settled.
+2. **Recipe JSON-LD import**, after the quantity shape is settled.
 
 The pin-setting UI depends on building the primitives in 8.D.
 Stalled-show detection depends on `watched_at` backfill (8.B) and seeing real

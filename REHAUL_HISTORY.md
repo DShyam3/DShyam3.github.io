@@ -3374,3 +3374,17 @@ Four decisions, each with its reason:
 4. **Staleness is judged per link.** A link not checked for two days is reported, and a never-checked link counts from the day it was added. A run that reaches only part of the list still shows, and silence is never reported as health: a check that has stopped reads "Link check stalled".
 
 Closure: shipped in commits `1467d995` (table and cron migration), `7c35d266` (links-check function and SSRF guard), `274e3bef` (owner Links button) and `6b16f6a6` (docs) on `origin/main`. The function is deployed and the migration applied to hosted Supabase, recorded as version `20261126123059`. The first manual run checked all 7 links and none failed. The first scheduled run (2026-11-27 04:40 UTC) and an owner-signed-in check of the live Links view are not yet verified.
+
+### Links fill from the pasted page: server-side read, shared address rules, the owner's text wins — 2026-11-26
+
+Four decisions, each with its reason:
+
+1. **The page is read server-side, by an owner-only function, and it reuses the dead-link check's redirect loop and address rules.** A browser cannot read another site's page because of CORS, so the read cannot happen in the form. The redirect loop and the outbound address guard moved into `_shared/public-fetch.ts` and `_shared/public-address.ts`, so the two functions cannot drift apart on what counts as a private address.
+
+2. **The name and description are rules over the page's own tags, with no model.** A home page gives its declared site name, because its title is often a tagline. Other pages give their title with the site name taken off. A figure or label a reader might trust must be reproducible, so a rule is used rather than a generated summary. Parsing is one forward pass with capped values, so a hostile page cannot make the read slow.
+
+3. **A fill writes only empty fields or its own earlier values, and its values follow the URL.** Nothing the owner typed is ever overwritten, because the fill is not allowed to write a field it did not put there. A name is never left describing a page the form no longer points at: a new page replaces the fill's values, and a failed read clears them.
+
+4. **The preview image (og:image) is not built.** Links have no image column and no place on the card to show one. Adding both is a schema change and a card redesign, and neither is needed for the fill to be useful.
+
+Closure: built and verified on the local stack from this worktree, uncommitted and not deployed to hosted Supabase or GitHub Pages. Ship order is in `STATE.md`: deploy `links-metadata`, redeploy `links-check`, then push the frontend.
