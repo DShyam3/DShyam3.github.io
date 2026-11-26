@@ -498,7 +498,7 @@ export interface CustomFranchiseGroup {
 }
 
 /**
- * Group movies and TV shows tagged with a custom `franchise` name in Supabase
+ * Group movies and TV shows tagged with custom franchise names in Supabase
  * into release-ordered franchise cards (zero TMDB or Wikidata calls).
  */
 export function customFranchisesFromLibrary(
@@ -508,11 +508,13 @@ export function customFranchisesFromLibrary(
   const byName = new Map<string, WatchlistItem[]>();
   for (const item of items) {
     if (item.library_state === 'hidden') continue;
-    const name = item.franchise?.trim();
-    if (!name) continue;
-    const list = byName.get(name) ?? [];
-    list.push(item);
-    byName.set(name, list);
+    const names = new Set([item.franchise, ...(item.additional_franchises ?? [])]
+      .map((name) => name?.trim()).filter((name): name is string => Boolean(name)));
+    for (const name of names) {
+      const list = byName.get(name) ?? [];
+      list.push(item);
+      byName.set(name, list);
+    }
   }
 
   return [...byName.entries()]

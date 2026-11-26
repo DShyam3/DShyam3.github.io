@@ -448,6 +448,20 @@ describe('customFranchisesFromLibrary', () => {
     expect(groups[0].name).toBe('Sheridan Universe');
     expect(groups[0].view.entries.map((e) => e.title)).toEqual(['Wind River', 'Tulsa King']);
   });
+
+  it('lets one title join a smaller and a larger group without duplicating it', () => {
+    const items: WatchlistItem[] = [
+      { id: '1', title: 'A New Hope', category: 'Movies', tmdb_id: 11, release_date: '1977-05-25', franchise: 'Star Wars Trilogy', additional_franchises: ['Star Wars', 'Star Wars'], created_at: '' },
+      { id: '2', title: 'The Empire Strikes Back', category: 'Movies', tmdb_id: 12, release_date: '1980-05-21', franchise: 'Star Wars Trilogy', additional_franchises: ['Star Wars'], created_at: '' },
+      { id: '3', title: 'The Mandalorian', category: 'TV Shows', tmdb_id: 13, release_date: '2019-11-12', additional_franchises: ['Star Wars'], created_at: '' },
+    ];
+
+    const groups = customFranchisesFromLibrary(items, libraryLookup(items, new Date('2026-11-20T00:00:00Z')));
+    expect(groups.map((group) => [group.name, group.view.entries.map((entry) => entry.title)])).toEqual([
+      ['Star Wars', ['A New Hope', 'The Empire Strikes Back', 'The Mandalorian']],
+      ['Star Wars Trilogy', ['A New Hope', 'The Empire Strikes Back']],
+    ]);
+  });
 });
 
 describe('franchise ordering by last touch', () => {

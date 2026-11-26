@@ -12,3 +12,8 @@ export function missingCategoryColumns(message: string): boolean {
 export function missingActivityColumn(message: string): boolean {
   return /last_activity_at/.test(message) && /(?:does not exist|could not find)/i.test(message);
 }
+
+/** Additional franchise memberships may be absent during a staged rollout. */
+export function missingAdditionalFranchisesColumn(message: string): boolean {
+  return /additional_franchises/.test(message) && /(?:does not exist|could not find)/i.test(message);
+}

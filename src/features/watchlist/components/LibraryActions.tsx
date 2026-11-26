@@ -11,15 +11,16 @@ import { PersonalRating } from './PersonalRating';
 
 export function LibraryActions({ item }: { item: WatchlistItem }) {
   const { isAdmin } = useAuth();
-  const { watchlist, setMovieWatched, setLibraryState, setFranchise, setSeriesStatus, setPersonalRating, ratingsStatus, favourites, addFavourite, removeFavourite } = useWatchlist();
+  const { watchlist, setMovieWatched, setLibraryState, setFranchise, editAdditionalFranchise, setSeriesStatus, setPersonalRating, ratingsStatus, favourites, addFavourite, removeFavourite } = useWatchlist();
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const [skipped, setSkipped] = useState(false);
   const [franchiseDraft, setFranchiseDraft] = useState(item.franchise ?? '');
+  const [extraFranchiseDraft, setExtraFranchiseDraft] = useState('');
   const franchiseOptions = Array.from(
     new Set(
       watchlist
-        .map((w) => w.franchise?.trim())
+        .flatMap((w) => [w.franchise, ...(w.additional_franchises ?? [])].map((name) => name?.trim()))
         .filter((f): f is string => Boolean(f)),
     ),
   ).sort((a, b) => a.localeCompare(b));
@@ -176,6 +177,61 @@ export function LibraryActions({ item }: { item: WatchlistItem }) {
             ))}
           </datalist>
         </form>
+        <div className="space-y-2 text-xs text-muted-foreground">
+          <p>Other franchises</p>
+          {(item.additional_franchises ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {item.additional_franchises?.map((name) => (
+                <Button
+                  key={name}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11 max-w-full break-words text-left"
+                  aria-label={`Remove ${name} from ${item.title}`}
+                  disabled={saving}
+                  onClick={() => void save(() => editAdditionalFranchise(item, name, false))}
+                >
+                  {name} <span aria-hidden="true">×</span>
+                </Button>
+              ))}
+            </div>
+          )}
+          <form
+            className="flex flex-wrap gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const name = extraFranchiseDraft.trim();
+              if (!name || name === item.franchise?.trim() || item.additional_franchises?.includes(name)) return;
+              void save(async () => {
+                await editAdditionalFranchise(item, name, true);
+                setExtraFranchiseDraft('');
+              });
+            }}
+          >
+            <input
+              aria-label="Add another franchise"
+              autoComplete="off"
+              list="watchlist-franchise-options"
+              value={extraFranchiseDraft}
+              onChange={(event) => setExtraFranchiseDraft(event.target.value)}
+              maxLength={80}
+              placeholder="Add another franchise…"
+              disabled={saving}
+              className="min-h-11 min-w-0 flex-1 basis-44 rounded-lg border border-border bg-background px-3 text-base text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              variant="outline"
+              className="min-h-11"
+              disabled={saving || (item.additional_franchises?.length ?? 0) >= 20 || !extraFranchiseDraft.trim() || extraFranchiseDraft.trim() === item.franchise?.trim() || item.additional_franchises?.includes(extraFranchiseDraft.trim())}
+            >
+              Add
+            </Button>
+          </form>
+          <p>A title can belong to several Library Franchises.</p>
+        </div>
         {item.category === 'Movies' && item.watched && (
           <p className="text-xs text-muted-foreground">{describeWatchedAt(item.watched_at, true)}</p>
         )}

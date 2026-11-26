@@ -4,7 +4,7 @@ import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import { resolveFavouriteCategory, type TmdbFacts } from './favourite-category';
 import type { LibraryState } from './library-state';
 import { releaseYear } from './watchlist-utils';
-import { missingActivityColumn, missingCategoryColumns } from './category-schema';
+import { missingActivityColumn, missingAdditionalFranchisesColumn, missingCategoryColumns } from './category-schema';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 
@@ -20,6 +20,7 @@ export interface WatchlistLibrary {
 const MOVIE_COLUMNS = `id, title, platform, genre, genre_ids, original_language, origin_country, release_year, poster, release_date, tmdb_id, runtime,
   watched, watched_at, library_state, collection_id, collection_name, franchise,
   imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes` as const;
+const MOVIE_COLUMNS_WITH_EXTRA = `${MOVIE_COLUMNS}, additional_franchises` as const;
 
 // Deliberately not `tv_show_episodes (*)`. Every mount of this page was
 // pulling all ~7,600 episode rows in full (~474 kB) purely to render a grid
@@ -33,9 +34,10 @@ const SHOW_COLUMNS = `id, title, platform, genre, genre_ids, original_language, 
     id, season_number, release_date, watched,
     tv_show_episodes (id, episode_number, watched, runtime, release_date)
   )` as const;
+const SHOW_COLUMNS_WITH_EXTRA = `${SHOW_COLUMNS}, additional_franchises` as const;
 
 /** A column some stack has not been migrated to yet, so read without it. */
-const rolloutGap = (message: string) => missingActivityColumn(message) || missingCategoryColumns(message);
+const rolloutGap = (message: string) => missingActivityColumn(message) || missingCategoryColumns(message) || missingAdditionalFranchisesColumn(message);
 
 async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
   // Each read is paged: the Data API stops at 1,000 rows without saying
@@ -47,10 +49,16 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
     (async () => {
       const withActivity = await selectAllPages((from, to) => supabase
       .from('movies')
-      .select(`${MOVIE_COLUMNS}, last_activity_at`, { count: 'exact' })
+      .select(`${MOVIE_COLUMNS_WITH_EXTRA}, last_activity_at`, { count: 'exact' })
       .order('title', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to), (movie) => String(movie.id));
+      if (withActivity.error && missingAdditionalFranchisesColumn(withActivity.error.message)) {
+        const without = await selectAllPages((from, to) => supabase.from('movies')
+          .select(`${MOVIE_COLUMNS}, last_activity_at`, { count: 'exact' })
+          .order('title', { ascending: true }).order('id', { ascending: true }).range(from, to), (movie) => String(movie.id));
+        if (!without.error || !rolloutGap(without.error.message)) return without;
+      }
       if (!withActivity.error || !rolloutGap(withActivity.error.message)) return withActivity;
       const withFacts = await selectAllPages((from, to) => supabase
       .from('movies')
@@ -67,10 +75,16 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
     (async () => {
       const withActivity = await selectAllPages((from, to) => supabase
       .from('tv_shows')
-      .select(`${SHOW_COLUMNS}, last_activity_at`, { count: 'exact' })
+      .select(`${SHOW_COLUMNS_WITH_EXTRA}, last_activity_at`, { count: 'exact' })
       .order('title', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to), (show) => String(show.id));
+      if (withActivity.error && missingAdditionalFranchisesColumn(withActivity.error.message)) {
+        const without = await selectAllPages((from, to) => supabase.from('tv_shows')
+          .select(`${SHOW_COLUMNS}, last_activity_at`, { count: 'exact' })
+          .order('title', { ascending: true }).order('id', { ascending: true }).range(from, to), (show) => String(show.id));
+        if (!without.error || !rolloutGap(without.error.message)) return without;
+      }
       if (!withActivity.error || !rolloutGap(withActivity.error.message)) return withActivity;
       const withFacts = await selectAllPages((from, to) => supabase
       .from('tv_shows')
@@ -151,6 +165,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       collection_id: movie.collection_id ?? undefined,
       collection_name: movie.collection_name ?? undefined,
       franchise: (('franchise' in movie ? movie.franchise : null) as string | null) ?? undefined,
+      additional_franchises: ('additional_franchises' in movie ? movie.additional_franchises : []) as string[],
     }),
   );
 
@@ -160,6 +175,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       library_state: show.library_state as LibraryState,
       last_activity_at: ('last_activity_at' in show ? show.last_activity_at : null) as string | null,
       franchise: (('franchise' in show ? show.franchise : null) as string | null) ?? undefined,
+      additional_franchises: ('additional_franchises' in show ? show.additional_franchises : []) as string[],
       watched_at: lastWatched.get(String(show.id)) ?? null,
       title: show.title,
       category: 'TV Shows' as const,

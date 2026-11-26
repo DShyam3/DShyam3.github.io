@@ -2325,6 +2325,7 @@ export type Database = {
       }
       movies: {
         Row: {
+          additional_franchises: string[]
           genre_ids: number[] | null
           original_language: string | null
           origin_country: string[] | null
@@ -2360,6 +2361,7 @@ export type Database = {
           trailer_key: string | null
         }
         Insert: {
+          additional_franchises?: string[]
           genre_ids?: number[] | null
           original_language?: string | null
           origin_country?: string[] | null
@@ -2395,6 +2397,7 @@ export type Database = {
           trailer_key?: string | null
         }
         Update: {
+          additional_franchises?: string[]
           genre_ids?: number[] | null
           original_language?: string | null
           origin_country?: string[] | null
@@ -2773,6 +2776,7 @@ export type Database = {
       }
       tv_shows: {
         Row: {
+          additional_franchises: string[]
           genre_ids: number[] | null
           original_language: string | null
           origin_country: string[] | null
@@ -2804,6 +2808,7 @@ export type Database = {
           trailer_key: string | null
         }
         Insert: {
+          additional_franchises?: string[]
           genre_ids?: number[] | null
           original_language?: string | null
           origin_country?: string[] | null
@@ -2835,6 +2840,7 @@ export type Database = {
           trailer_key?: string | null
         }
         Update: {
+          additional_franchises?: string[]
           genre_ids?: number[] | null
           original_language?: string | null
           origin_country?: string[] | null
@@ -3317,6 +3323,10 @@ export type Database = {
           key: string
           window_start: string
         }[]
+      }
+      edit_watchlist_franchise_membership: {
+        Args: { p_media_type: string; p_id: number; p_name: string; p_add: boolean }
+        Returns: string[]
       }
       import_watch_history: {
         Args: {

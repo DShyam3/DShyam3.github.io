@@ -150,6 +150,8 @@ export interface WatchlistItem {
   collection_name?: string;
   /** Custom franchise name stored directly in Supabase (movies + tv_shows). */
   franchise?: string | null;
+  /** Extra custom groups; a title can appear in several Library Franchises. */
+  additional_franchises?: string[];
   /**
    * When the owner last added, watched or re-filed this title, stamped by a
    * database trigger (never by the sync). Null for a title untouched since
@@ -245,6 +247,7 @@ interface WatchlistContextType {
   setMovieWatched: (item: WatchlistItem, watched: boolean, when?: WatchedWhen) => Promise<void>;
   setLibraryState: (item: WatchlistItem, state: LibraryState) => Promise<void>;
   setFranchise: (item: WatchlistItem, franchise: string | null) => Promise<void>;
+  editAdditionalFranchise: (item: WatchlistItem, name: string, add: boolean) => Promise<void>;
   setSeriesStatus: (item: WatchlistItem, status: NonNullable<WatchlistItem['series_status']>) => Promise<void>;
   setPersonalRating: (item: WatchlistItem, rating: number | null, seasonNumber?: number, episodeNumber?: number) => Promise<void>;
   /**
@@ -1105,6 +1108,23 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) { reportPersonalUpdateError(error); }
   };
 
+  const editAdditionalFranchise = async (item: WatchlistItem, name: string, add: boolean) => {
+    try {
+      if (!isAdmin || (item.category !== 'Movies' && item.category !== 'TV Shows')) throw new Error('Library update unavailable');
+      const trimmedName = name.trim();
+      if (!trimmedName || trimmedName.length > 80) throw new Error('Invalid franchise name');
+      const { data: additional_franchises, error } = await supabase.rpc('edit_watchlist_franchise_membership', {
+        p_media_type: item.category === 'Movies' ? 'movie' : 'tv',
+        p_id: Number(item.id),
+        p_name: trimmedName,
+        p_add: add,
+      });
+      if (error || !additional_franchises) throw error ?? new Error('Franchise update failed');
+      setWatchlist((prev) => prev.map((row) => row.category === item.category && row.id === item.id
+        ? { ...row, additional_franchises } : row));
+    } catch (error) { reportPersonalUpdateError(error); }
+  };
+
   const setSeriesStatus = async (item: WatchlistItem, status: NonNullable<WatchlistItem['series_status']>) => {
     try {
       if (!isAdmin || item.category !== 'TV Shows') throw new Error('Status update unavailable');
@@ -1865,6 +1885,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const stableSetMovieWatched = useStableCallback(setMovieWatched);
   const stableSetLibraryState = useStableCallback(setLibraryState);
   const stableSetFranchise = useStableCallback(setFranchise);
+  const stableEditAdditionalFranchise = useStableCallback(editAdditionalFranchise);
   const stableSetSeriesStatus = useStableCallback(setSeriesStatus);
   const stableSetPersonalRating = useStableCallback(setPersonalRating);
   const stableRemoveWatchlistItem = useStableCallback(removeWatchlistItem);
@@ -1911,6 +1932,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       setMovieWatched: stableSetMovieWatched,
       setLibraryState: stableSetLibraryState,
       setFranchise: stableSetFranchise,
+      editAdditionalFranchise: stableEditAdditionalFranchise,
       setSeriesStatus: stableSetSeriesStatus,
       setPersonalRating: stableSetPersonalRating,
       ratingsStatus,
@@ -1948,6 +1970,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       stableSetMovieWatched,
       stableSetLibraryState,
       stableSetFranchise,
+      stableEditAdditionalFranchise,
       stableSetSeriesStatus,
       stableSetPersonalRating,
       ratingsStatus,

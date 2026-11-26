@@ -1,3 +1,23 @@
+CREATE OR REPLACE FUNCTION "public"."valid_watchlist_franchise_names"(p_names text[])
+RETURNS boolean
+LANGUAGE sql IMMUTABLE STRICT
+SET search_path = ''
+AS $$
+  SELECT NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.unnest(p_names) AS candidate(name)
+    WHERE candidate.name IS NULL
+       OR candidate.name <> pg_catalog.btrim(candidate.name)
+       OR pg_catalog.char_length(candidate.name) NOT BETWEEN 1 AND 80
+  );
+$$;
+
+ALTER FUNCTION "public"."valid_watchlist_franchise_names"(text[]) OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION "public"."valid_watchlist_franchise_names"(text[]) FROM PUBLIC, "anon";
+
+GRANT EXECUTE ON FUNCTION "public"."valid_watchlist_franchise_names"(text[]) TO "authenticated", "service_role";
+
 CREATE TABLE IF NOT EXISTS "public"."favourites" (
     "id" integer NOT NULL,
     "title" "text" NOT NULL,
@@ -59,7 +79,10 @@ CREATE TABLE IF NOT EXISTS "public"."movies" (
     "collection_id" integer,
     "collection_name" "text",
     "franchise" "text",
+    "additional_franchises" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
     "last_activity_at" timestamp with time zone,
+    CONSTRAINT "movies_additional_franchises_check" CHECK (cardinality("additional_franchises") <= 20 AND char_length(array_to_string("additional_franchises", '')) <= 1600 AND array_position("additional_franchises", NULL) IS NULL),
+    CONSTRAINT "movies_additional_franchise_names_check" CHECK ("public"."valid_watchlist_franchise_names"("additional_franchises")),
     CONSTRAINT "movies_imdb_id_check" CHECK ("imdb_id" ~ '^tt[0-9]{7,10}$'),
     CONSTRAINT "movies_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
     CONSTRAINT "movies_imdb_votes_check" CHECK ("imdb_votes" >= 0),
@@ -210,7 +233,10 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
     "tmdb_votes" integer,
     "scores_checked_at" timestamp with time zone,
     "franchise" "text",
+    "additional_franchises" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
     "last_activity_at" timestamp with time zone,
+    CONSTRAINT "tv_shows_additional_franchises_check" CHECK (cardinality("additional_franchises") <= 20 AND char_length(array_to_string("additional_franchises", '')) <= 1600 AND array_position("additional_franchises", NULL) IS NULL),
+    CONSTRAINT "tv_shows_additional_franchise_names_check" CHECK ("public"."valid_watchlist_franchise_names"("additional_franchises")),
     CONSTRAINT "tv_shows_imdb_id_check" CHECK ("imdb_id" ~ '^tt[0-9]{7,10}$'),
     CONSTRAINT "tv_shows_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
     CONSTRAINT "tv_shows_imdb_votes_check" CHECK ("imdb_votes" >= 0),
@@ -221,6 +247,12 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
 );
 
 ALTER TABLE "public"."tv_shows" OWNER TO "postgres";
+
+COMMENT ON COLUMN "public"."movies"."additional_franchises" IS
+    'Extra owner-chosen Library Franchise groups, alongside the primary franchise.';
+
+COMMENT ON COLUMN "public"."tv_shows"."additional_franchises" IS
+    'Extra owner-chosen Library Franchise groups, alongside the primary franchise.';
 
 COMMENT ON COLUMN "public"."tv_shows"."tmdb_status" IS
     'Last observed TMDB series status. A different status is a manual override until TMDB changes from this baseline.';
@@ -583,6 +615,8 @@ GRANT ALL ON SEQUENCE "public"."favourites_id_seq" TO "authenticated";
 
 GRANT ALL ON SEQUENCE "public"."favourites_id_seq" TO "service_role";
 
+REVOKE ALL ON TABLE "public"."movies" FROM PUBLIC, "anon";
+
 GRANT SELECT ON TABLE "public"."movies" TO "anon";
 
 REVOKE ALL ON TABLE "public"."movies" FROM "authenticated";
@@ -628,6 +662,8 @@ GRANT ALL ON TABLE "public"."tv_show_seasons" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."tv_show_seasons_id_seq" TO "authenticated";
 
 GRANT ALL ON SEQUENCE "public"."tv_show_seasons_id_seq" TO "service_role";
+
+REVOKE ALL ON TABLE "public"."tv_shows" FROM PUBLIC, "anon";
 
 GRANT SELECT ON TABLE "public"."tv_shows" TO "anon";
 
@@ -1824,3 +1860,62 @@ ALTER FUNCTION "public"."set_season_omdb_scores"(integer, timestamp with time zo
 REVOKE ALL ON FUNCTION "public"."set_season_omdb_scores"(integer, timestamp with time zone, jsonb) FROM PUBLIC, "anon", "authenticated";
 
 GRANT EXECUTE ON FUNCTION "public"."set_season_omdb_scores"(integer, timestamp with time zone, jsonb) TO "service_role";
+
+-- Update one custom franchise membership against the row's current array.
+-- A single UPDATE serializes concurrent edits so one device cannot replace
+-- memberships added on another device from a stale client snapshot.
+CREATE OR REPLACE FUNCTION "public"."edit_watchlist_franchise_membership"(
+  p_media_type text, p_id integer, p_name text, p_add boolean
+)
+RETURNS text[]
+LANGUAGE plpgsql SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_name text := pg_catalog.btrim(p_name);
+  v_memberships text[];
+BEGIN
+  IF NOT COALESCE((SELECT public.is_admin()), false) THEN
+    RAISE EXCEPTION 'Not authorized' USING ERRCODE = '42501';
+  END IF;
+  IF p_id IS NULL OR p_id <= 0 OR p_add IS NULL
+     OR v_name IS NULL OR pg_catalog.char_length(v_name) NOT BETWEEN 1 AND 80 THEN
+    RAISE EXCEPTION 'Invalid franchise membership' USING ERRCODE = '22023';
+  END IF;
+
+  IF p_media_type = 'movie' THEN
+    UPDATE public.movies
+    SET additional_franchises = CASE
+      WHEN p_add AND NOT (v_name = ANY (additional_franchises))
+        THEN pg_catalog.array_append(additional_franchises, v_name)
+      WHEN NOT p_add THEN pg_catalog.array_remove(additional_franchises, v_name)
+      ELSE additional_franchises
+    END
+    WHERE id = p_id
+    RETURNING additional_franchises INTO v_memberships;
+  ELSIF p_media_type = 'tv' THEN
+    UPDATE public.tv_shows
+    SET additional_franchises = CASE
+      WHEN p_add AND NOT (v_name = ANY (additional_franchises))
+        THEN pg_catalog.array_append(additional_franchises, v_name)
+      WHEN NOT p_add THEN pg_catalog.array_remove(additional_franchises, v_name)
+      ELSE additional_franchises
+    END
+    WHERE id = p_id
+    RETURNING additional_franchises INTO v_memberships;
+  ELSE
+    RAISE EXCEPTION 'Invalid media type' USING ERRCODE = '22023';
+  END IF;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Title not found' USING ERRCODE = 'P0002';
+  END IF;
+  RETURN v_memberships;
+END;
+$$;
+
+ALTER FUNCTION "public"."edit_watchlist_franchise_membership"(text, integer, text, boolean) OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION "public"."edit_watchlist_franchise_membership"(text, integer, text, boolean) FROM PUBLIC, "anon";
+
+GRANT EXECUTE ON FUNCTION "public"."edit_watchlist_franchise_membership"(text, integer, text, boolean) TO "authenticated";
