@@ -1,8 +1,9 @@
 # State
 
-Updated 2026-11-26. `main` tracks `origin/main` with the portable App Suite architecture, dot-matrix polish, Watchlist Franchises/Cool facts revamp, daily dead-link check (`1467d995`–`c85eca7f`), overlapping custom franchises (`e3619d09`), and Likely seen paging fix (`fb9fac0a`) all committed and pushed.
+Updated 2026-11-26. `main` tracks `origin/main` at `4a26f7bb` with the portable App Suite architecture, dot-matrix polish, Watchlist Franchises/Cool facts revamp, daily dead-link check (`1467d995`–`c85eca7f`), overlapping custom franchises (`e3619d09`), and Likely seen paging fix (`fb9fac0a`) all committed and pushed.
 
 ## Closed
+- **Links fill from the pasted page (`4a1555dc`, `e712976b`, `b45e5509`, `4a26f7bb`; pushed as `7710731e..4a26f7bb`):** pasting a URL in the Links form fills an empty name and description from the page through the owner-only `links-metadata` function, which shares the redirect loop with `links-check` (`_shared/public-fetch.ts`). Hosted: `links-metadata` deployed and `links-check` redeployed, no migration; GitHub Pages run `45902727524` succeeded and the live bundle has the new strings. Decisions: `REHAUL_HISTORY.md` 2026-11-26.
 - **Payslip modal figure reveal, duplicate detection, and benefit deductions (local, uncommitted):** Added an in-card **Show figures / Hide figures** toggle (`useHiddenFigures.ts`, `index.css`, `PayslipsSection.tsx`, `PayslipImportDialog.tsx`) so imported figures can be inspected while the background page stays hidden; added `findDuplicatePayslip` (`payslip.ts`) to warn and disable saving in Add Payslip and default duplicates unticked in bulk import; and extended `payslip-parse.ts` to sum named employee benefit/sacrifice deductions into `otherDeductions` and `lines` (excluding notional P11D/BIK, employer-paid benefits, and cash allowances). Lint, typecheck, 138 payslip/hidden-figures tests, build, and `impeccable detect src/` pass.
 - **Discover section dropdown:** Added a persisted `Discover section` dropdown (`All sections`, `Coming soon`, `Have you already watched?`, `You might like`) in `WatchlistNews.tsx` and `DiscoverySection.tsx`, paired with the `All` / `Films` / `Series` filter so each section can be focused and browsed by media type. Lint, typecheck, build, and `impeccable detect src/` pass.
 - **Portable App Suite architecture & dot-matrix polish:** Canonical registry in `src/apps/` (`manifests.ts`, `portable.tsx`, `routes.tsx`, `useActiveApp.ts`, `_template/`) drives routing, sidebar/mobile App Switcher (unified list, Watchlist last), `CommandDock`, `Header` (owner identity + `+` social links on left, active app coloured badge + title on right, desktop sidebar toggle), `?standalone=1|0` query support, and restored dot-matrix digits (`DotMatrixText`, `DotMatrixClock`) and 9×9 sun/moon `ThemeToggle` (`DotMatrixIcon`).
@@ -23,7 +24,10 @@ Updated 2026-11-26. `main` tracks `origin/main` with the portable App Suite arch
 | Prior rebased suite (`6b16f6a6`): `npx vitest run` / `npm run test:functions` | 136 files, 3,115 pass / 87 pass |
 | `impeccable detect src/` / `npm run ship-check` | 0 anti-patterns (1 pre-existing advisory) / 90/100 (airport-code false positive) |
 
+This session (2026-11-26, `4a26f7bb`, rebased tree): lint 0 errors / 0 warnings; typecheck pass; typecheck:functions pass; `npm run test:functions` 102 pass; `npx vitest run` 140 files / 3,149 tests pass; build pass; `impeccable detect src/` 0 anti-patterns; ship-check 90/100 unchanged (airport-code false positive, no finding in the new files). Hosted `links-check` run through the cron's path at 2026-11-26 22:06 UTC: HTTP 200, `{"checked":7,"failed":0,"unchecked":0}`.
+
 ## Still open / not verified
+- **Links paste fill:** not checked against the live function while signed in as the owner; no real clipboard paste (local tests used a simulated paste event); no real phone.
 - **Dead-link check:** First scheduled run (after 2026-11-27 04:40 UTC) and live owner-signed-in view when failing/stalled links exist; hardware drawer check.
 - **App Suite & Watchlist Franchises/Cool facts:** Owner-signed-in checks of `/watchlist/franchises`, `/watchlist/facts`, franchise membership edits, and real-device iPhone/iPad checks of the App Suite chrome.
 - **Manual TV status & Discover:** Owner-signed-in picker, status-change News event, live sync override/takeover, and signed-in Discover checks (`watchlist_not_seen` sync, reset dialog, menu focus return, Wildcards).
@@ -33,7 +37,7 @@ Updated 2026-11-26. `main` tracks `origin/main` with the portable App Suite arch
 ## Next
 1. Likely seen follow-up (owner's call): let Not interested answers turn a language pool off (the language pick reads the library only, so `ja`/`hi` pages still load after they were turned down), and don't show the empty message while pool pages are still coming.
 2. Check the first scheduled `links-check` run after 2026-11-27 04:40 UTC.
-3. Run owner-signed-in checks across the live deployed site (App Suite chrome, Watchlist Franchises/Cool facts, manual TV status picker, Discover, rating queue, Transactions).
+3. Run owner-signed-in checks across the live deployed site (App Suite chrome, Watchlist Franchises/Cool facts, manual TV status picker, Discover, rating queue, Transactions, and the Links paste fill).
 4. Decide rating-queue choices, then complete real-device hardware checks.
 
 ## Blockers

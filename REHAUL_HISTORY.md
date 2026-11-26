@@ -3387,4 +3387,4 @@ Four decisions, each with its reason:
 
 4. **The preview image (og:image) is not built.** Links have no image column and no place on the card to show one. Adding both is a schema change and a card redesign, and neither is needed for the fill to be useful.
 
-Closure: built and verified on the local stack from this worktree, uncommitted and not deployed to hosted Supabase or GitHub Pages. Ship order is in `STATE.md`: deploy `links-metadata`, redeploy `links-check`, then push the frontend.
+Closure: shipped in commits 4a1555dc, e712976b, b45e5509 and 4a26f7bb on main; `links-metadata` deployed and `links-check` redeployed to hosted Supabase. A paste on the live site while signed in, a real clipboard paste and a real phone are not yet verified.
