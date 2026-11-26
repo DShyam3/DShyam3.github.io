@@ -19,12 +19,15 @@ import {
   LIKELY_SEEN_POOL_PAGES,
   likelySeenConsensus,
   likelySeenLanguage,
-  likelySeenTmdbPage,
+  likelySeenPoolPageItems,
+  likelySeenPoolSources,
   takeTurns,
   weekIndex,
   type DiscoveryItem,
   type DiscoveryMedia,
   type DiscoverySeed,
+  type DiscoverySource,
+  type LikelySeenLanguages,
 } from './discovery';
 import {
   buildOrderView,
@@ -87,13 +90,14 @@ const DISCOVER_CALLS_PER_MINUTE = 42;
  * How those are shared. Franchises lead the page, so the collection walk has
  * the larger share; with many dismissals the other sections can page for
  * minutes without adding a tile. Each share is a ceiling, so neither can take
- * the other's last places: pages keep at least 14 a minute, the walk 22.
- * Fourteen is the first page in All, so it goes at once even while the walk
+ * the other's last places: pages keep at least 16 a minute, the walk 22.
+ * Sixteen is the most the first page in All can be (Likely seen's is four
+ * calls with a library language), so it goes at once even while the walk
  * takes its whole share.
  */
 const PAGE_CALLS_PER_MINUTE = 20;
 /** Also carries Likely seen's people lookups: up to 16 calls, two a person. */
-const WALK_CALLS_PER_MINUTE = 28;
+const WALK_CALLS_PER_MINUTE = 26;
 const discoverSlot = createCallPacer(DISCOVER_CALLS_PER_MINUTE, 60_000);
 const pageSlot = () => discoverSlot({ kind: 'page', limit: PAGE_CALLS_PER_MINUTE });
 const walkSlot = () => discoverSlot({ kind: 'walk', limit: WALK_CALLS_PER_MINUTE });
@@ -118,16 +122,7 @@ async function request<T = TMDBSearchResponse>(
   }
 }
 
-interface Source {
-  endpoint: string;
-  params: Record<string, string>;
-  media: DiscoveryMedia;
-  reason: string;
-  kind: DiscoveryItem['kind'];
-  seedKey?: string;
-  shortReason?: string;
-  wildcard?: boolean;
-}
+type Source = DiscoverySource;
 
 interface Loaded { items: DiscoveryItem[]; failed: boolean }
 
@@ -138,6 +133,9 @@ interface Loaded { items: DiscoveryItem[]; failed: boolean }
  */
 interface SuggestionPage extends Loaded { seeds: DiscoverySeed[]; taste: TasteProfile }
 interface PageParam { page: number; seeds: DiscoverySeed[] | null; taste: TasteProfile | null }
+/** A Likely seen pool page, with the languages fixed by its first page. */
+interface PoolPage extends Loaded { languages: LikelySeenLanguages }
+interface PoolParam { index: number; languages: LikelySeenLanguages | null }
 
 async function load(sources: Source[]): Promise<Loaded> {
   const results = await Promise.allSettled(sources.map(async (source) => {
@@ -231,50 +229,6 @@ function seedSources(seeds: DiscoverySeed[], page: number, media: DiscoveryMedia
   }];
 }
 
-/** Likely seen pool pages that also read a library language's most-voted titles. */
-const LIKELY_SEEN_LANGUAGE_PAGES = 3;
-const POOL_LANGUAGE = 'likely-seen:language';
-
-/**
- * One page of Likely seen's widely watched pool: TMDB's most-voted released
- * films and series on the page `likelySeenTmdbPage` picks and, for its first
- * pages, the most-voted in the library's own language other than English,
- * films and series apart (`likelySeenLanguage`).
- */
-function likelySeenPoolSources(
-  index: number,
-  week: number,
-  today: string,
-  languages: Readonly<Record<DiscoveryMedia, string | null>>,
-): Source[] {
-  const released = (media: DiscoveryMedia) => (media === 'movie' ? { 'release_date.lte': today } : { 'first_air_date.lte': today });
-  const page = String(likelySeenTmdbPage(index, week));
-  const sources: Source[] = (['movie', 'tv'] as const).map((media) => ({
-    endpoint: `discover/${media}`,
-    params: { ...released(media), sort_by: 'vote_count.desc', include_adult: 'false', page },
-    media,
-    reason: 'Widely watched on TMDB — have you seen this already?',
-    shortReason: 'Widely watched',
-    kind: 'recommendation' as const,
-  }));
-  if (index >= LIKELY_SEEN_LANGUAGE_PAGES) return sources;
-  for (const media of ['movie', 'tv'] as const) {
-    const language = languages[media];
-    if (!language) continue;
-    const name = languageDisplayName(language);
-    sources.push({
-      endpoint: `discover/${media}`,
-      params: { ...released(media), with_original_language: language, sort_by: 'vote_count.desc', include_adult: 'false', page: String(index + 1) },
-      media,
-      reason: `One of the most watched ${name} ${media === 'movie' ? 'films' : 'series'} on TMDB — have you seen it already?`,
-      shortReason: `Widely watched · ${name}`,
-      kind: 'recommendation',
-      seedKey: POOL_LANGUAGE,
-    });
-  }
-  return sources;
-}
-
 export interface DiscoveryFranchiseGroup {
   key: string;
   name: string;
@@ -297,13 +251,13 @@ export interface DiscoveryFranchiseGroup {
 //   is kept for a day, so the walk is paid for once a day (about 200 calls
 //   at most); a fresh cached one skips the queue.
 // - Every other section's pages share PAGE_CALLS_PER_MINUTE, never fewer
-//   than 14, so the sections' first pages (14 calls in All, two of them
-//   YOU MIGHT LIKE's wildcards) go at once.
+//   than 16, so the sections' first pages (up to 16 calls in All, two of
+//   them YOU MIGHT LIKE's wildcards and up to four Likely seen's) go at once.
 // - COMING SOON pages until its grid is full, at most 10 pages (20 calls).
 // - YOU MIGHT LIKE and Likely seen page until full, at most 6 and 5 pages
 //   automatically per visit; Show more is the owner's own call. A Likely
-//   seen page is two calls, three or four for its first
-//   LIKELY_SEEN_LANGUAGE_PAGES while a library language has a pool.
+//   seen page is two calls, up to four for its first
+//   LIKELY_SEEN_LANGUAGE_PAGES (likelySeenPoolSources).
 const COLLECTIONS_PER_BATCH = 12;
 const FRANCHISES_PER_STEP = 6;
 const MAX_UPCOMING_PAGES = 10;
@@ -483,34 +437,42 @@ export function useDiscovery(type: LibraryType) {
   // Rotating pool of widely-watched released titles so "Have you already
   // watched?" always has familiar films and series to log or dismiss.
   // The library's own language other than English, films and series apart,
-  // read from the library alone: answers move with every click, and a pool
-  // keyed on them would start over.
-  const likelySeenLanguages = useMemo(() => {
+  // read from the library alone, since answers move with every click. Like
+  // YOU MIGHT LIKE's seeds, it is fixed when the first page loads and
+  // travels with the pages, so a rating or a Seen it cannot start the pool
+  // over.
+  const likelySeenLanguages = useMemo((): LikelySeenLanguages => {
     const profiles = buildTasteProfiles(libraryTasteTitles(watchlist, favourites, isAdmin, today));
     return { movie: likelySeenLanguage(profiles.movie.language), tv: likelySeenLanguage(profiles.tv.language) };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
   }, [watchlist, favourites, isAdmin, week]);
+  const likelySeenLanguagesRef = useRef(likelySeenLanguages);
+  // Declared before the query, so the first fetch already sees them.
+  useEffect(() => {
+    likelySeenLanguagesRef.current = likelySeenLanguages;
+  }, [likelySeenLanguages]);
   const likelySeenPool = useInfiniteQuery({
-    queryKey: ['watchlist', 'discovery', 'likely-seen-pool', 'v2', week, likelySeenLanguages.movie, likelySeenLanguages.tv],
-    enabled: !loading,
+    queryKey: ['watchlist', 'discovery', 'likely-seen-pool', week],
+    // Ratings weigh the language, so the first page waits for them, as
+    // YOU MIGHT LIKE's does.
+    enabled: !loading && ratingsStatus !== 'loading',
     staleTime: 60 * 60 * 1000,
     retry: false,
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) => load(likelySeenPoolSources(pageParam, week, start, likelySeenLanguages)),
-    getNextPageParam: (_lastPage, _pages, lastParam) => (
-      lastParam + 1 < LIKELY_SEEN_POOL_PAGES ? lastParam + 1 : undefined
+    initialPageParam: { index: 0, languages: null } as PoolParam,
+    queryFn: async ({ pageParam }): Promise<PoolPage> => {
+      const languages = pageParam.languages ?? likelySeenLanguagesRef.current;
+      const loaded = await load(likelySeenPoolSources(pageParam.index, week, start, languages));
+      return { ...loaded, languages };
+    },
+    getNextPageParam: (lastPage, _pages, lastParam): PoolParam | undefined => (
+      lastParam.index + 1 < LIKELY_SEEN_POOL_PAGES ? { index: lastParam.index + 1, languages: lastPage.languages } : undefined
     ),
   });
 
-  // Each page's most-voted titles take turns with its language's.
-  const likelySeenPoolItems = useMemo(() => (likelySeenPool.data?.pages ?? []).flatMap((page) => {
-    const items = page.items.filter((item) => type === 'all' || item.media === type);
-    const alternate = (list: DiscoveryItem[]) => (type === 'all' ? interleaveUpcoming(list) : list);
-    return takeTurns([
-      alternate(items.filter((item) => item.seedKey !== POOL_LANGUAGE)),
-      alternate(items.filter((item) => item.seedKey === POOL_LANGUAGE)),
-    ]);
-  }), [likelySeenPool.data?.pages, type]);
+  const likelySeenPoolItems = useMemo(
+    () => (likelySeenPool.data?.pages ?? []).flatMap((page) => likelySeenPoolPageItems(page.items, type)),
+    [likelySeenPool.data?.pages, type],
+  );
 
   // --- "Have you already watched?" grouped franchises & spin-offs ----------
   // A visitor's cards read only what a visitor's seeds do: a hidden or

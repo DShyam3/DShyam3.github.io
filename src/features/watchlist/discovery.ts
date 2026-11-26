@@ -1,6 +1,7 @@
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 import { libraryShelf, libraryStatus, nextAirDate, type LibraryType } from './library-state';
 import type { TMDBSearchItem } from './tmdb-types';
+import { languageDisplayName } from './language-groups';
 
 export type DiscoveryMedia = 'movie' | 'tv';
 export interface DiscoverySeed { id: number; media: DiscoveryMedia; title: string; reason: string }
@@ -13,6 +14,17 @@ export interface DiscoveryItem extends TMDBSearchItem {
   /** A tile-length reason, "Like Arcane"; `reason` is the full sentence. */
   shortReason?: string;
   /** A well-loved title outside the usual genres (wildcards.ts), not a seed's. */
+  wildcard?: boolean;
+}
+/** Where Discover's suggestions come from: one tmdb-proxy call. */
+export interface DiscoverySource {
+  endpoint: string;
+  params: Record<string, string>;
+  media: DiscoveryMedia;
+  reason: string;
+  kind: DiscoveryItem['kind'];
+  seedKey?: string;
+  shortReason?: string;
   wildcard?: boolean;
 }
 export const discoveryKey = (media: DiscoveryMedia, id: number) => `${media}:${id}`;
@@ -158,6 +170,78 @@ export function likelySeenLanguage(language: ReadonlyMap<string, number>): strin
     bestShare = share;
   }
   return best;
+}
+
+export type LikelySeenLanguages = Readonly<Record<DiscoveryMedia, string | null>>;
+/** Pool pages that also read the library language's most-voted titles: its top 60. */
+export const LIKELY_SEEN_LANGUAGE_PAGES = 3;
+/**
+ * A language's most-voted titles run out of votes quickly: below this, a
+ * title is not one most people who watch that language would know.
+ */
+export const LIKELY_SEEN_LANGUAGE_MIN_VOTES = 100;
+const LIKELY_SEEN_LANGUAGE_KEY = 'likely-seen:language';
+
+/**
+ * One page of Likely seen's widely watched pool: TMDB's most-voted released
+ * films and series on the page `likelySeenTmdbPage` picks and, for the first
+ * `LIKELY_SEEN_LANGUAGE_PAGES`, the most-voted in the library's own language
+ * other than English, films and series apart (`likelySeenLanguage`). Two
+ * calls, or up to four with a language.
+ */
+export function likelySeenPoolSources(
+  index: number,
+  week: number,
+  today: string,
+  languages: LikelySeenLanguages,
+): DiscoverySource[] {
+  const released = (media: DiscoveryMedia) => (media === 'movie' ? { 'release_date.lte': today } : { 'first_air_date.lte': today });
+  const page = String(likelySeenTmdbPage(index, week));
+  const sources: DiscoverySource[] = (['movie', 'tv'] as const).map((media) => ({
+    endpoint: `discover/${media}`,
+    params: { ...released(media), sort_by: 'vote_count.desc', include_adult: 'false', page },
+    media,
+    reason: 'Widely watched on TMDB — have you seen this already?',
+    shortReason: 'Widely watched',
+    kind: 'recommendation' as const,
+  }));
+  if (index >= LIKELY_SEEN_LANGUAGE_PAGES) return sources;
+  for (const media of ['movie', 'tv'] as const) {
+    const language = languages[media];
+    if (!language) continue;
+    const name = languageDisplayName(language);
+    sources.push({
+      endpoint: `discover/${media}`,
+      params: {
+        ...released(media),
+        with_original_language: language,
+        'vote_count.gte': String(LIKELY_SEEN_LANGUAGE_MIN_VOTES),
+        sort_by: 'vote_count.desc',
+        include_adult: 'false',
+        page: String(index + 1),
+      },
+      media,
+      reason: `One of the most watched ${name} ${media === 'movie' ? 'films' : 'series'} on TMDB — have you seen it already?`,
+      shortReason: `Widely watched · ${name}`,
+      kind: 'recommendation',
+      seedKey: LIKELY_SEEN_LANGUAGE_KEY,
+    });
+  }
+  return sources;
+}
+
+/**
+ * A pool page's titles for one view, in grid order: its most-voted titles
+ * take turns with its language's, and in All each takes turns between films
+ * and series.
+ */
+export function likelySeenPoolPageItems(items: readonly DiscoveryItem[], type: LibraryType): DiscoveryItem[] {
+  const shown = items.filter((item) => type === 'all' || item.media === type);
+  const alternate = (list: DiscoveryItem[]) => (type === 'all' ? interleaveUpcoming(list) : list);
+  return takeTurns([
+    alternate(shown.filter((item) => item.seedKey !== LIKELY_SEEN_LANGUAGE_KEY)),
+    alternate(shown.filter((item) => item.seedKey === LIKELY_SEEN_LANGUAGE_KEY)),
+  ]);
 }
 
 export const MAX_SUGGESTIONS_PER_SEED = 4;

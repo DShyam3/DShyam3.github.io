@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LIKELY_SEEN_POOL_PAGES, LIKELY_SEEN_TOP_PAGES, admitWildcards, curateDiscovery, discoverySeeds, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, keepHeldInPlace, likelySeenConsensus, likelySeenLanguage, likelySeenTmdbPage, type DiscoveryItem } from './discovery';
+import { LIKELY_SEEN_POOL_PAGES, LIKELY_SEEN_TOP_PAGES, admitWildcards, curateDiscovery, discoverySeeds, filmGroupsNeeded, franchiseUpcomingItems, interleaveBySeed, interleaveFreshBySeed, interleaveUpcoming, keepFirstSeenOrder, keepHeldInPlace, LIKELY_SEEN_LANGUAGE_MIN_VOTES, likelySeenConsensus, likelySeenLanguage, likelySeenPoolPageItems, likelySeenPoolSources, likelySeenTmdbPage, type DiscoveryItem } from './discovery';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -543,5 +543,66 @@ describe('likelySeenLanguage', () => {
   it('gives a tie to the earlier code, in any order', () => {
     expect(likelySeenLanguage(new Map([['ko', 0.05], ['ja', 0.05]]))).toBe('ja');
     expect(likelySeenLanguage(new Map([['ja', 0.05], ['ko', 0.05]]))).toBe('ja');
+  });
+});
+
+describe('likelySeenPoolSources', () => {
+  const today = '2026-11-26';
+
+  it('reads the most-voted released films and series on the walked page', () => {
+    const sources = likelySeenPoolSources(1, 14, today, { movie: null, tv: null });
+    expect(sources.map((source) => [source.endpoint, source.params.page])).toEqual([
+      ['discover/movie', String(likelySeenTmdbPage(1, 14))],
+      ['discover/tv', String(likelySeenTmdbPage(1, 14))],
+    ]);
+    expect(sources[0].params).toMatchObject({ sort_by: 'vote_count.desc', 'release_date.lte': today });
+    expect(sources[1].params).toMatchObject({ sort_by: 'vote_count.desc', 'first_air_date.lte': today });
+    expect(sources.every((source) => source.shortReason === 'Widely watched' && !source.seedKey)).toBe(true);
+  });
+
+  it('adds the library language for the first three pages, from its own first page', () => {
+    const languages = { movie: 'hi', tv: 'ko' };
+    const language = (index: number) => likelySeenPoolSources(index, 14, today, languages).slice(2);
+    expect(language(0).map((source) => [source.media, source.params.with_original_language, source.params.page])).toEqual([
+      ['movie', 'hi', '1'],
+      ['tv', 'ko', '1'],
+    ]);
+    expect(language(2).map((source) => source.params.page)).toEqual(['3', '3']);
+    expect(language(3)).toEqual([]);
+    const [hindi] = language(0);
+    expect(hindi.params).toMatchObject({ sort_by: 'vote_count.desc', 'vote_count.gte': String(LIKELY_SEEN_LANGUAGE_MIN_VOTES), 'release_date.lte': today });
+    expect(hindi.shortReason).toBe('Widely watched · Hindi');
+    expect(hindi.reason).toContain('most watched Hindi films');
+  });
+
+  it('asks only for the media that has a language', () => {
+    const sources = likelySeenPoolSources(0, 0, today, { movie: null, tv: 'ja' });
+    expect(sources.slice(2).map((source) => source.endpoint)).toEqual(['discover/tv']);
+  });
+});
+
+describe('likelySeenPoolPageItems', () => {
+  const vote = (id: number, media: 'movie' | 'tv' = 'movie') => makeDiscoveryItem({ id, media, kind: 'recommendation', shortReason: 'Widely watched' });
+  const lang = (id: number, media: 'movie' | 'tv' = 'movie') => {
+    const [source] = likelySeenPoolSources(0, 0, '2026-11-26', { movie: 'hi', tv: 'hi' }).filter((s) => s.seedKey && s.media === media);
+    return makeDiscoveryItem({ id, media, kind: source.kind, seedKey: source.seedKey, shortReason: source.shortReason });
+  };
+  const ids = (items: DiscoveryItem[]) => items.map((item) => `${item.media}:${item.id}`);
+
+  it('takes turns between the most-voted and the language titles, keeping each order', () => {
+    expect(ids(likelySeenPoolPageItems([vote(1), vote(2), vote(3), lang(10), lang(11)], 'movie')))
+      .toEqual(['movie:1', 'movie:10', 'movie:2', 'movie:11', 'movie:3']);
+  });
+
+  it('shows one media in Films and Series', () => {
+    const items = [vote(1), vote(2, 'tv'), lang(10), lang(11, 'tv')];
+    expect(ids(likelySeenPoolPageItems(items, 'movie'))).toEqual(['movie:1', 'movie:10']);
+    expect(ids(likelySeenPoolPageItems(items, 'tv'))).toEqual(['tv:2', 'tv:11']);
+  });
+
+  it('takes turns between films and series within each in All', () => {
+    const items = [vote(1), vote(2), vote(3, 'tv'), lang(10), lang(11, 'tv')];
+    expect(ids(likelySeenPoolPageItems(items, 'all')))
+      .toEqual(['movie:1', 'movie:10', 'tv:3', 'tv:11', 'movie:2']);
   });
 });
