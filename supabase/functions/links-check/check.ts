@@ -1,4 +1,4 @@
-import { checkOutboundUrl, type OutboundRefusal, type Resolver } from '../_shared/public-address.ts'
+import { fetchPublic, type PublicFetchDeps, type PublicFetchError } from '../_shared/public-fetch.ts'
 
 /**
  * One link's check: the final HTTP status once redirects are followed, or why
@@ -6,7 +6,12 @@ import { checkOutboundUrl, type OutboundRefusal, type Resolver } from '../_share
  * fake fetch and resolver.
  */
 
-export type CheckError = OutboundRefusal | 'timeout' | 'connection' | 'too_many_redirects'
+export { MAX_REDIRECTS } from '../_shared/public-fetch.ts'
+
+/** Honest about what it is, so a site owner reading their logs can tell. */
+export const USER_AGENT = 'DShyamLinkCheck/1.0 (+https://dshyam3.github.io/links)'
+
+export type CheckError = PublicFetchError
 
 export interface LinkCheck {
   /** Final HTTP status, or null when no response came back. */
@@ -16,19 +21,7 @@ export interface LinkCheck {
   challenged?: true
 }
 
-export interface CheckDeps {
-  fetch: typeof fetch
-  resolve: Resolver
-  /** Aborts the whole check, every hop included, when the time is up. */
-  signal: AbortSignal
-}
-
-/** Honest about what it is, so a site owner reading their logs can tell. */
-export const USER_AGENT = 'DShyamLinkCheck/1.0 (+https://dshyam3.github.io/links)'
-
-export const MAX_REDIRECTS = 5
-
-const REDIRECTS = new Set([301, 302, 303, 307, 308])
+export type CheckDeps = PublicFetchDeps
 
 /**
  * Statuses that say the site is there but will not serve a robot: a login
@@ -67,38 +60,20 @@ async function request(deps: CheckDeps, url: URL, method: 'HEAD' | 'GET'): Promi
 /**
  * Checks `url`. HEAD first, since it fetches no page; a server that answers
  * HEAD with an error gets a GET as well, because enough of them mishandle HEAD
- * that its error alone is not evidence.
+ * that its error alone is not evidence. Every hop passes the address rules
+ * first (`fetchPublic`).
  */
 export async function checkLink(url: string, deps: CheckDeps): Promise<LinkCheck> {
-  let current = url
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const allowed = await checkOutboundUrl(current, deps.resolve, deps.signal)
-    if (!allowed.ok) {
-      return { status: null, error: deps.signal.aborted ? 'timeout' : allowed.reason }
-    }
-
-    let response: Response
-    try {
-      response = await request(deps, allowed.url, 'HEAD')
-      if (response.status >= 400) response = await request(deps, allowed.url, 'GET')
-    } catch {
-      return { status: null, error: deps.signal.aborted ? 'timeout' : 'connection' }
-    }
-
-    // Cloudflare marks a challenge page; it often comes as 503 or 403.
-    if (response.headers.get('cf-mitigated') === 'challenge') {
-      return { status: response.status, error: null, challenged: true }
-    }
-
-    const location = response.headers.get('location')
-    if (!REDIRECTS.has(response.status) || !location) return { status: response.status, error: null }
-    try {
-      current = new URL(location, allowed.url).href
-    } catch {
-      return { status: response.status, error: null }
-    }
+  const result = await fetchPublic(url, deps, async (target) => {
+    const response = await request(deps, target, 'HEAD')
+    return response.status >= 400 ? request(deps, target, 'GET') : response
+  })
+  if (!result.ok) return { status: null, error: result.error }
+  // Cloudflare marks a challenge page; it often comes as 503 or 403.
+  if (result.response.headers.get('cf-mitigated') === 'challenge') {
+    return { status: result.response.status, error: null, challenged: true }
   }
-  return { status: null, error: 'too_many_redirects' }
+  return { status: result.response.status, error: null }
 }
 
 /** A `link_checks` row, less its key. */
