@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Image as ImageIcon, Loader2, Pencil, Plus, Search, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -24,12 +24,16 @@ import {
 import { cn } from '@/lib/utils';
 import { safeHref, safeImageSrc } from '@/lib/safe-url';
 import { ALL } from '../facets';
+import { mergeFill } from '../form-fill';
 import type {
   CollectionConfig,
   CollectionRow,
   FieldDef,
   FormValues,
 } from '../types';
+
+/** Where a `fillFrom` read stands; each but idle names the config's line for it. */
+type FillStatus = 'idle' | 'pending' | 'failed' | 'filled' | 'nothing';
 
 /** Click-to-select file input with a preview. Photos upload rather than paste a URL. */
 function FileField<T extends CollectionRow>({
@@ -260,28 +264,87 @@ export function EntityFormDialog<T extends CollectionRow, R>({
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  // `fillFrom`: what it last ran for, and what it put in, so a later answer
+  // replaces its own values but never the owner's. `latestValues` is what the
+  // form held at its last render, for an answer that arrives later.
+  const [fillStatus, setFillStatus] = useState<FillStatus>('idle');
+  const fillSource = useRef<string | null>(null);
+  // Each read is numbered; only the newest one's answer is used.
+  const fillRun = useRef(0);
+  const filledEarlier = useRef<Partial<FormValues>>({});
+  const latestValues = useRef(values);
+  useLayoutEffect(() => {
+    latestValues.current = values;
+  }, [values]);
 
   // Re-seed on open so an edit dialog never shows a stale row, and an add
   // dialog starts clean after a previous submit.
   useEffect(() => {
     if (open) {
-      setValues(initialValues(config.fields, item));
+      const initial = initialValues(config.fields, item);
+      setValues(initial);
+      // An edit dialog has its row's value already; only a new one is read.
+      fillSource.current = config.fillFrom ? initial[config.fillFrom.field]?.trim() || null : null;
+      fillRun.current += 1;
+      filledEarlier.current = {};
+      setFillStatus('idle');
       setSaveError('');
       setErrors({});
       setImageFailed({});
       setFiles({});
       setPreviews({});
     }
-  }, [open, item, config.fields]);
+  }, [open, item, config.fields, config.fillFrom]);
 
   const setValue = (name: string, value: string) => {
     setValues((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
+    // Editing the field drops any answer still on its way: it is for a value
+    // the field no longer holds, and the same value pasted again reads afresh.
+    if (name === config.fillFrom?.field && value.trim() !== fillSource.current) {
+      fillSource.current = null;
+      fillRun.current += 1;
+      if (fillStatus !== 'idle') setFillStatus('idle');
+    }
+  };
+
+  const runFill = (raw: string) => {
+    const fillFrom = config.fillFrom;
+    const source = raw.trim();
+    if (!fillFrom || !source || source === fillSource.current) return;
+    fillSource.current = source;
+    const run = ++fillRun.current;
+    setFillStatus('pending');
+    // What came back replaces what the last fill put in; a failure clears it.
+    const settle = (filled: Partial<FormValues> | null, failed: boolean) => {
+      // The field changed since, a newer read started, or the dialog reopened.
+      if (fillRun.current !== run) return;
+      const base = latestValues.current;
+      const earlier = filledEarlier.current;
+      const answer = filled ?? {};
+      const { values: next, owned } = mergeFill(base, answer, earlier, fillFrom.field, source);
+      filledEarlier.current = owned;
+      const written = Object.keys(next).filter((name) => next[name] && next[name] !== base[name]);
+      setFillStatus(
+        failed ? 'failed' : written.length ? 'filled' : filled && !Object.keys(filled).length ? 'nothing' : 'idle',
+      );
+      if (next === base) return;
+      setValues((prev) => (prev === base ? next : mergeFill(prev, answer, earlier, fillFrom.field, source).values));
+      // A required field the fill just answered is no longer missing.
+      if (written.some((name) => errors[name])) {
+        setErrors((prev) => ({ ...prev, ...Object.fromEntries(written.map((name) => [name, ''])) }));
+      }
+    };
+    fillFrom.fill(source).then(
+      (filled) => settle(filled, false),
+      () => settle(null, true),
+    );
   };
 
   const handleBlur = (field: FieldDef<T>) => {
     const merged = config.onFieldBlur?.(field.name, values);
     if (merged) setValues((prev) => ({ ...prev, ...merged }));
+    if (field.name === config.fillFrom?.field) runFill(values[field.name] ?? '');
   };
 
   const pickFile = (field: FieldDef<T>, file: File) => {
@@ -398,7 +461,11 @@ export function EntityFormDialog<T extends CollectionRow, R>({
     const id = `${mode}-${config.table}-${field.name}`;
     const error = errors[field.name];
     const value = values[field.name] ?? '';
-    const fieldA11y = { 'aria-invalid': Boolean(error), 'aria-describedby': error ? `${id}-error` : undefined, 'aria-required': Boolean(field.required) };
+    const describedBy = [
+      error && `${id}-error`,
+      field.name === config.fillFrom?.field && fillStatus === 'idle' && `${id}-fill`,
+    ].filter(Boolean).join(' ');
+    const fieldA11y = { 'aria-invalid': Boolean(error), 'aria-describedby': describedBy || undefined, 'aria-required': Boolean(field.required) };
 
     return (
       <div key={field.name} className="space-y-2">
@@ -491,6 +558,15 @@ export function EntityFormDialog<T extends CollectionRow, R>({
             value={value}
             onChange={(e) => setValue(field.name, e.target.value)}
             onBlur={() => handleBlur(field)}
+            onPaste={
+              field.name === config.fillFrom?.field
+                ? (e) => {
+                    // The pasted text is in the input once the paste is done.
+                    const input = e.currentTarget;
+                    window.setTimeout(() => runFill(input.value));
+                  }
+                : undefined
+            }
             placeholder={field.placeholder}
             className={cn(
               error && 'border-destructive focus-visible:ring-destructive',
@@ -499,6 +575,25 @@ export function EntityFormDialog<T extends CollectionRow, R>({
         )}
 
         {error && <p id={`${id}-error`} role="alert" className="text-xs text-destructive">{error}</p>}
+        {config.fillFrom && field.name === config.fillFrom.field && (
+          // Hint and status share one grid cell, so the line is as tall as
+          // the taller of them and the fields below do not jump while a fill
+          // runs. Only the status is live; the hint is read with the field.
+          <p className="grid text-xs text-muted-foreground">
+            <span
+              id={`${id}-fill`}
+              className={cn('col-start-1 row-start-1', fillStatus !== 'idle' && 'invisible')}
+            >
+              {config.fillFrom.hint}
+            </span>
+            <span role="status" className="col-start-1 row-start-1 flex items-start gap-1.5">
+              {fillStatus === 'pending' && (
+                <Loader2 aria-hidden="true" className="mt-0.5 h-3 w-3 shrink-0 animate-spin motion-reduce:animate-none" />
+              )}
+              {fillStatus === 'idle' ? '' : config.fillFrom[fillStatus]}
+            </span>
+          </p>
+        )}
         {field.type === 'image' && imageFailed[field.name] && (
           <p className="text-xs text-destructive">
             Couldn't load an image from that URL

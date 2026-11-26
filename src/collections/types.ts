@@ -304,6 +304,31 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
   ) => Partial<FormValues> | null;
 
   /**
+   * A slower fill once the owner pastes into or leaves `field`: a link's name
+   * and description read from its page, say. `field` must be a 'text' or
+   * 'url' field; no other input runs it. Runs once per new value of `field`
+   * -- in the edit dialog, not for the value the row already has -- and
+   * merges what comes back only into fields that are empty or still hold an
+   * earlier fill's value, so nothing typed is overwritten (`mergeFill`).
+   * `fill` resolves null when the value is not one it can read, and throws
+   * when the read fails.
+   */
+  fillFrom?: {
+    field: keyof T & string;
+    fill: (value: string) => Promise<Partial<FormValues> | null>;
+    /** Shown under the field otherwise: what pasting into it does. */
+    hint: string;
+    /** Shown under the field while the fill runs. */
+    pending: string;
+    /** Shown when the fill wrote something. */
+    filled: string;
+    /** Shown when the read worked but had nothing to fill in. */
+    nothing: string;
+    /** Shown when the read failed. */
+    failed: string;
+  };
+
+  /**
    * Validate on submit. Return a message keyed by field, or null if valid.
    * `item` is the row being edited, for rules that depend on a column the
    * form does not show; it is undefined when adding.

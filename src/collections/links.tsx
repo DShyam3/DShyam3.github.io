@@ -2,6 +2,7 @@ import { DetailSection } from '@/components/cards/CardDetailDialog';
 import { uploadPhoto } from '@/lib/storage';
 import { LinkCheckStatus } from './components/LinkCheckStatus';
 import { buildHighDpiFaviconUrl, parseLinkUrl, resolveLinkIcon } from './link-icons';
+import { fetchLinkMetadata } from './link-metadata';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface LinkRow extends CollectionRow {
@@ -59,9 +60,10 @@ export const linksCollection: CollectionConfig<LinkRow> = {
   // bucket, which avoids depending on a third-party URL staying alive.
   uploadFile: uploadPhoto,
 
+  // The URL comes first: pasting it fills in the name and description below.
   fields: [
-    { name: 'name', label: 'Name', type: 'text', required: true, placeholder: 'Figma' },
     { name: 'url', label: 'URL', type: 'url', required: true, placeholder: 'https://figma.com' },
+    { name: 'name', label: 'Name', type: 'text', required: true, placeholder: 'Figma' },
     {
       name: 'description',
       label: 'Description',
@@ -85,6 +87,24 @@ export const linksCollection: CollectionConfig<LinkRow> = {
     return {
       icon: buildHighDpiFaviconUrl(parsed.hostname),
     };
+  },
+
+  // Once a URL is pasted or entered, the page's own name and description fill
+  // whichever of those fields are still empty. Read by the links-metadata
+  // function, since a browser cannot read another site's page.
+  fillFrom: {
+    field: 'url',
+    fill: (value) => {
+      const parsed = parseLinkUrl(value);
+      // Only a web page has a page to read; a mailto: link has none.
+      const readable = parsed && (parsed.protocol === 'https:' || parsed.protocol === 'http:');
+      return readable ? fetchLinkMetadata(parsed.href) : Promise.resolve(null);
+    },
+    hint: 'Pasting a link fills in an empty name and description.',
+    pending: 'Reading the page…',
+    filled: 'Filled in from the page.',
+    nothing: 'The page gives no name or description.',
+    failed: "Couldn't read that page. Fill in the name and description yourself.",
   },
 
   // No URL row: the dialog title is already a link out, so repeating the

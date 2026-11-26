@@ -437,6 +437,7 @@ reading sizes. Browser viewport checks do not replace physical device tests.
   separately; the colour pass does not establish full accessibility compliance.
 - Use brief, local transitions. Existing card hover movement is disabled under
   reduced motion. Future animations must respect that preference too.
+- A field that fills other fields (`fillFrom`, handled in `EntityFormDialog`) carries one status line under it. Its hint and status share one grid cell, so the line keeps its height while a read runs and the fields below do not move. Only the status is `role="status"`; the hint is linked by `aria-describedby` while no fill is running.
 - No continuous gradient animation, scroll hijacking or parallax dependency.
 - No idling telemetry. A figure that ticks, sweeps or scrolls on a timer with no
   underlying change is animation pretending to be data, and it never stops
