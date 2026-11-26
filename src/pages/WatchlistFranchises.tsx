@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronsDownUp, ChevronsUpDown, Search, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -58,7 +58,7 @@ const UNIQUE_VIOLATION = '23505';
 const COLLECTIONS_PER_BATCH = 20;
 
 type FranchiseCategory = 'all' | 'film-series' | 'tv-spinoffs' | 'orders' | 'library';
-type FranchiseProgress = 'all' | 'in-progress' | 'completed' | 'not-started';
+type FranchiseProgress = 'all' | 'in-progress' | 'completed' | 'not-started' | 'stopped';
 type FranchiseSort = 'largest' | 'progress' | 'alphabetical';
 
 const PROGRESS_OPTIONS: readonly { key: FranchiseProgress; label: string }[] = [
@@ -66,6 +66,7 @@ const PROGRESS_OPTIONS: readonly { key: FranchiseProgress; label: string }[] = [
   { key: 'in-progress', label: 'In progress' },
   { key: 'completed', label: 'Completed' },
   { key: 'not-started', label: 'Not started' },
+  { key: 'stopped', label: 'Stopped watching' },
 ];
 
 const SORT_OPTIONS: readonly { key: FranchiseSort; label: string }[] = [
@@ -83,7 +84,7 @@ export default function WatchlistFranchises() {
   const { watchlist, loading: libraryLoading, getAutoStatus, isEpisodeWatched, isSeasonWatched, toggleEpisodeWatched } = useWatchlist();
   const { isAdmin } = useAuth();
   const { getCollection, getTvSpinoffs, getFilmUniverses } = useTMDB();
-  const { addToLibrary, isAdding } = useAddToLibrary();
+  const { addToLibrary, toggleStopped, isAdding } = useAddToLibrary();
   // Discover's "Not interested" marks: dimmed here rather than dropped.
   const { notInterested } = useDismissedSuggestions();
   const { askDelete, deleteDialog } = useDeleteConfirm();
@@ -263,6 +264,7 @@ export default function WatchlistFranchises() {
     enabled: !libraryLoading && tvSeedIds.length > 0,
     staleTime: 24 * 60 * 60 * 1000,
     retry: false,
+    placeholderData: keepPreviousData,
   });
   const tvFranchises = useMemo(
     () => tvFranchisesFromLinks(tvSpinoffsQuery.data ?? [], visibleWatchlist, POSTER_BASE),
@@ -341,11 +343,12 @@ export default function WatchlistFranchises() {
     [openTvFranchises, lookup],
   );
 
-  const matchesFilters = (name: string, watched: number, total: number) => {
+  const matchesFilters = (name: string, watched: number, total: number, hasStopped = false) => {
     if (normalizedQuery && !name.toLowerCase().includes(normalizedQuery)) return false;
     if (progressFilter === 'in-progress') return watched > 0 && watched < total;
     if (progressFilter === 'completed') return total > 0 && watched >= total;
     if (progressFilter === 'not-started') return total > 0 && watched === 0;
+    if (progressFilter === 'stopped') return hasStopped;
     return true;
   };
 
@@ -370,7 +373,7 @@ export default function WatchlistFranchises() {
 
   const filteredCustomFranchises = useMemo(
     () => bySort(
-      customFranchises.filter((g) => matchesFilters(g.name, g.view.watched, g.view.total)),
+      customFranchises.filter((g) => matchesFilters(g.name, g.view.watched, g.view.total, g.view.entries.some((e) => e.stopped))),
       (g) => g.view.watched,
       (g) => g.view.total,
       (g) => g.name,
@@ -380,7 +383,7 @@ export default function WatchlistFranchises() {
   );
   const filteredOrders = useMemo(
     () => bySort(
-      orderItems.filter((item) => matchesFilters(item.order.name, item.view.watched, item.view.total)),
+      orderItems.filter((item) => matchesFilters(item.order.name, item.view.watched, item.view.total, item.view.entries.some((e) => e.stopped))),
       (item) => item.view.watched,
       (item) => item.view.total,
       (item) => item.order.name,
@@ -390,7 +393,7 @@ export default function WatchlistFranchises() {
   );
   const filteredTvFranchises = useMemo(
     () => bySort(
-      tvFranchiseItems.filter((item) => matchesFilters(item.franchise.name, item.view.watched, item.view.total)),
+      tvFranchiseItems.filter((item) => matchesFilters(item.franchise.name, item.view.watched, item.view.total, item.view.entries.some((e) => e.stopped))),
       (item) => item.view.watched,
       (item) => item.view.total,
       (item) => item.franchise.name,
@@ -759,7 +762,12 @@ export default function WatchlistFranchises() {
                       open={openCards.has(cardKey)}
                       onToggle={() => toggleCard(cardKey)}
                     >
-                      <EntryList view={group.view} onOpen={openEntry} />
+                      <EntryList
+                        view={group.view}
+                        onOpen={openEntry}
+                        onToggleStopped={isAdmin ? (entry) => void toggleStopped(entry) : undefined}
+                        isAdding={isAdding}
+                      />
                     </FranchiseCard>
                   );
                 })}
@@ -805,6 +813,7 @@ export default function WatchlistFranchises() {
                         onOpen={openEntry}
                         onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
                         onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+                        onToggleStopped={isAdmin ? (entry) => void toggleStopped(entry) : undefined}
                         isAdding={isAdding}
                       />
                     );
@@ -848,6 +857,7 @@ export default function WatchlistFranchises() {
                         onOpen={openEntry}
                         onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
                         onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+                        onToggleStopped={isAdmin ? (entry) => void toggleStopped(entry) : undefined}
                         isAdding={isAdding}
                         onSave={
                           isAdmin
@@ -905,6 +915,7 @@ export default function WatchlistFranchises() {
                         onOpen={openEntry}
                         onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
                         onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+                        onToggleStopped={isAdmin ? (entry) => void toggleStopped(entry) : undefined}
                         isAdding={isAdding}
                         onSave={
                           isAdmin

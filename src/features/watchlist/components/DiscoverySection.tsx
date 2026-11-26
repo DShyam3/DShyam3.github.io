@@ -429,6 +429,7 @@ function DiscoveryFranchiseCard({
   onAddToLibrary,
   onSeenIt,
   onDismiss,
+  onToggleStopped,
   isAdding,
 }: {
   group: DiscoveryFranchiseGroup;
@@ -436,6 +437,7 @@ function DiscoveryFranchiseCard({
   onAddToLibrary?: (entry: OrderEntryView) => void;
   onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
   onDismiss: (entry: OrderEntryView) => void;
+  onToggleStopped?: (entry: OrderEntryView) => void;
   isAdding: (key: string) => boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -464,6 +466,7 @@ function DiscoveryFranchiseCard({
         onAddToLibrary={onAddToLibrary}
         onSeenIt={onSeenIt}
         onDismiss={onDismiss}
+        onToggleStopped={onToggleStopped}
         isAdding={isAdding}
       />
     </FranchiseCard>
@@ -587,12 +590,21 @@ function DiscoverAddSearch({ type }: { type: LibraryType }) {
   );
 }
 
+export type DiscoverSection = 'all' | 'coming_soon' | 'already_watched' | 'might_like';
+
+export const DISCOVER_SECTION_OPTIONS: ReadonlyArray<{ key: DiscoverSection; label: string }> = [
+  { key: 'all', label: 'All sections' },
+  { key: 'coming_soon', label: 'Coming soon' },
+  { key: 'already_watched', label: 'Have you already watched?' },
+  { key: 'might_like', label: 'You might like' },
+];
+
 /** Discover: what is coming that you do not follow, grouped franchises/spin-offs you have started, then "more like this". */
-export function DiscoverySection({ type }: { type: LibraryType }) {
+export function DiscoverySection({ type, section = 'all' }: { type: LibraryType; section?: DiscoverSection }) {
   const discovery = useDiscovery(type);
   const { isAdmin } = useAuth();
   const { watchlist, getAutoStatus, isEpisodeWatched, isSeasonWatched, toggleEpisodeWatched } = useWatchlist();
-  const { addToLibrary, isAdding } = useAddToLibrary();
+  const { addToLibrary, toggleStopped, isAdding } = useAddToLibrary();
   const [selected, setSelected] = useState<{ id: string; category: 'Movies' | 'TV Shows' } | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OrderEntryView | null>(null);
   const [resetFailed, setResetFailed] = useState(false);
@@ -661,29 +673,32 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
   const selectedItem = selected && watchlist.find((i) => i.category === selected.category && i.id === selected.id);
 
   return (
-    <div className="ultrawide-discover-grid">
+    <div className={section === 'all' ? 'ultrawide-discover-grid' : 'flex flex-col gap-10'}>
       {isAdmin && (
         <div className="space-y-2" style={{ gridColumn: '1 / -1' }}>
           <DiscoverAddSearch type={type} />
           <RateWatchedEntry type={type} />
         </div>
       )}
-      <section className="space-y-4 min-w-0" aria-labelledby="discover-coming-soon">
-        <div className="space-y-1">
-          <h2 id="discover-coming-soon"><DotMatrixText text="COMING SOON" size="sm" /></h2>
-          <p className="text-sm text-muted-foreground">Outside your library, over the next six months. Dates can change, and a cinema release is not streaming.</p>
-        </div>
-        {(discovery.upcomingLoading || (comingSoon.length === 0 && discovery.upcomingLoadingMore)) && (
-          <p role="status" className="text-sm text-muted-foreground">Finding new releases…</p>
-        )}
-        {discovery.upcomingFailed && <p role="status" className="text-sm text-muted-foreground">Some new releases couldn’t load.</p>}
-        {!discovery.upcomingLoading && !discovery.upcomingLoadingMore && !discovery.upcomingFailed && comingSoon.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nothing new among the most popular releases of the next six months.</p>
-        )}
-        {comingSoon.length > 0 && <TileGrid items={comingSoon} onDismiss={(item) => discovery.dismiss(item, 'coming_soon')} />}
-      </section>
+      {(section === 'all' || section === 'coming_soon') && (
+        <section className="space-y-4 min-w-0" aria-labelledby="discover-coming-soon">
+          <div className="space-y-1">
+            <h2 id="discover-coming-soon"><DotMatrixText text="COMING SOON" size="sm" /></h2>
+            <p className="text-sm text-muted-foreground">Outside your library, over the next six months. Dates can change, and a cinema release is not streaming.</p>
+          </div>
+          {(discovery.upcomingLoading || (comingSoon.length === 0 && discovery.upcomingLoadingMore)) && (
+            <p role="status" className="text-sm text-muted-foreground">Finding new releases…</p>
+          )}
+          {discovery.upcomingFailed && <p role="status" className="text-sm text-muted-foreground">Some new releases couldn’t load.</p>}
+          {!discovery.upcomingLoading && !discovery.upcomingLoadingMore && !discovery.upcomingFailed && comingSoon.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nothing new among the most popular releases of the next six months.</p>
+          )}
+          {comingSoon.length > 0 && <TileGrid items={comingSoon} onDismiss={(item) => discovery.dismiss(item, 'coming_soon')} />}
+        </section>
+      )}
 
-      <section ref={alreadyWatchedRef} tabIndex={-1} className="space-y-4 min-w-0" aria-labelledby="discover-already-watched">
+      {(section === 'all' || section === 'already_watched') && (
+        <section ref={alreadyWatchedRef} tabIndex={-1} className="space-y-4 min-w-0" aria-labelledby="discover-already-watched">
         <div className="space-y-1">
           <h2 id="discover-already-watched"><DotMatrixText text="HAVE YOU ALREADY WATCHED?" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">
@@ -723,6 +738,7 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
                 onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
                 onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
                 onDismiss={(entry) => discovery.dismiss({ media: entry.mediaType, id: entry.tmdbId, release_date: entry.releaseDate }, 'franchise')}
+                onToggleStopped={isAdmin ? (entry) => void toggleStopped(entry) : undefined}
                 isAdding={isAdding}
               />
             ))}
@@ -786,9 +802,11 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
             </Button>
           )}
         </div>
-      </section>
+        </section>
+      )}
 
-      <section className="space-y-4" aria-labelledby="discover-might-like">
+      {(section === 'all' || section === 'might_like') && (
+        <section className="space-y-4" aria-labelledby="discover-might-like">
         <div className="space-y-1">
           <h2 id="discover-might-like"><DotMatrixText text="YOU MIGHT LIKE" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">Discover new films and series outside the collections above, based on what you rate highly, favourite and watch.</p>
@@ -839,7 +857,8 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
             )}
           </div>
         )}
-      </section>
+        </section>
+      )}
 
       <div ref={footerRef} tabIndex={-1} className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         <span>

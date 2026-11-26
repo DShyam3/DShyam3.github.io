@@ -29,6 +29,7 @@ export function OrderCard({
   onOpen,
   onAddToLibrary,
   onSeenIt,
+  onToggleStopped,
   isAdding,
 }: {
   order: StoredOrder;
@@ -42,6 +43,7 @@ export function OrderCard({
   onOpen: (entry: OrderEntryView) => void;
   onAddToLibrary?: (entry: OrderEntryView) => void;
   onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
+  onToggleStopped?: (entry: OrderEntryView) => void;
   isAdding?: (key: string) => boolean;
 }) {
   const [localOpen, setLocalOpen] = useState(false);
@@ -116,6 +118,7 @@ export function OrderCard({
         onOpen={onOpen}
         onAddToLibrary={onAddToLibrary}
         onSeenIt={onSeenIt}
+        onToggleStopped={onToggleStopped}
         isAdding={isAdding}
         edits={actions && {
           busy,

@@ -21,6 +21,7 @@ export function TvFranchiseCard({
   onOpen,
   onAddToLibrary,
   onSeenIt,
+  onToggleStopped,
   isAdding,
   onSave,
 }: {
@@ -32,6 +33,7 @@ export function TvFranchiseCard({
   onOpen: (entry: OrderEntryView) => void;
   onAddToLibrary?: (entry: OrderEntryView) => void;
   onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
+  onToggleStopped?: (entry: OrderEntryView) => void;
   isAdding?: (key: string) => boolean;
   onSave?: (franchise: TvFranchiseSummary, view: ReturnType<typeof buildOrderView>) => Promise<void>;
 }) {
@@ -86,6 +88,7 @@ export function TvFranchiseCard({
         onOpen={onOpen}
         onAddToLibrary={onAddToLibrary}
         onSeenIt={onSeenIt}
+        onToggleStopped={onToggleStopped}
         isAdding={isAdding}
       />
     </FranchiseCard>

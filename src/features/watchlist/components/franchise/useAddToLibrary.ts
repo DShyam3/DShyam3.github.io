@@ -3,13 +3,13 @@ import { useCallback, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useWatchlist } from '@/features/watchlist/useWatchlist';
 import { useTMDB } from '@/features/watchlist/useTMDB';
-import type { OrderEntryInput } from '@/features/watchlist/franchise';
+import type { OrderEntryInput, OrderEntryView } from '@/features/watchlist/franchise';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
 
 /** "Add to library" (or "Seen it") for an entry that is not in it yet: the same
  *  getMovieDetails + addWatchlistItem path as the Library's add dialog. */
 export function useAddToLibrary() {
-  const { addWatchlistItem } = useWatchlist();
+  const { watchlist, addWatchlistItem, setLibraryState } = useWatchlist();
   const { getMovieDetails } = useTMDB();
   const { toast } = useToast();
   const [pending, setPending] = useState<Set<string>>(new Set());
@@ -41,5 +41,26 @@ export function useAddToLibrary() {
     [addWatchlistItem, getMovieDetails, toast],
   );
 
-  return { addToLibrary, isAdding: (key: string) => pending.has(key) };
+  const toggleStopped = useCallback(
+    async (entry: OrderEntryView) => {
+      if (!entry.libraryId) return;
+      const item = watchlist.find((w) => w.id === entry.libraryId);
+      if (!item) return;
+      setPending((prev) => new Set(prev).add(entry.key));
+      try {
+        await setLibraryState(item, item.library_state === 'stopped' ? 'active' : 'stopped');
+      } catch {
+        toast({ title: `Could not update ${entry.title}`, variant: 'destructive' });
+      } finally {
+        setPending((prev) => {
+          const next = new Set(prev);
+          next.delete(entry.key);
+          return next;
+        });
+      }
+    },
+    [setLibraryState, toast, watchlist],
+  );
+
+  return { addToLibrary, toggleStopped, isAdding: (key: string) => pending.has(key) };
 }

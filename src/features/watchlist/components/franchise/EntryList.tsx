@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, Film, Loader2, Pencil, Plus, Trash2, Tv, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, CircleOff, Film, Loader2, Pencil, Play, Plus, Trash2, Tv, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,7 @@ export interface EntryEdits {
 }
 
 export function stateLabel(entry: OrderEntryView): string {
+  if (entry.stopped) return 'Stopped watching';
   switch (entry.state) {
     case 'watched':
       return 'Watched';
@@ -107,6 +108,7 @@ export function EntryList({
   onAddToLibrary,
   onSeenIt,
   onDismiss,
+  onToggleStopped,
   isAdding,
   edits,
 }: {
@@ -115,6 +117,7 @@ export function EntryList({
   onAddToLibrary?: (entry: OrderEntryView) => void;
   onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
   onDismiss?: (entry: OrderEntryView) => void;
+  onToggleStopped?: (entry: OrderEntryView) => void;
   isAdding?: (key: string) => boolean;
   edits?: EntryEdits;
 }) {
@@ -211,7 +214,9 @@ export function EntryList({
                   <span
                     className={cn(
                       'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 font-mono text-xs font-medium',
-                      CHIP[entry.state],
+                      entry.stopped
+                        ? 'border border-border/70 bg-muted/60 text-muted-foreground'
+                        : CHIP[entry.state],
                     )}
                   >
                     {entry.state === 'watched' && <Check className="h-3 w-3" aria-hidden="true" />}
@@ -233,8 +238,26 @@ export function EntryList({
                   entry.note && <p className="break-words text-xs sm:text-sm text-muted-foreground">{entry.note}</p>
                 )}
 
-                {(edits || ((onAddToLibrary || onSeenIt || onDismiss) && entry.state === 'not-in-library')) && (
+                {(edits || ((onAddToLibrary || onSeenIt || onDismiss) && entry.state === 'not-in-library') || (onToggleStopped && entry.mediaType === 'tv' && entry.libraryId && entry.state !== 'watched')) && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    {onToggleStopped && entry.mediaType === 'tv' && entry.libraryId && entry.state !== 'watched' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={adding}
+                        onClick={() => onToggleStopped(entry)}
+                        className="min-h-10 gap-1.5"
+                      >
+                        {adding ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        ) : entry.stopped ? (
+                          <Play className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <CircleOff className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        {entry.stopped ? 'Resume watching' : 'Stopped watching'}
+                      </Button>
+                    )}
                     {onAddToLibrary && entry.state === 'not-in-library' && (
                       <Button
                         type="button"

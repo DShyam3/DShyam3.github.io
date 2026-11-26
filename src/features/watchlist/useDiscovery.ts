@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWatchlist } from './useWatchlist';
@@ -603,6 +603,7 @@ export function useDiscovery(type: LibraryType) {
     enabled: !loading && type !== 'movie' && tvSeedIds.length > 0,
     staleTime: 24 * 60 * 60 * 1000,
     retry: false,
+    placeholderData: keepPreviousData,
     // Thrown on failure: this key is persisted, and a failed lookup must not
     // be kept for a day as "no spin-offs".
     queryFn: () => getTvSpinoffs(tvSeedIds, { throwOnError: true }),

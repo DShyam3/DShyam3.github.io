@@ -21,7 +21,7 @@ export interface LibraryLookup {
   /** Keyed by TMDB id. `lastActivityAt` is the row's `last_activity_at`. */
   movies: Map<number, { id: string; watched: boolean; lastActivityAt?: string | null }>;
   /** Keyed by TMDB id; specials excluded by `libraryLookup`. */
-  shows: Map<number, { id: string; airedEpisodes: number; watchedEpisodes: number; lastActivityAt?: string | null }>;
+  shows: Map<number, { id: string; airedEpisodes: number; watchedEpisodes: number; stopped?: boolean; lastActivityAt?: string | null }>;
 }
 
 /**
@@ -49,7 +49,13 @@ export function libraryLookup(watchlist: WatchlistItem[], today: Date): LibraryL
           if (ep.watched) watchedEpisodes++;
         }
       }
-      shows.set(item.tmdb_id, { id: item.id, airedEpisodes, watchedEpisodes, lastActivityAt: item.last_activity_at ?? null });
+      shows.set(item.tmdb_id, {
+        id: item.id,
+        airedEpisodes,
+        watchedEpisodes,
+        ...(item.library_state === 'stopped' ? { stopped: true } : {}),
+        lastActivityAt: item.last_activity_at ?? null,
+      });
     }
   }
   return { movies, shows };
@@ -61,6 +67,7 @@ export interface OrderEntryView extends OrderEntryInput {
   state: EntryState;
   libraryId: string | null;
   progress: { watched: number; aired: number } | null;
+  stopped?: boolean;
 }
 
 export interface OrderView {
@@ -74,7 +81,7 @@ export interface OrderView {
 export function entryState(
   entry: OrderEntryInput,
   library: LibraryLookup,
-): { state: EntryState; libraryId: string | null; progress: { watched: number; aired: number } | null } {
+): { state: EntryState; libraryId: string | null; progress: { watched: number; aired: number } | null; stopped?: boolean } {
   if (entry.mediaType === 'movie') {
     const movie = library.movies.get(entry.tmdbId);
     if (!movie) return { state: 'not-in-library', libraryId: null, progress: null };
@@ -89,10 +96,10 @@ export function entryState(
       : show.watchedEpisodes > 0
         ? 'in-progress'
         : 'unwatched';
-  return { state, libraryId: show.id, progress };
+  return { state, libraryId: show.id, progress, stopped: show.stopped };
 }
 
-/** Keeps input order; nextUp is the first entry not yet watched. */
+/** Keeps input order; nextUp is the first entry not yet watched or stopped. */
 export function buildOrderView(entries: OrderEntryInput[], library: LibraryLookup): OrderView {
   const views = entries.map((e): OrderEntryView => ({ ...e, ...entryState(e, library) }));
   return {
@@ -100,7 +107,7 @@ export function buildOrderView(entries: OrderEntryInput[], library: LibraryLooku
     total: views.length,
     watched: views.filter((v) => v.state === 'watched').length,
     inLibrary: views.filter((v) => v.state !== 'not-in-library').length,
-    nextUp: views.find((v) => v.state !== 'watched') ?? null,
+    nextUp: views.find((v) => v.state !== 'watched' && !v.stopped) ?? null,
   };
 }
 

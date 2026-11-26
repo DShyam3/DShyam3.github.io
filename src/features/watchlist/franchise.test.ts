@@ -191,6 +191,21 @@ describe('libraryLookup', () => {
     const touched = { ...movie, last_activity_at: '2026-11-20T21:00:00Z' } as WatchlistItem;
     expect(libraryLookup([touched], today).movies.get(7)?.lastActivityAt).toBe('2026-11-20T21:00:00Z');
   });
+
+  it('marks stopped shows and skips them for nextUp', () => {
+    const stoppedShow = { ...show, library_state: 'stopped' } as WatchlistItem;
+    const lookup = libraryLookup([stoppedShow], today);
+    expect(lookup.shows.get(50)?.stopped).toBe(true);
+    const view = buildOrderView(
+      [
+        entry({ key: 'tv:50', mediaType: 'tv', tmdbId: 50, title: 'Stopped Show' }),
+        entry({ key: 'tv:51', mediaType: 'tv', tmdbId: 51, title: 'Next Show' }),
+      ],
+      lookup,
+    );
+    expect(view.entries[0]?.stopped).toBe(true);
+    expect(view.nextUp?.key).toBe('tv:51');
+  });
 });
 
 describe('tvFranchisesFromLinks', () => {
