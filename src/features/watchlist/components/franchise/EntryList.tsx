@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Check, CircleOff, EyeOff, Film, Loader2, Pencil, Pl
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import type { EntryState, OrderEntryView, OrderView } from '@/features/watchlist/franchise';
+import { franchiseStarted, type EntryState, type OrderEntryView, type OrderView } from '@/features/watchlist/franchise';
 import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
 import { WatchedWhenMenu } from '@/features/watchlist/components/WatchedWhenMenu';
 import { useDismissedKeys } from '@/features/watchlist/useDismissedSuggestions';
@@ -130,6 +130,8 @@ export function EntryList({
   const [filterMode, setFilterMode] = useState<'all' | 'remaining'>('all');
   const dismissed = useDismissedKeys();
   const todayIso = new Date().toLocaleDateString('en-CA');
+  // Not seen asks only where unseenFilmCount does: a franchise only saved is still to watch.
+  const started = franchiseStarted(view);
 
   if (view.entries.length === 0) {
     return <p className="text-sm text-muted-foreground">Nothing in this order yet.</p>;
@@ -173,7 +175,7 @@ export function EntryList({
           const isNextUp = view.nextUp?.key === entry.key;
           // A film already saved may have been seen and not logged.
           const seenItForLibraryFilm = entry.mediaType === 'movie' && entry.state === 'unwatched' && !entry.stopped && !!releaseDate && released;
-          const askNotSeen = !!onNotSeen && seenItForLibraryFilm && !notSeen?.has(entry.key);
+          const askNotSeen = !!onNotSeen && seenItForLibraryFilm && started && !notSeen?.has(entry.key);
 
           return (
             <li

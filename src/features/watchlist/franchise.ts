@@ -639,11 +639,18 @@ export function hasWatchGap(view: OrderView): boolean {
  * Released films in the library not yet marked watched: ones you may have
  * seen and not logged, so a Discover card asks about them as it does about
  * the titles missing from the library. A film stopped, or answered Not seen
- * (`answered`, by entry key), has been answered.
+ * (`answered`, by entry key), has been answered. Only in a franchise
+ * `franchiseStarted`: one only saved is still to watch.
  */
 export function unseenFilmCount(view: OrderView, todayIso: string, answered?: ReadonlySet<string>): number {
+  if (!franchiseStarted(view)) return 0;
   return view.entries.filter((entry) =>
     entry.mediaType === 'movie' && entry.state === 'unwatched' && !entry.stopped && !answered?.has(entry.key)
     && !!entry.releaseDate && entry.releaseDate.slice(0, 10) <= todayIso,
   ).length;
+}
+
+/** A title in it watched, or in progress and not stopped. */
+export function franchiseStarted(view: OrderView): boolean {
+  return view.entries.some((entry) => entry.state === 'watched' || (entry.state === 'in-progress' && !entry.stopped));
 }

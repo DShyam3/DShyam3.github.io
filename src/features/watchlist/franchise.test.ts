@@ -16,6 +16,7 @@ import {
   sortByRelease,
   tvFranchisesFromLinks,
   unseenFilmCount,
+  franchiseStarted,
   type LibraryLookup,
   type OrderEntryInput,
   type UniverseLibraryFilm,
@@ -404,6 +405,7 @@ describe('unseenFilmCount', () => {
   });
   it('skips unreleased and undated films, and series', () => {
     const view = buildOrderView([
+      entry({ key: 'w', tmdbId: 1, releaseDate: '2000-01-01' }), // watched: started
       entry({ key: 'a', tmdbId: 2, releaseDate: '2026-12-01' }),
       entry({ key: 'b', tmdbId: 2, releaseDate: null }),
       entry({ key: 'c', mediaType: 'tv', tmdbId: 12, releaseDate: '2010-01-01' }),
@@ -412,15 +414,28 @@ describe('unseenFilmCount', () => {
   });
   it('skips films stopped or answered Not seen', () => {
     const lookup = libraryLookup([
+      { id: 'w', category: 'Movies', tmdb_id: 4, title: 'W', watched: true },
       { id: 'a', category: 'Movies', tmdb_id: 5, title: 'A', watched: false, library_state: 'stopped' },
       { id: 'b', category: 'Movies', tmdb_id: 6, title: 'B', watched: false },
     ] as WatchlistItem[], new Date('2026-11-27'));
     const view = buildOrderView([
+      entry({ key: 'movie:4', tmdbId: 4, releaseDate: '2000-01-01' }),
       entry({ key: 'movie:5', tmdbId: 5, releaseDate: '2001-01-01' }),
       entry({ key: 'movie:6', tmdbId: 6, releaseDate: '2002-01-01' }),
     ], lookup);
     expect(unseenFilmCount(view, today)).toBe(1);
     expect(unseenFilmCount(view, today, new Set(['movie:6']))).toBe(0);
+  });
+  it('asks nothing in a franchise not yet started', () => {
+    const view = buildOrderView([
+      entry({ key: 'a', tmdbId: 2, releaseDate: '2001-01-01' }), // saved, not watched
+      entry({ key: 'b', tmdbId: 3, releaseDate: '2005-01-01' }), // not in library
+    ], library);
+    expect(unseenFilmCount(view, today)).toBe(0);
+    const started = buildOrderView([...view.entries, entry({ key: 'c', mediaType: 'tv', tmdbId: 11 })], library);
+    expect(unseenFilmCount(started, today)).toBe(1); // a series in progress starts it
+    const stopped = { ...started, entries: started.entries.map((e) => (e.key === 'c' ? { ...e, stopped: true } : e)) };
+    expect(franchiseStarted(stopped)).toBe(false); // unless it was stopped
   });
 });
 

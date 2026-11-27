@@ -1,4 +1,4 @@
-Updated 2026-11-27. `origin/main` at `c6f410b1` (collapsible Discover sections), live on Pages via deploy `46068774982`. Synced with anon default privileges, travel map fixes, Ponytail setup and audit fixes.
+Updated 2026-11-27. `origin/main` at `3112a4a0` (Discover empty-section fix `a486dcae`, live on Pages via deploy `46070577186`). Synced with anon default privileges, travel map fixes, Ponytail setup and audit fixes.
 
 ## Closed
 
@@ -9,6 +9,7 @@ Updated 2026-11-27. `origin/main` at `c6f410b1` (collapsible Discover sections),
 ## Watchlist (pushed)
 
 - **HAVE YOU ALREADY WATCHED? no longer ends empty** (`a486dcae`, on `origin/main`, live on Pages via deploy `46070577186`; decision in `REHAUL_HISTORY.md`, 2026-11-27). For the owner, franchise cards also count released films saved but not watched: `Seen it` marks the saved film watched, `Not seen` answers no, stopped films count as answered. An empty Likely seen grid on screen pages on through the widely watched pool. Reviewed by `reviewer` (Opus); its two bugs and four of five risks fixed.
+- **Started franchises only** (follow-up, committed, not pushed): saved films are asked about, and `Not seen` offered, only in a franchise with a title watched or a series in progress and not stopped (`franchiseStarted`), after Pages showed merely saved collections (Open Season, 0 of 4) filling the section.
 
 ## Travel (pushed)
 

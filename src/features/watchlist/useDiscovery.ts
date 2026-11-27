@@ -625,9 +625,10 @@ export function useDiscovery(type: LibraryType, likelySeenOnScreen = true) {
     });
 
   // A franchise is two or more titles, and it shows once one of them is in
-  // the library and another is not, or, for the owner, who can answer it, a
-  // released film in it is in the library but not yet watched, stopped or
-  // answered Not seen: one they may have seen and not logged.
+  // the library and another is not, or, for the owner, who can answer it, in
+  // a franchise already started (`franchiseStarted`), a released film in it
+  // is in the library but not yet watched, stopped or answered Not seen: one
+  // they may have seen and not logged.
   const franchiseGroups = useMemo((): DiscoveryFranchiseGroup[] => {
     const groups: DiscoveryFranchiseGroup[] = [];
     if (type !== 'tv') {
