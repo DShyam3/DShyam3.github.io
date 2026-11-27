@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import type { ForecastEvent, ForecastUnavailableReason } from '@/lib/finance/balance-forecast';
 import { useBalanceForecast } from '../useBalanceForecast';
+import { useFinanceData } from '../FinanceDataContext';
 
 /** Dates of events shown before "Show all". */
 const PREVIEW_DATES = 10;
@@ -39,6 +40,7 @@ const unique = (names: string[]) => [...new Set(names)];
 
 export default function ForecastSurface() {
   const { forecast, ready, exclusionsUnreliable } = useBalanceForecast();
+  const { unloaded } = useFinanceData();
   const [showAll, setShowAll] = useState(false);
 
   const days = useMemo(() => {
@@ -79,7 +81,11 @@ export default function ForecastSurface() {
     return (
       <div className="flex flex-col gap-8">
         {header}
-        <p className="font-sans text-sm text-muted-foreground">{UNAVAILABLE[forecast.reason]}</p>
+        <p className="font-sans text-sm text-muted-foreground">
+          {forecast.reason === 'no_cash_account' && unloaded.includes('bank_accounts')
+            ? 'Bank accounts did not load, so there is no forecast.'
+            : UNAVAILABLE[forecast.reason]}
+        </p>
       </div>
     );
   }

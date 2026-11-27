@@ -24,13 +24,18 @@ const NET_WORTH_CHART_CONFIG: ChartConfig = {
  * points. A chart of one day is a dot, and claiming a trend from it would be
  * the same failure as reporting "under pace by £0.00" against no budget.
  */
-export function NetWorthTrend({ points, today }: { points: NetWorthPoint[]; today: string }) {
+export function NetWorthTrend({ points, today, unavailable = false }: {
+  points: NetWorthPoint[];
+  today: string;
+  /** The history read failed and nothing of this profile's is shown. */
+  unavailable?: boolean;
+}) {
   const change = netWorthChangeSince(points, startOfMonth(today));
 
   if (points.length === 0) {
     return (
       <p className="font-sans text-xs text-muted-foreground">
-        No history recorded yet. A snapshot is taken nightly.
+        {unavailable ? 'Net worth history did not load.' : 'No history recorded yet. A snapshot is taken nightly.'}
       </p>
     );
   }

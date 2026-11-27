@@ -3414,3 +3414,17 @@ Four decisions, each with its reason:
 4. **A replacement picture comes from the item's own page, not an image-search API.** Every inventory item has a product link, so the page is the source already in hand. A search API needs an account and a key, which is the owner's call. The function identifies itself honestly as `DShyamImageCache/1.0`. Shops that refuse non-browser requests cannot be read: Superdrug answered 403, Apple 503 and Lululemon 403 in local tests. Those pictures stay broken and show the existing "Image no longer loads" owner message; the image-search fallback is listed in `REHAUL_PLAN.md` under 8.E.
 
 Closure: shipped 2026-11-27. The hosted migration (`image_cache`) is applied, with the advisors showing nothing new, and `item-image` is deployed with JWT verification on (an anonymous call gets 401). The code is on `main`. No copy exists on the hosted bucket until the owner next opens Inventory or Links signed in; that first pass was verified only on the local stack. What is still open, including the owner's check of the few whole-on-plate shots, is in `STATE.md`; orphaned copies and the image-search fallback are in `REHAUL_PLAN.md`.
+
+### Finance: a table that fails to load after a profile switch is emptied and named, not kept — 2026-11-27
+
+Why: A failed read left whatever was on screen. After a profile switch that was the previous profile's rows under the new profile's name. Saves were already refused for a failed table (save-safety), so this was display only, but a wrong ledger reads exactly like a right one, which Part 0.5 rules out.
+
+Decisions:
+
+1. **Empty the failed collection and name it.** A failed profile table after a switch, on the first load, or after a load that threw part-way is emptied, and a page-level notice names what did not load with a "Try again" button that reads everything again. Empty states for those tables say the data did not load, rather than "none yet", because empty figures otherwise look like real zeros.
+2. **Rejected: rolling the switch back when any table fails.** That would make a profile unreachable while one table is permanently broken (for example a missing migration), which per-table tolerance exists to prevent.
+3. **Rejected: emptying without a notice.** Empty figures with no explanation read as real zeros.
+4. **A same-profile refresh keeps its own rows.** A failed refresh of the profile already on screen keeps its last-loaded rows, which are its own. Shared reference tables (tax rates and similar) are kept once they have loaded, because every profile sees the same rows, and are named only if they have never loaded since sign-in.
+5. **Pairs count as one collection.** Budget categories with their items, and goals with their contributions, are judged together, because the load sets each pair only when both reads succeed.
+
+Closure: the rules live in `src/features/finance/unloaded-tables.ts` (`planFailedLoad`), covered by `unloaded-tables.test.ts`. Verified on the local stack by revoking read on bank accounts and budget tables (grants restored). Not verified: the whole-profile notice after a load that throws, real devices, and hosted.

@@ -60,6 +60,7 @@ import { ProfileAvatar } from './components/ProfileAvatar';
 import { NetWorthTrend } from './components/NetWorthTrend';
 import { FinanceSectionBoundary, FinanceSectionLoading } from './components/FinanceSectionBoundary';
 import { Button } from '@/components/ui/button';
+import { coversAllProfileData, describeTables, isSharedTable } from './unloaded-tables';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useHiddenFigures } from './useHiddenFigures';
 import type {
@@ -101,6 +102,8 @@ function FinanceView() {
     profileLoadState,
     profileLoadError,
     retryProfiles,
+    unloaded,
+    retryUnloaded,
     recurringTemplates,
     allRecurrings: recurrings,
     recurringDataReady,
@@ -130,6 +133,29 @@ function FinanceView() {
   const activeSurface = surfaceForTab(activeTab);
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
   const figures = useHiddenFigures();
+  // The not-loaded notice disappears once a retry reads every table, taking
+  // its focused button with it. Focus then goes to the notice's slot, which
+  // stays mounted, rather than dropping to the page body.
+  const unloadedSlotRef = useRef<HTMLDivElement>(null);
+  const unloadedRetryFocusedRef = useRef(false);
+  const [unloadedCleared, setUnloadedCleared] = useState(false);
+  const unloadedCount = unloaded.length;
+  useEffect(() => {
+    if (unloadedCount > 0) {
+      setUnloadedCleared(false);
+      return;
+    }
+    if (!unloadedRetryFocusedRef.current) return;
+    unloadedRetryFocusedRef.current = false;
+    setUnloadedCleared(true);
+    unloadedSlotRef.current?.focus();
+  }, [unloadedCount]);
+  // Named only with more than one profile, and only when something listed is
+  // that profile's own: tax rates and other shared tables belong to none.
+  const unloadedProfileName = profiles.length > 1 && unloaded.some(name => !isSharedTable(name))
+    ? profiles.find(p => p.id === profileId)?.name ?? 'this profile'
+    : null;
+  const nothingLoaded = coversAllProfileData(unloaded);
   const activeSections = (SURFACES.find(su => su.key === activeSurface)?.tabs ?? []) as readonly TabKey[];
 
   // The provider outlives this view (FinanceSession), so a return visit finds
@@ -656,7 +682,7 @@ function FinanceView() {
             <>
               Assets {formatGBP(totalAssets)} · Debt {formatGBP(totalDebt)}
               <div className="mt-3 max-w-sm">
-                <NetWorthTrend points={netWorthHistory} today={toISODate(todayDateObj)} />
+                <NetWorthTrend points={netWorthHistory} today={toISODate(todayDateObj)} unavailable={unloaded.includes('net_worth_history')} />
               </div>
             </>
           }
@@ -811,9 +837,50 @@ function FinanceView() {
               {profileLoadState === 'error' && <Button variant="outline" onClick={() => { void retryProfiles(); }}>Try again</Button>}
             </div>
           ) : <>
-          {showsSurfaceHero(activeTab) ? surfaceHero : null}
+          {/* Tables that failed to load for this profile are shown empty
+              rather than as the previous profile's rows, so every figure
+              built from them is short until a load reads them. */}
+          {/* The slot stays mounted: focus lands here when a retry reads
+              everything and the notice (with its focused button) goes. */}
+          <div ref={unloadedSlotRef} tabIndex={-1} className="outline-none">
+            <p role="status" className="sr-only">{unloadedCleared ? 'Finance data loaded.' : ''}</p>
+            {unloaded.length > 0 && (
+              <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 font-sans text-sm">
+                <p role="alert" className="min-w-0 flex-1 text-pretty">
+                  <span className="font-semibold">
+                    {nothingLoaded
+                      ? `Finance data${unloadedProfileName ? ` for ${unloadedProfileName}` : ''} did not load.`
+                      : `Not loaded${unloadedProfileName ? ` for ${unloadedProfileName}` : ''}: ${describeTables(unloaded)}.`}
+                  </span>{' '}
+                  <span className="text-muted-foreground">
+                    {nothingLoaded
+                      ? 'Figures are hidden until it loads.'
+                      : 'Figures that use them are incomplete until they load.'}
+                  </span>
+                </p>
+                {/* aria-disabled, not disabled: a disabled button loses focus,
+                    which would drop it to the page body mid-retry. The label
+                    stays put so the retry is not announced twice. */}
+                <Button
+                  variant="outline"
+                  aria-disabled={loadingDb}
+                  aria-busy={loadingDb}
+                  onFocus={() => { unloadedRetryFocusedRef.current = true; }}
+                  onBlur={() => { unloadedRetryFocusedRef.current = false; }}
+                  onClick={retryUnloaded}
+                  className="shrink-0 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-card/80 aria-disabled:hover:text-foreground"
+                >
+                  {loadingDb && <Loader2 aria-hidden="true" className="animate-spin" />}
+                  Try again
+                </Button>
+              </div>
+            )}
+          </div>
+          {/* After a load that threw on a switch, nothing on screen is this
+              profile's: the notice stands alone until a load lands. */}
+          {!nothingLoaded && showsSurfaceHero(activeTab) ? surfaceHero : null}
 
-          <FinanceSectionBoundary>
+          {!nothingLoaded && <FinanceSectionBoundary>
             <Suspense fallback={<FinanceSectionLoading />}>
               {activeTab === 'dashboard' && <DashboardSurface toggleRecurringPaid={toggleRecurringPaid} />}
               {activeTab === 'tax-income' && (
@@ -899,7 +966,7 @@ function FinanceView() {
               {activeTab === 'tax-calculator' && <TaxCalculatorSurface figuresHidden={figures.hidden} />}
               {activeTab === 'money-hub' && <MoneyHubSurface key={profileId} figuresHidden={figures.hidden} />}
             </Suspense>
-          </FinanceSectionBoundary>
+          </FinanceSectionBoundary>}
           </>}
         </div>
       </AppShell>

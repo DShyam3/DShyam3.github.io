@@ -79,6 +79,7 @@ export default function BankAccountsSection() {
     deleteFinanceRows,
     setBankAccounts,
     fetchSupabaseData,
+    unloaded,
   } = useFinanceData();
 
   const {
@@ -189,7 +190,7 @@ export default function BankAccountsSection() {
           {bankAccounts.map(account => <AccountInspector key={account.id} account={account} transactions={mockTransactions} bills={recurrings}
             onEdit={() => { setActiveAccount(account); setEditBase(account); setIsEditAccountOpen(true); }}
             onDelete={() => handleDeleteAccount(account.id)} />)}
-          {bankAccounts.length === 0 && <p className="surface-card rounded-3xl border p-6 text-sm text-muted-foreground sm:col-span-2 xl:col-span-3">No accounts yet. Add an account to track balances and linked activity.</p>}
+          {bankAccounts.length === 0 && <p className="surface-card rounded-3xl border p-6 text-sm text-muted-foreground sm:col-span-2 xl:col-span-3">{unloaded.includes('bank_accounts') ? 'Bank accounts did not load.' : 'No accounts yet. Add an account to track balances and linked activity.'}</p>}
         </div>
       </div>
 

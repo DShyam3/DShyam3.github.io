@@ -50,6 +50,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     setMockTransactions,
     fetchSupabaseData,
     hasLoaded,
+    unloaded,
   } = useFinanceData();
 
   // Figures sum this; the transaction list below still shows every row.
@@ -1024,7 +1025,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             );
           })}
           {goals.length === 0 && (
-            <p className="text-xs text-muted-foreground italic text-center py-4">No active savings goals set up.</p>
+            <p className="text-xs text-muted-foreground italic text-center py-4">{unloaded.includes('goals') ? 'Goals did not load.' : 'No active savings goals set up.'}</p>
           )}
         </CardContent>
       </Card>

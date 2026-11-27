@@ -284,10 +284,6 @@ saved link on the live site (checked on the local stack only); a real HEIC file
 functions and their pg_net calls, and a signed-in admin session. The cron jobs
 were checked in the catalogue only.
 
-### Sync and profile switch interactions
-
-**A table that fails to load on profile switch keeps the previous profile's rows visible.** Writes are blocked (collections marked incomplete), but the display is not cleared. User sees the old profile's data with editing disabled, which is confusing. The fix clears the table on a failed load, or renders an error state. Low priority — writes are safe, reading stale data is the symptom of a network failure, and error states are not yet defined for tables.
-
 ### Public version (UK-only) — what is left
 
 The code no longer names the owner outside `src/config/site.json`

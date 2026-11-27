@@ -113,6 +113,7 @@ import {
   scopeToProfile,
   type StoredRow,
 } from './save-safety';
+import { PROFILE_COLLECTIONS, describeTables, planFailedLoad } from './unloaded-tables';
 import {
   bankAccountFromRow,
   bankAccountRow,
@@ -262,6 +263,12 @@ function useProvideFinanceData() {
 
   const rawTransactionsRef = useRef<MockTransaction[]>([]);
   const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
+  // The rules on screen as of the last commit, for a load that finishes after
+  // they changed: its own closure may hold a copy from before.
+  const categoryRulesRef = useRef(categoryRules);
+  useLayoutEffect(() => {
+    categoryRulesRef.current = categoryRules;
+  }, [categoryRules]);
 
   // Tax rates are historical reference data. The active timeline is the
   // admin override when present, otherwise the built-in default timeline.
@@ -500,6 +507,41 @@ function useProvideFinanceData() {
   const [transferSingleLegs, setTransferSingleLegs] = useState<StoredSingleLegDecision[]>([]);
   const [transferSingleLegsFailed, setTransferSingleLegsFailed] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
+  // What is shown as not loaded, each with the profile it was recorded for so
+  // a switch in flight never shows one profile's list under another's name
+  // (unloaded-tables.ts). `tables` comes from the main load: collections
+  // emptied or never read, and shared tables never loaded. `lists` from the
+  // lists loaded on their own. The finance page names both until they load.
+  const [unloadedTables, setUnloadedTables] = useState<{ profileId: string | null; tables: string[] }>({ profileId: null, tables: [] });
+  const unloadedTablesRef = useRef(unloadedTables);
+  const recordUnloadedTables = (forProfile: string, tables: string[]) => {
+    unloadedTablesRef.current = { profileId: forProfile, tables };
+    setUnloadedTables(unloadedTablesRef.current);
+  };
+  const [unloadedLists, setUnloadedLists] = useState<{ profileId: string | null; lists: string[] }>({ profileId: null, lists: [] });
+  // Shared tables read successfully at least once since sign-in. Until then
+  // the page holds code fallbacks for them, which a failed read leaves.
+  const sharedLoadedRef = useRef(new Set<string>());
+  // Which profile each separately loaded list on screen belongs to. A failed
+  // read keeps the list only when it is that profile's own; after a switch it
+  // would be the previous profile's rows under the new profile's name, so it
+  // is emptied and reported instead.
+  const sideRowsForRef = useRef(new Map<string, string>());
+  const sideReadFailed = (list: string, forProfile: string, clear: () => void) => {
+    if (sideRowsForRef.current.get(list) === forProfile) return;
+    sideRowsForRef.current.delete(list);
+    clear();
+    setUnloadedLists(prev => ({
+      profileId: forProfile,
+      lists: prev.profileId === forProfile ? [...new Set([...prev.lists, list])] : [list],
+    }));
+  };
+  const sideReadLoaded = (list: string, forProfile: string) => {
+    sideRowsForRef.current.set(list, forProfile);
+    setUnloadedLists(prev => (prev.profileId === forProfile && prev.lists.includes(list)
+      ? { profileId: forProfile, lists: prev.lists.filter(name => name !== list) }
+      : prev));
+  };
   // The selected profile, current as of the last render. A load started from
   // an older closure -- a bank sync's refresh bound to the profile it began
   // on -- is dropped once another profile is selected.
@@ -619,6 +661,11 @@ function useProvideFinanceData() {
     setProfiles([]);
     setProfileLoadState('idle');
     setProfileLoadError(null);
+    unloadedTablesRef.current = { profileId: null, tables: [] };
+    setUnloadedTables(unloadedTablesRef.current);
+    setUnloadedLists({ profileId: null, lists: [] });
+    sharedLoadedRef.current = new Set();
+    sideRowsForRef.current = new Map();
     setHasLoaded(false);
     setLoadingDb(false);
     return () => {
@@ -675,8 +722,10 @@ function useProvideFinanceData() {
     if (forProfile !== currentProfileRef.current) return;
     if (error) {
       console.warn('transfers unavailable', error.message);
+      sideReadFailed('transfers', forProfile, () => setTransfers([]));
       return;
     }
+    sideReadLoaded('transfers', forProfile);
     setTransfers(
       (data ?? []).map(r => ({
         id: r.id,
@@ -735,8 +784,10 @@ function useProvideFinanceData() {
     if (forProfile !== currentProfileRef.current) return;
     if (error) {
       console.warn('payslips unavailable', error.message);
+      sideReadFailed('payslips', forProfile, () => setPayslips([]));
       return;
     }
+    sideReadLoaded('payslips', forProfile);
     setPayslips((data ?? []).map(r => ({
       id: r.id,
       payDate: r.pay_date,
@@ -844,8 +895,10 @@ function useProvideFinanceData() {
     if (forProfile !== currentProfileRef.current) return;
     if (error) {
       console.warn('payslip reconciliations unavailable');
+      sideReadFailed('payslip_reconciliations', forProfile, () => setPayslipReconciliations([]));
       return;
     }
+    sideReadLoaded('payslip_reconciliations', forProfile);
     setPayslipReconciliations((data ?? []).map(row => ({
       id: row.id,
       payslipId: row.payslip_id,
@@ -876,8 +929,10 @@ function useProvideFinanceData() {
     if (error) {
       console.warn('payslip reimbursement links unavailable');
       setPayslipReimbursementsAvailable(false);
+      sideReadFailed('payslip_reimbursement_links', forProfile, () => setPayslipReimbursementLinks([]));
       return;
     }
+    sideReadLoaded('payslip_reimbursement_links', forProfile);
     setPayslipReimbursementsAvailable(true);
     setPayslipReimbursementLinks((data ?? []).map(row => ({
       id: row.id,
@@ -1544,8 +1599,10 @@ function useProvideFinanceData() {
       // A missing series is not worth a toast: every other figure on the page
       // is current state and still correct without it.
       console.warn('net worth history unavailable', error.message);
+      sideReadFailed('net_worth_history', forProfile, () => setNetWorthHistory([]));
       return;
     }
+    sideReadLoaded('net_worth_history', forProfile);
     setNetWorthHistory(
       (data ?? []).map(r => ({
         capturedOn: r.captured_on,
@@ -1707,8 +1764,23 @@ function useProvideFinanceData() {
         ] as const).filter(([, res]) => res.error);
         // Applied once every collection is set, at the end of the load: if
         // mapping throws first, nothing is unblocked over unset state.
-        const blockedAfterLoad = saveKeysBlockedBy(failedTables.map(([name]) => name));
+        const failedNames: string[] = failedTables.map(([name]) => name);
+        const blockedAfterLoad = saveKeysBlockedBy(failedNames);
         let seedPresets = false;
+        // The profile whose rows are on screen. When it is not this one, a
+        // failed table's rows are emptied, not kept: they belong to another
+        // profile, or to no load at all.
+        const previousUnloaded = unloadedTablesRef.current.profileId === profileId
+          ? unloadedTablesRef.current.tables
+          : [];
+        const { clear, unloaded, kept } = planFailedLoad({
+          failed: failedNames,
+          rowsOnScreenFor: lastLoadedProfileRef.current,
+          loadingFor: profileId,
+          previous: previousUnloaded,
+          sharedLoaded: sharedLoadedRef.current,
+        });
+        const clearing = new Set(clear);
 
         if (failedTables.length > 0) {
           console.error(
@@ -1717,7 +1789,11 @@ function useProvideFinanceData() {
           );
           toast({
             title: 'Some finance data failed to load',
-            description: `Showing cached values for: ${failedTables.map(([name]) => name).join(', ')}. Check that all migrations have been applied.`,
+            description: [
+              unloaded.length > 0 ? `Not shown: ${describeTables(unloaded)}.` : '',
+              kept.length > 0 ? `Showing the last loaded ${describeTables(kept)}.` : '',
+              'Check that all migrations have been applied.',
+            ].filter(Boolean).join(' '),
             variant: 'destructive'
           });
         }
@@ -1742,6 +1818,8 @@ function useProvideFinanceData() {
           // list this load did not put on screen would read as deleting every
           // holiday it lacks.
           setSettings(prev => ({ ...prev, holidaysByUser: mappedHolidays }));
+        } else if (clearing.has('user_holidays')) {
+          setSettings(prev => ({ ...prev, holidaysByUser: [] }));
         }
 
         if (activeSettings) {
@@ -1778,6 +1856,15 @@ function useProvideFinanceData() {
           setPaydaySchedule(loadedSettings.paydaySchedule || 'monthly_date');
           setPaydayWeekday(loadedSettings.paydayWeekday !== undefined ? loadedSettings.paydayWeekday : 5);
           setPaydayBiweeklyAnchor(loadedSettings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
+        } else if (clearing.has('settings')) {
+          // Back to the code defaults the page starts from, keeping the
+          // holidays set just above.
+          const blank = createDefaultFinanceSettings(ALL_SAVINGS_IDS);
+          setSettings(prev => ({ ...blank, holidaysByUser: prev.holidaysByUser }));
+          setPayDayInput((blank.payDayOfMonth || 25).toString());
+          setPaydaySchedule(blank.paydaySchedule || 'monthly_date');
+          setPaydayWeekday(blank.paydayWeekday !== undefined ? blank.paydayWeekday : 5);
+          setPaydayBiweeklyAnchor(blank.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
         }
 
         const userGoals = goalsRes.data?.filter(d => !d.is_default) || [];
@@ -1802,6 +1889,9 @@ function useProvideFinanceData() {
           rememberStoredRows('finance_goal_contributions', goalsOwned ? contributionsOf(mappedGoals) : [], c => contributionRow(c, profileId), profileId, true);
           markLoaded('finance_goals', mappedGoals);
           markLoaded('finance_goal_contributions', mappedGoals.flatMap(g => g.contributions));
+        } else if (clearing.has('goals') || clearing.has('goal_contributions')) {
+          setGoals([]);
+          setSelectedGoalId(null);
         }
 
         const userAccounts = bankAccountsRes.data?.filter(d => !d.is_default) || [];
@@ -1816,6 +1906,8 @@ function useProvideFinanceData() {
           setBankAccounts(mappedBankAccounts);
           rememberStoredRows('finance_bank_accounts', mappedBankAccounts, a => bankAccountRow(a, profileId), userAccounts.length > 0 ? profileId : null, true);
           markLoaded('finance_bank_accounts', mappedBankAccounts);
+        } else if (clearing.has('bank_accounts')) {
+          setBankAccounts([]);
         }
 
         const mappedInvestmentHoldings: InvestmentHolding[] = (investmentHoldingsRes.data ?? []).map(holding => ({
@@ -1831,6 +1923,7 @@ function useProvideFinanceData() {
           category: asInvestmentCategory(holding.category),
         }));
         if (!investmentHoldingsRes.error) setInvestmentHoldings(mappedInvestmentHoldings);
+        else if (clearing.has('investment_holdings')) setInvestmentHoldings([]);
 
         const mappedInvestmentActivities: InvestmentActivity[] = (investmentActivitiesRes.data ?? []).map(activity => ({
           id: activity.id,
@@ -1845,6 +1938,7 @@ function useProvideFinanceData() {
           sourceReference: activity.source_reference,
         }));
         if (!investmentActivitiesRes.error) setInvestmentActivities(mappedInvestmentActivities);
+        else if (clearing.has('investment_activities')) setInvestmentActivities([]);
 
         const userMemberships = membershipsRes.data?.filter(d => !d.is_default) || [];
         const defaultMemberships = membershipsRes.data?.filter(d => d.is_default) || [];
@@ -1856,6 +1950,8 @@ function useProvideFinanceData() {
           setMemberships(mappedMemberships);
           rememberStoredRows('finance_memberships', membershipsOwned ? mappedMemberships : [], m => membershipRow(m, profileId), profileId, true);
           markLoaded('finance_memberships', mappedMemberships);
+        } else if (clearing.has('memberships')) {
+          setMemberships([]);
         }
 
         const mappedObservations: DebtObservation[] = (debtObservationsRes.data || []).map(o => ({
@@ -1869,6 +1965,7 @@ function useProvideFinanceData() {
           createdAt: o.created_at || undefined,
         }));
         if (!debtObservationsRes.error) setDebtObservations(mappedObservations);
+        else if (clearing.has('debt_observations')) setDebtObservations([]);
 
         const userDebts = debtsRes.data?.filter(d => !d.is_default) || [];
         const defaultDebts = debtsRes.data?.filter(d => d.is_default) || [];
@@ -1887,6 +1984,8 @@ function useProvideFinanceData() {
           setDebts(mappedDebts);
           rememberStoredRows('finance_debts', debtsOwned ? mappedDebts : [], d => debtRow(d, profileId), profileId, true);
           markLoaded('finance_debts', mappedDebts);
+        } else if (clearing.has('debts')) {
+          setDebts([]);
         }
 
         const userCreditScores = creditScoresRes.data?.filter(d => !d.is_default) || [];
@@ -1905,6 +2004,8 @@ function useProvideFinanceData() {
           setCreditScores(scoresObj);
           rememberStoredRows('finance_credit_scores', scoresOwned ? scoresOf(scoresObj) : [], sc => creditScoreRow(sc, profileId), profileId, true);
           markLoaded('finance_credit_scores', scoresOf(scoresObj).map(sc => sc.score));
+        } else if (clearing.has('credit_scores')) {
+          setCreditScores({ experian: [], transunion: [], equifax: [] });
         }
 
         const userBudgetCats = budgetCategoriesRes.data?.filter(d => !d.is_default && !d.is_template) || [];
@@ -1947,6 +2048,7 @@ function useProvideFinanceData() {
         );
         const budgetLoaded = !budgetCategoriesRes.error && !budgetItemsRes.error;
         if (budgetLoaded) setBudgetCategories(loadedBudget);
+        else if (clearing.has('budget_categories') || clearing.has('budget_items')) setBudgetCategories([]);
 
         const userRecurrings = recurringBillsRes.data?.filter(d => !d.is_default) || [];
         const defaultRecurrings = recurringBillsRes.data?.filter(d => d.is_default) || [];
@@ -1978,6 +2080,8 @@ function useProvideFinanceData() {
             profileId,
             budgetLoaded ? loadedBudget : null,
           ));
+        } else if (clearing.has('recurring_bills')) {
+          setRecurrings([]);
         }
 
         const loadedRules: CategoryRule[] = (categoryRulesRes?.data ?? []).map(r => ({
@@ -1991,7 +2095,16 @@ function useProvideFinanceData() {
         }));
         if (!categoryRulesRes?.error) {
           setCategoryRules(loadedRules);
+        } else if (clearing.has('category_rules')) {
+          setCategoryRules([]);
         }
+        // The rules transactions are shown with: those read now, or, when the
+        // read failed, those on screen -- unless they were emptied above.
+        // Applying none would show every transaction's raw category as if no
+        // rule existed.
+        const rulesShown = !categoryRulesRes?.error
+          ? loadedRules
+          : clearing.has('category_rules') ? [] : categoryRulesRef.current;
 
         const userTransactions = transactionsRes.data?.filter(d => !d.is_default) || [];
         const defaultTransactions = transactionsRes.data?.filter(d => d.is_default) || [];
@@ -2002,13 +2115,19 @@ function useProvideFinanceData() {
           const goalId = tx.goalId && goalIdFor.get(tx.goalId);
           return goalId && goalId !== tx.goalId ? { ...tx, goalId } : tx;
         });
-        rawTransactionsRef.current = mappedTransactions;
-        const appliedTransactions = applyCategoryRules(mappedTransactions, loadedRules);
         if (!transactionsRes.error) {
+          rawTransactionsRef.current = mappedTransactions;
+          const appliedTransactions = applyCategoryRules(mappedTransactions, rulesShown);
           setMockTransactions(appliedTransactions);
           rememberStoredRows('finance_transactions', appliedTransactions, t => transactionRow(t, profileId), userTransactions.length > 0 ? profileId : null, true);
           markLoaded('finance_transactions', appliedTransactions);
+        } else if (clearing.has('transactions')) {
+          rawTransactionsRef.current = [];
+          setMockTransactions([]);
         }
+        // Kept transactions stay exactly as shown, rules and edits included:
+        // rebuilding them from the last load would undo every review, delete
+        // and addition since.
 
         const mapTaxConfig = (row: NonNullable<typeof taxConfigsRes.data>[number]): TaxConfig => ({
           effectiveFrom: row.effective_from,
@@ -2216,6 +2335,16 @@ function useProvideFinanceData() {
         defaultsMap['budget_presets'] = presetsObj;
         setDatabaseDefaults(defaultsMap);
 
+        recordUnloadedTables(profileId, unloaded);
+        for (const [name, res] of [
+          ['tax_configs', taxConfigsRes],
+          ['recurring_templates', recurringTemplatesRes],
+          ['credit_bureaus', creditBureausRes],
+          ['holiday_defaults', holidayDefaultsRes],
+          ['budget_presets', budgetPresetsRes],
+        ] as const) {
+          if (!res.error) sharedLoadedRef.current.add(name);
+        }
         blockedSaveKeysRef.current.set(profileId, blockedAfterLoad);
         lastLoadedProfileRef.current = profileId;
         // A partial load does not count as fresh, so the next visit retries it.
@@ -2225,8 +2354,14 @@ function useProvideFinanceData() {
         console.error('Error fetching settings from Supabase:', err);
         // Some collections may be half set: none is safe to save.
         if (loadSeq === loadSeqRef.current) {
+          const rowsWereOwn = lastLoadedProfileRef.current === profileId;
           blockedSaveKeysRef.current.set(profileId, new Set(ALL_GUARDED_SAVE_KEYS));
           lastLoadedProfileRef.current = null;
+          // After a switch, what is on screen is the previous profile's rows
+          // or a mix: the page shows only the notice until a load lands. On
+          // a refresh the rows were this profile's own, so they stay. Either
+          // way the next load empties whatever still fails.
+          if (!rowsWereOwn) recordUnloadedTables(profileId, [...PROFILE_COLLECTIONS]);
         }
       } finally {
         if (loadSeq === loadSeqRef.current) {
@@ -2289,6 +2424,23 @@ function useProvideFinanceData() {
     void fetchTransferSingleLegs(profileId);
     void fetchNetWorthHistory(profileId);
     if (!studentLoanRatesLoadedRef.current) void fetchStudentLoanRates();
+  };
+
+  // Everything shown as not loaded for the profile on screen.
+  const unloaded = useMemo(() => [
+    ...(unloadedTables.profileId === profileId ? unloadedTables.tables : []),
+    ...(unloadedLists.profileId === profileId ? unloadedLists.lists : []),
+  ], [unloadedTables, unloadedLists, profileId]);
+
+  /** Reads again everything the not-loaded notice can name. */
+  const retryUnloaded = () => {
+    if (!isAdmin || !profileId || loadingDb) return;
+    void fetchSupabaseData();
+    void fetchTransfers(profileId);
+    void fetchPayslips(profileId);
+    void fetchPayslipReconciliations(profileId);
+    void fetchPayslipReimbursementLinks(profileId);
+    void fetchNetWorthHistory(profileId);
   };
 
   // Only tables still saved whole. A row-saved table (RowTable) is never
@@ -3142,6 +3294,8 @@ function useProvideFinanceData() {
     profileLoadState,
     profileLoadError,
     retryProfiles: loadProfiles,
+    unloaded,
+    retryUnloaded,
     setProfiles,
     fetchingHolidays,
     setFetchingHolidays,

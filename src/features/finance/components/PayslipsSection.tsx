@@ -123,6 +123,7 @@ export function PayslipsSection() {
     settings,
     setSettings,
     saveDataToSupabase,
+    unloaded,
   } = useFinanceData();
   const { planRules, repaymentThreshold } = useStudentLoanRules();
   const { askDelete, deleteDialog } = useDeleteConfirm();
@@ -616,8 +617,12 @@ export function PayslipsSection() {
 
       {payslips.length === 0 ? (
         <p className="text-xs text-muted-foreground font-mono">
-          Import a folder of payslips, or add one by hand. The figures are read here in
-          your browser; the PDF is only ever stored.
+          {unloaded.includes('payslips') ? 'Payslips did not load.' : (
+            <>
+              Import a folder of payslips, or add one by hand. The figures are read here in
+              your browser; the PDF is only ever stored.
+            </>
+          )}
         </p>
       ) : (
         <>
