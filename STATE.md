@@ -6,9 +6,9 @@ Updated 2026-11-27. `origin/main` at `c6f410b1` (collapsible Discover sections),
 - **Ponytail setup & whole-repo audit fixes** (`5791ffeb`, live on Pages via deploy `46063005569`; all 8 modified Edge Functions deployed to hosted Supabase). Ponytail skills in `.agents/skills/ponytail*`, ruleset in `AGENTS.md`. Edge Function error handling, finance insert-before-delete and debt fixes, dead code removed, `date-fns` call sites replaced (kept as a `react-day-picker` peer).
 - **Cleaned card images** (`64aa9de3`, live on Pages via deploy `46042232214` attempt 2).
 
-## Watchlist (committed, not pushed)
+## Watchlist (pushed)
 
-- **HAVE YOU ALREADY WATCHED? no longer ends empty** (decision in `REHAUL_HISTORY.md`, 2026-11-27). For the owner, franchise cards also count released films saved but not watched: `Seen it` marks the saved film watched, `Not seen` answers no, stopped films count as answered. An empty Likely seen grid on screen pages on through the widely watched pool. Reviewed by `reviewer` (Opus); its two bugs and four of five risks fixed.
+- **HAVE YOU ALREADY WATCHED? no longer ends empty** (`a486dcae`, on `origin/main`, live on Pages via deploy `46070577186`; decision in `REHAUL_HISTORY.md`, 2026-11-27). For the owner, franchise cards also count released films saved but not watched: `Seen it` marks the saved film watched, `Not seen` answers no, stopped films count as answered. An empty Likely seen grid on screen pages on through the widely watched pool. Reviewed by `reviewer` (Opus); its two bugs and four of five risks fixed.
 
 ## Travel (pushed)
 
@@ -32,7 +32,7 @@ Updated 2026-11-27. `origin/main` at `c6f410b1` (collapsible Discover sections),
 ## Still open / not verified
 
 - **Discover collapsible (`c6f410b1`):** unverified: layout with real Discover data loaded (the dev server on 8089 had no TMDB CORS, so only failure states were seen); Undo focus fallback (needs Likely seen data); real devices. Verified on a dev server: click/Space/Enter toggle, `aria-expanded` and hidden body, focus ring, reload persistence, picker-alone forces open, 2400px two-column grid, 44px touch target under touch emulation, no React warnings.
-- **Discover empty-section fix (not pushed):** owner-only cards, `Seen it` / `Not seen` on saved films and their writes not exercised signed in; the signed-out check on local 8080 predates the review fixes. Likely seen took about 2 minutes (14 pool pages) to show its first tiles on this library. Focus loss when a card's last answer removes the card is not fixed. The console 404 was `GET /rest/v1/image_cache` before that table existed on hosted Supabase (last 2026-11-27 11:16 UTC).
+- **Discover empty-section fix (`a486dcae`, live):** on Pages signed out, Likely seen filled after about 2 minutes (the call pacer's rate); the owner saw the saved-film cards with `Seen it` / `Not seen` on Pages, but their writes were not exercised. Focus loss when a card's last answer removes the card is not fixed. The console 404 was `GET /rest/v1/image_cache` before that table existed on hosted Supabase (last 2026-11-27 11:16 UTC).
 - **Discover order on owner data:** browser check not run (REHAUL_PLAN.md item 6).
 - **Ponytail audit follow-ups:** Monolith splits (#18) and `src/lib/finance/llm.ts` removal were intentionally deferred.
 - **Travel & Inventory:** real-device iPhone/iPad checks of map pinch zoom and touches.
