@@ -1,41 +1,44 @@
-Updated 2026-11-27. Local `main` and `origin/main` synced with anon default privileges, travel map surfaces/double-coastline fixes, Ponytail setup, and audit fixes.
+Updated 2026-11-27. `origin/main` at `c6f410b1` (collapsible Discover sections), live on Pages via deploy `46068774982`. Synced with anon default privileges, travel map fixes, Ponytail setup and audit fixes.
 
 ## Closed
 
-- **Ponytail setup & whole-repo audit fixes** (`5791ffeb`, live on Pages via deploy `46063005569`; all 8 modified Edge Functions deployed to hosted Supabase): Installed Ponytail skills in `.agents/skills/ponytail*` and added the always-on ruleset to `AGENTS.md`. Fixed TrueLayer token-refresh error handling, 401/403 masking, non-finite amount filtering, concurrent source-sync upsert race, and fetch timeouts; eliminated module-level `activeUsage` races in `watchlist-cron-sync` and `merchant-logo-cache`, stream-capped Brandfetch logo downloads, paginated `links-check`, fixed JPEG `0xFF 0xFF` fill bytes, and added Deno tests (`require-admin`, `cooldown`, `jpeg`). Fixed finance insert-before-delete for 4 settings tables, DB-first debt observations sorted by date, same-day CSV duplicate imports, debt month-overflow, cash-benefit tax stacking, negative pension pot, and rule-applied baseline drift. Deleted orphaned `src/lib/in-chunks.ts`, dead `equalEarth`/`sf-symbols` exports, duplicated helpers, and `dotenv`; replaced all `src/` `date-fns` call sites (`date-fns` kept in `package.json` as a `react-day-picker` peer dependency).
+- **Watchlist Discover sections collapsible** (`c6f410b1`, on `origin/main`, live on Pages via deploy `46068774982`; not checked on Pages). Each of COMING SOON, HAVE YOU ALREADY WATCHED? and YOU MIGHT LIKE has an `aria-expanded` heading button with a chevron. Open or closed is remembered per section in localStorage. The body stays mounted (hidden) so Discover data keeps loading. A section shown alone in the picker is always open. Undo of "None of these" focuses the section if its button is hidden. FEATURES.md updated in the same commit.
+- **Ponytail setup & whole-repo audit fixes** (`5791ffeb`, live on Pages via deploy `46063005569`; all 8 modified Edge Functions deployed to hosted Supabase). Ponytail skills in `.agents/skills/ponytail*`, ruleset in `AGENTS.md`. Edge Function error handling, finance insert-before-delete and debt fixes, dead code removed, `date-fns` call sites replaced (kept as a `react-day-picker` peer).
 - **Cleaned card images** (`64aa9de3`, live on Pages via deploy `46042232214` attempt 2).
 
 ## Travel (pushed)
 
-- All three map looks mark visited cities and outline visited-country borders and coastlines. Topographic and Satellite mosaic refine through 120, 45, 17 and 6 km hexes. Full-resolution imagery loads on demand. Reduced motion applies view changes immediately and disables idle rotation.
-- The earlier local Chrome check showed a single coastline at 6 km in all three looks. Current map checks passed lint, frontend and Edge Function typechecks, production build and 59 tests in six map files. A separate cold 6 km check loaded both hemispheres and recorded one 67 ms frame gap (95th percentile 17 ms). Changing choices during a delayed load and reduced-motion globe/flat switching passed.
-- Maximum frame intervals in one local desktop Chrome run, before → after: first appearance switch 367 → 17 ms, zoom into finer levels 200 → 17 ms, zoom out 33 → 17 ms, globe/flat 17 → 17 ms. Phone frame timing and real iPhone/iPad gestures are unverified.
+- All three map looks mark visited cities and outline visited-country borders and coastlines. Topographic and Satellite refine through 120, 45, 17 and 6 km hexes. Full-resolution imagery loads on demand. Reduced motion applies view changes immediately and disables idle rotation.
+- Local desktop Chrome: max frame gaps before → after were 367 → 17 ms (appearance switch), 200 → 17 ms (zoom in), 33 → 17 ms (zoom out), 17 → 17 ms (globe/flat). Phone frame timing and real iPhone/iPad gestures are unverified.
 
-## Last checks (2026-11-27)
+## Last checks
 
-| Check | Result |
-|---|---|
-| `npm run lint` / `typecheck` / `typecheck:functions` / `build` | Passed (`0` errors, `0` warnings). |
-| `npm run test:functions` (Deno) | 124 passed, 0 failed. |
-| `npm test` (Vitest) | 147 files, 3,245 passed. |
-| `impeccable detect src/` | 0 anti-patterns (1 advisory). |
-
-## Recent shipped work
-
-- Links metadata, daily dead-link checking, likely seen language-aware paging, Payslip parser fixes, and cleaned card images are in Git / on `origin/main`.
+| Check | Commit | Date | Result |
+|---|---|---|---|
+| `npm run lint` | `c6f410b1` | 2026-11-27 | 0 errors, 0 warnings |
+| `npm run typecheck` | `c6f410b1` | 2026-11-27 | Passed |
+| `npm run build` | `c6f410b1` | 2026-11-27 | Passed |
+| `impeccable detect src/` | `c6f410b1` | 2026-11-27 | 0 anti-patterns (1 advisory, pre-existing) |
+| Live-page impeccable scan | `c6f410b1` | 2026-11-27 | 20 findings, identical to a baseline scan of `dd930681`; pre-existing |
+| `npm run typecheck:functions` | `5791ffeb` | 2026-11-27 | Passed (no Edge Function change since) |
+| `npm run test:functions` (Deno) | `5791ffeb` | 2026-11-27 | 124 passed, 0 failed |
+| `npm test` (Vitest) | `5791ffeb` | 2026-11-27 | 147 files, 3,245 passed (not re-run for `c6f410b1`) |
 
 ## Still open / not verified
 
+- **Discover collapsible (`c6f410b1`):** unverified: layout with real Discover data loaded (the dev server on 8089 had no TMDB CORS, so only failure states were seen); Undo focus fallback (needs Likely seen data); real devices. Verified on a dev server: click/Space/Enter toggle, `aria-expanded` and hidden body, focus ring, reload persistence, picker-alone forces open, 2400px two-column grid, 44px touch target under touch emulation, no React warnings.
+- **Discover order on owner data:** browser check not run (REHAUL_PLAN.md item 6).
 - **Ponytail audit follow-ups:** Monolith splits (#18) and `src/lib/finance/llm.ts` removal were intentionally deferred.
-- **Travel & Inventory:** Real-device iPhone/iPad checks of map pinch zoom and touches.
-- **Other surfaces:** Live owner-signed-in checks of `/watchlist/franchises`, `/watchlist/facts`, Dead-link failures, and manual TV sync.
-- **Hosted migration history drift:** hosted records seven versions the repo lacks, so `supabase db push` refuses until repaired (owner's call; REHAUL_PLAN.md database follow-ups).
+- **Travel & Inventory:** real-device iPhone/iPad checks of map pinch zoom and touches.
+- **Other surfaces:** live owner-signed-in checks of `/watchlist/franchises`, `/watchlist/facts`, dead-link failures, and manual TV sync.
+- **Hosted migration drift:** hosted records seven versions the repo lacks, so `supabase db push` refuses until repaired (owner's call; REHAUL_PLAN.md database follow-ups).
 - **Live on Pages, not checked signed in:** cleaned card images, image pruning and the Finance profile-switch notice.
 
 ## Next
 
-1. Verify map appearance on iPhone/iPad; open Inventory and Links signed in on Pages; complete live owner-signed-in checks.
+1. Check Discover collapse on Pages signed in with real data, including the Undo focus fallback.
+2. Verify map appearance on iPhone/iPad; open Inventory and Links signed in on Pages.
 
 ## Blockers
 
-None. The billing lock is cleared; Pages was last deployed by `46063005569` (`5791ffeb`, success) on 2026-11-27.
+None. Floorplan refresh was skipped in this worktree (`floorplan/` is gitignored and lives in the main checkout); run it there. `graphify update .` ran.
