@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  calendarYearOf, checkPayslip, compareToModel, deductionRate, effectiveTaxRate, findDuplicatePayslip, formatPayslipLineLabel, inCalendarYear, inTaxYear,
+  calendarYearOf, checkPayslip, compareToModel, deductionRate, effectiveTaxRate, findDuplicatePayslip, findMissingPayslipMonths, formatPayslipLineLabel, inCalendarYear, inTaxYear,
   studentLoanExpectedInTaxYear, studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
 } from './payslip';
 
@@ -290,5 +290,16 @@ describe('findDuplicatePayslip', () => {
 
   it('matches same month, gross, and net when monthFallback is enabled even if employer differs', () => {
     expect(findDuplicatePayslip(existing, { payDate: '2026-11-01', employer: 'Capgemini', gross: 4000, net: 2800, monthFallback: true })?.id).toBe('oi-nov');
+  });
+});
+
+describe('findMissingPayslipMonths', () => {
+  it('returns any YYYY-MM gaps between earliest and latest dates', () => {
+    expect(findMissingPayslipMonths(['2026-01-31', '2026-04-30', '2026-02-28'])).toEqual(['2026-03']);
+  });
+
+  it('returns empty when fewer than two months or no gaps exist', () => {
+    expect(findMissingPayslipMonths(['2026-01-31'])).toEqual([]);
+    expect(findMissingPayslipMonths(['2026-01-31', '2026-02-28'])).toEqual([]);
   });
 });

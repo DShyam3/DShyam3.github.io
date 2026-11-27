@@ -1061,7 +1061,7 @@ export function PayslipsSection() {
           : Promise.resolve(false)}
       />
 
-      <PayslipImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
+      <PayslipImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} orgs={orgs} />
 
       <PayslipRescanDialog open={isRescanOpen} onOpenChange={setIsRescanOpen} />
 

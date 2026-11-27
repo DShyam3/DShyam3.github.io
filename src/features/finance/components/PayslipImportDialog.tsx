@@ -10,21 +10,24 @@
  * exactly like a right one.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useFinanceData } from '../FinanceDataContext';
 import { extractPayslipFromPdf } from '../payslip-pdf';
 import { deleteFinanceDocument, uploadFinanceDocument } from '../finance-storage';
+import { matchEmployerOrg } from '../employer-logo';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/features/finance/utils/calculations';
-import { checkPayslip, findDuplicatePayslip, parsePayslipFilename, parsedFieldCount, type Payslip } from '@/lib/finance';
+import { checkPayslip, findDuplicatePayslip, findMissingPayslipMonths, parsePayslipFilename, parsedFieldCount, type Payslip } from '@/lib/finance';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format-date';
-import { AlertTriangle, Ban, Check, Eye, EyeOff, Upload } from 'lucide-react';
+import { AlertTriangle, Ban, Check, Eye, EyeOff, FolderOpen, Upload } from 'lucide-react';
 import { useGlobalFiguresHidden } from '../useHiddenFigures';
+
+type OrgRef = { name: string; aliases?: readonly string[]; logoUrl?: string | null };
 
 interface Row {
   file: File;
@@ -37,7 +40,7 @@ interface Row {
   error?: string;
 }
 
-const rowFrom = async (file: File): Promise<Row> => {
+const rowFrom = async (file: File, orgs: readonly OrgRef[]): Promise<Row> => {
   const fromName = parsePayslipFilename(file.name);
   const base: Payslip = {
     id: `payslip_import_${crypto.randomUUID()}`,
@@ -49,11 +52,13 @@ const rowFrom = async (file: File): Promise<Row> => {
 
   try {
     const parsed = await extractPayslipFromPdf(file);
+    const rawEmployer = parsed.employer ?? base.employer;
+    const matchedEmployer = matchEmployerOrg(rawEmployer, orgs)?.name ?? rawEmployer;
     const slip: Payslip = {
       ...base,
       // The document outranks the filename wherever it produced something.
       payDate: parsed.payDate ?? base.payDate,
-      employer: parsed.employer ?? base.employer,
+      employer: matchedEmployer,
       gross: parsed.gross ?? 0,
       incomeTax: parsed.incomeTax ?? 0,
       nationalInsurance: parsed.nationalInsurance ?? 0,
@@ -80,9 +85,10 @@ const rowFrom = async (file: File): Promise<Row> => {
   }
 };
 
-export function PayslipImportDialog({ open, onOpenChange }: {
+export function PayslipImportDialog({ open, onOpenChange, orgs = [] }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  orgs?: readonly OrgRef[];
 }) {
   const { payslips, savePayslip, profileId } = useFinanceData();
   const [rows, setRows] = useState<Row[]>([]);
@@ -91,18 +97,20 @@ export function PayslipImportDialog({ open, onOpenChange }: {
   const [isImporting, setIsImporting] = useState(false);
   const [revealFigures, setRevealFigures] = useState(false);
   const globalFiguresHidden = useGlobalFiguresHidden();
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length) return;
+    const pdfs = Array.from(files).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    if (pdfs.length === 0) return;
     setIsReading(true);
     setRows([]);
-    const list = Array.from(files);
-    setProgress({ done: 0, total: list.length });
+    setProgress({ done: 0, total: pdfs.length });
     const parsed: Row[] = [];
     // Sequential, not Promise.all: pdf.js spins up a worker per document and
     // twenty at once makes the tab unresponsive on the machine doing the work.
-    for (const file of list) {
-      const row = await rowFrom(file);
+    for (const file of pdfs) {
+      const row = await rowFrom(file, orgs);
       const duplicate = findDuplicatePayslip(payslips, {
         payDate: row.slip.payDate,
         employer: row.slip.employer,
@@ -110,8 +118,12 @@ export function PayslipImportDialog({ open, onOpenChange }: {
         net: row.slip.net,
         monthFallback: row.dateFromName,
       });
-      parsed.push(duplicate ? { ...row, include: false } : row);
-      setProgress({ done: parsed.length, total: list.length });
+      // Backfill automatically if the existing row is missing its PDF or figures.
+      const needsBackfill = Boolean(
+        duplicate && (!duplicate.storagePath || ((duplicate.gross === 0 && duplicate.net === 0) && row.found > 0)),
+      );
+      parsed.push(duplicate && !needsBackfill ? { ...row, include: false } : row);
+      setProgress({ done: parsed.length, total: pdfs.length });
     }
     setRows(parsed.sort((a, b) => a.slip.payDate.localeCompare(b.slip.payDate)));
     setIsReading(false);
@@ -121,6 +133,9 @@ export function PayslipImportDialog({ open, onOpenChange }: {
   const chosen = rows.filter(r => r.include);
   const unreadable = rows.filter(r => r.found === 0).length;
   const mismatched = rows.filter(r => r.found > 0 && !checkPayslip(r.slip).reconciles).length;
+  const missingMonths = rows.length > 0
+    ? findMissingPayslipMonths([...payslips.map(p => p.payDate), ...rows.map(r => r.slip.payDate)])
+    : [];
 
   const handleImport = async () => {
     if (!profileId || chosen.length === 0) return;
@@ -196,16 +211,37 @@ export function PayslipImportDialog({ open, onOpenChange }: {
 
         <div className="space-y-3 py-2">
           <div className="space-y-1">
-            <Label htmlFor="payslip-import-files" className="text-xs">Choose PDFs</Label>
-            <Input
-              id="payslip-import-files"
-              type="file"
-              accept="application/pdf"
-              multiple
-              disabled={isReading || isImporting}
-              onChange={e => void handleFiles(e.target.files)}
-              className="rounded-lg h-9 border-primary/20 bg-background/50 text-xs file:text-xs file:mr-2"
-            />
+            <Label htmlFor="payslip-import-files" className="text-xs">Choose PDFs or a folder</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                id="payslip-import-files"
+                type="file"
+                accept="application/pdf"
+                multiple
+                disabled={isReading || isImporting}
+                onChange={e => void handleFiles(e.target.files)}
+                className="flex-1 min-w-0 rounded-lg h-9 border-primary/20 bg-background/50 text-xs file:text-xs file:mr-2"
+              />
+              <input
+                ref={folderInputRef}
+                type="file"
+                className="hidden"
+                multiple
+                {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
+                onChange={e => void handleFiles(e.target.files)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isReading || isImporting}
+                onClick={() => folderInputRef.current?.click()}
+                className="h-9 rounded-lg text-xs gap-1.5 border-border/40 shrink-0"
+              >
+                <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                Choose folder
+              </Button>
+            </div>
           </div>
 
           {progress && (
@@ -215,26 +251,29 @@ export function PayslipImportDialog({ open, onOpenChange }: {
           )}
 
           {rows.length > 0 && (
-            /* Unreadable files start unticked, which is the right default and
-               a poor discovery: nothing on the row says it can be turned on.
-               These say it out loud, because archiving a scan you cannot parse
-               is a thing people want and would not otherwise find. */
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground">Select</span>
-              {([
-                ['All', () => setRows(rs => rs.map(r => ({ ...r, include: !r.error && !!r.slip.payDate })))],
-                ['Only with figures', () => setRows(rs => rs.map(r => ({ ...r, include: r.found > 0 && !!r.slip.payDate })))],
-                ['None', () => setRows(rs => rs.map(r => ({ ...r, include: false })))],
-              ] as const).map(([label, apply]) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={apply}
-                  className="rounded-md border border-border/40 px-2 py-0.5 text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Select</span>
+                {([
+                  ['All', () => setRows(rs => rs.map(r => ({ ...r, include: !r.error && !!r.slip.payDate })))],
+                  ['Only with figures', () => setRows(rs => rs.map(r => ({ ...r, include: r.found > 0 && !!r.slip.payDate })))],
+                  ['None', () => setRows(rs => rs.map(r => ({ ...r, include: false })))],
+                ] as const).map(([label, apply]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={apply}
+                    className="rounded-md border border-border/40 px-2 py-0.5 text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {missingMonths.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Missing months in timeline: {missingMonths.join(', ')}
+                </p>
+              )}
             </div>
           )}
 

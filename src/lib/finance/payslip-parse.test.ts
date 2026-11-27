@@ -652,6 +652,7 @@ describe('parsePayslipText — benefit deductions', () => {
 
   it('parses payrolled BIKs (same benefit in Payments and Deductions) and Ers Pension beside YTD', () => {
     const oceanInfinity = `
+      Company Name : Ocean Infinity Group Ltd Department : 1580 Robotics
       Salary 4,583.33 Tax 822.46
       Pension Salary Sacr... -229.17 National Insurance 254.58
       Dental Insurance 40.35 Dental Insurance 40.35
@@ -664,6 +665,7 @@ describe('parsePayslipText — benefit deductions', () => {
       Pay Date 30/11/2026 Net Pay 3,106.12
     `;
     const parsed = parsePayslipText(oceanInfinity);
+    expect(parsed.employer).toBe('Ocean Infinity Group Ltd');
     expect(parsed.payDate).toBe('2026-11-30');
     expect(parsed.gross).toBe(4583.33);
     expect(parsed.incomeTax).toBe(822.46);

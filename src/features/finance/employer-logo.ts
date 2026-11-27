@@ -19,11 +19,11 @@ const slugify = (name: string): string =>
 
 const STOP_WORDS = new Set(['of', 'the', 'and', 'for', 'in', 'at', 'on', 'to']);
 
-/** The logo of the employer with the closest-matching name, or null. */
-export function employerLogo(
+/** The experience/education organisation matching `employer`, or null. */
+export function matchEmployerOrg<T extends { name: string; aliases?: readonly string[]; logoUrl?: string | null }>(
   employer: string | undefined,
-  orgs: readonly { name: string; aliases?: readonly string[]; logoUrl?: string | null }[],
-): string | null {
+  orgs: readonly T[],
+): T | null {
   if (!employer) return null;
   const slug = slugify(employer);
   if (!slug) return null;
@@ -43,25 +43,25 @@ export function employerLogo(
 
   // Prefixes are compared on whole slug words, so "Arm" never finds "Armagh
   // Council", and the longest match wins when several orgs qualify.
-  const uniqueLogo = (matches: typeof slugged) => {
-    const logos = new Set(matches.map(({ org }) => org.logoUrl ?? null));
-    return logos.size === 1 ? [...logos][0] : null;
+  const uniqueOrg = (matches: typeof slugged) => {
+    const matched = new Set(matches.map(({ org }) => org));
+    return matched.size === 1 ? [...matched][0] : null;
   };
   const longest = (matches: typeof slugged) => {
     const length = Math.max(...matches.map(match => match.slug.length));
-    return uniqueLogo(matches.filter(match => match.slug.length === length));
+    return uniqueOrg(matches.filter(match => match.slug.length === length));
   };
 
   const canonical = slugged.filter(match => match.canonical && match.slug === slug);
-  if (canonical.length > 0) return uniqueLogo(canonical);
+  if (canonical.length > 0) return uniqueOrg(canonical);
   const exact = slugged.filter(({ slug: orgSlug }) => orgSlug === slug);
-  if (exact.length > 0) return uniqueLogo(exact);
+  if (exact.length > 0) return uniqueOrg(exact);
 
   // A compound name written without spaces ("oceaninfinity") still matches
   // the spaced organisation ("Ocean Infinity").
   if (compact.length >= 4) {
     const compactMatch = slugged.filter(({ slug: orgSlug }) => orgSlug.replace(/-/g, '') === compact);
-    if (compactMatch.length > 0) return uniqueLogo(compactMatch);
+    if (compactMatch.length > 0) return uniqueOrg(compactMatch);
   }
 
   // A longer legal name still matches, so "Acme Robotics UK Ltd" finds
@@ -85,8 +85,16 @@ export function employerLogo(
       const contentInitials = words.filter(w => !STOP_WORDS.has(w)).map(w => w[0]).join('');
       return allInitials === slug || contentInitials === slug;
     });
-    if (byInitials.length > 0) return uniqueLogo(byInitials);
+    if (byInitials.length > 0) return uniqueOrg(byInitials);
   }
 
   return null;
+}
+
+/** The logo of the employer with the closest-matching name, or null. */
+export function employerLogo(
+  employer: string | undefined,
+  orgs: readonly { name: string; aliases?: readonly string[]; logoUrl?: string | null }[],
+): string | null {
+  return matchEmployerOrg(employer, orgs)?.logoUrl ?? null;
 }

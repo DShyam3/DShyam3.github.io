@@ -330,3 +330,32 @@ export const findDuplicatePayslip = (
   }
   return undefined;
 };
+
+/**
+ * Returns `YYYY-MM` months that have no payslip between the earliest and
+ * latest payslip dates in the combined set.
+ */
+export const findMissingPayslipMonths = (dates: readonly string[]): string[] => {
+  const months = new Set(
+    dates
+      .map(d => d.trim().slice(0, 7))
+      .filter(m => /^\d{4}-\d{2}$/.test(m)),
+  );
+  if (months.size < 2) return [];
+  const sorted = [...months].sort();
+  const [startYear, startMonth] = sorted[0].split('-').map(Number);
+  const [endYear, endMonth] = sorted[sorted.length - 1].split('-').map(Number);
+  const missing: string[] = [];
+  let y = startYear;
+  let m = startMonth;
+  while (y < endYear || (y === endYear && m <= endMonth)) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    if (!months.has(key)) missing.push(key);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return missing;
+};

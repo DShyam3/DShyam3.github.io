@@ -279,6 +279,8 @@ const DATE_LABELS: RegExp[] = [
   /\bpay\s+period\s+end|\bperiod\s+end(?:ing)?\b/i,
 ];
 
+const EMPLOYER_LABEL = /\b(?:company|organisation|organization|employer)\s*(?:name)?\s*:\s*([^\n]+?)(?=\s+(?:department|dept|pay\s*date|employee|tax|ni)\b|$)/i;
+
 /** Handles 28/08/2026, 28-08-2026, 28 August 2026 and 31-Dec-2025; returns ISO. */
 const parseDate = (line: string): string | undefined => {
   const numeric = line.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/);
@@ -312,6 +314,10 @@ export function parsePayslipText(text: string): ParsedPayslip {
   let payrolledBik = 0;
 
   for (const rawLine of rawLines) {
+    if (!result.employer) {
+      const empMatch = EMPLOYER_LABEL.exec(rawLine);
+      if (empMatch?.[1]?.trim()) result.employer = empMatch[1].trim();
+    }
     for (let rank = 0; rank < DATE_LABELS.length && rank < dateRank; rank++) {
       if (!DATE_LABELS[rank].test(rawLine)) continue;
       const date = parseDate(rawLine);
