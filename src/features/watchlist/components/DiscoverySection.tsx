@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, EyeOff, Loader2, Plus, Search, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { Check, ChevronDown, EyeOff, Loader2, Plus, Search, X } from 'lucide-react';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CardGrid } from '@/components/shared/CardGrid';
@@ -13,6 +13,7 @@ import {
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
+import { cn } from '@/lib/utils';
 import { useWatchlist } from '../useWatchlist';
 import { useTMDB } from '../useTMDB';
 import type { TMDBResult } from '../useTMDB';
@@ -599,6 +600,62 @@ export const DISCOVER_SECTION_OPTIONS: ReadonlyArray<{ key: DiscoverSection; lab
   { key: 'might_like', label: 'You might like' },
 ];
 
+/**
+ * One Discover part. Its heading opens and closes it, remembered per part on
+ * this browser. The body stays mounted while closed, so its grids keep their
+ * held tiles and focus targets. Shown alone by the section picker, it stays open.
+ */
+function DiscoverPart({ id, title, collapsible, sectionRef, children }: {
+  id: string;
+  title: string;
+  collapsible: boolean;
+  /** A focus target: the section takes focus when its own controls are gone. */
+  sectionRef?: Ref<HTMLElement>;
+  children: ReactNode;
+}) {
+  const storageKey = `watchlist-${id}-open`;
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(storageKey) !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const toggle = () => {
+    setOpen(!open);
+    try {
+      localStorage.setItem(storageKey, String(!open));
+    } catch {
+      // The choice resets next visit.
+    }
+  };
+  const label = <DotMatrixText text={title} size="sm" />;
+  return (
+    <section ref={sectionRef} tabIndex={sectionRef ? -1 : undefined} className="min-w-0" aria-labelledby={id}>
+      <h2 id={id}>
+        {collapsible ? (
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={`${id}-body`}
+            onClick={toggle}
+            className="flex w-full items-center gap-2 rounded-md text-left"
+          >
+            {label}
+            <ChevronDown
+              aria-hidden="true"
+              className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out motion-reduce:transition-none', !open && '-rotate-90')}
+            />
+          </button>
+        ) : label}
+      </h2>
+      <div id={`${id}-body`} hidden={collapsible && !open} className="space-y-4 pt-1">
+        {children}
+      </div>
+    </section>
+  );
+}
+
 /** Discover: what is coming that you do not follow, grouped franchises/spin-offs you have started, then "more like this". */
 export function DiscoverySection({ type, section = 'all' }: { type: LibraryType; section?: DiscoverSection }) {
   const discovery = useDiscovery(type);
@@ -641,7 +698,11 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
       setNoneMarked(null);
       // Undo leaves with its status: focus goes back to the button it undid,
       // once the titles are back, or to the section.
-      requestAnimationFrame(() => (noneRef.current ?? alreadyWatchedRef.current)?.focus());
+      requestAnimationFrame(() => {
+        noneRef.current?.focus();
+        // Gone, or hidden because its part was closed meanwhile: the part takes focus.
+        if (document.activeElement !== noneRef.current) alreadyWatchedRef.current?.focus();
+      });
     } catch {
       setNoneMarked({ ...noneMarked, undo: 'failed' });
     }
@@ -689,11 +750,8 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
         </div>
       )}
       {(section === 'all' || section === 'coming_soon') && (
-        <section className="space-y-4 min-w-0" aria-labelledby="discover-coming-soon">
-          <div className="space-y-1">
-            <h2 id="discover-coming-soon"><DotMatrixText text="COMING SOON" size="sm" /></h2>
-            <p className="text-sm text-muted-foreground">Outside your library, over the next six months. Dates can change, and a cinema release is not streaming.</p>
-          </div>
+        <DiscoverPart id="discover-coming-soon" title="COMING SOON" collapsible={section === 'all'}>
+          <p className="text-sm text-muted-foreground">Outside your library, over the next six months. Dates can change, and a cinema release is not streaming.</p>
           {(discovery.upcomingLoading || (comingSoon.length === 0 && discovery.upcomingLoadingMore)) && (
             <p role="status" className="text-sm text-muted-foreground">Finding new releases…</p>
           )}
@@ -702,13 +760,12 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
             <p className="text-sm text-muted-foreground">Nothing new among the most popular releases of the next six months.</p>
           )}
           {comingSoon.length > 0 && <TileGrid items={comingSoon} onDismiss={(item) => discovery.dismiss(item, 'coming_soon')} />}
-        </section>
+        </DiscoverPart>
       )}
 
       {(section === 'all' || section === 'already_watched') && (
-        <section ref={alreadyWatchedRef} tabIndex={-1} className="space-y-4 min-w-0" aria-labelledby="discover-already-watched">
+        <DiscoverPart id="discover-already-watched" title="HAVE YOU ALREADY WATCHED?" collapsible={section === 'all'} sectionRef={alreadyWatchedRef}>
         <div className="space-y-1">
-          <h2 id="discover-already-watched"><DotMatrixText text="HAVE YOU ALREADY WATCHED?" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">
             Film collections, shared universes such as the Marvel Cinematic Universe, and connected TV spin-offs you have started, each in release order, so you can log what you’ve seen or add the rest.
           </p>
@@ -804,13 +861,12 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
             </Button>
           )}
         </div>
-        </section>
+        </DiscoverPart>
       )}
 
       {(section === 'all' || section === 'might_like') && (
-        <section className="space-y-4" aria-labelledby="discover-might-like">
+        <DiscoverPart id="discover-might-like" title="YOU MIGHT LIKE" collapsible={section === 'all'}>
         <div className="space-y-1">
-          <h2 id="discover-might-like"><DotMatrixText text="YOU MIGHT LIKE" size="sm" /></h2>
           <p className="text-sm text-muted-foreground">Discover new films and series outside the collections above, based on what you rate highly, favourite and watch.</p>
           {tasteLines.length > 0 && (
             <p className="text-xs text-muted-foreground">
@@ -859,7 +915,7 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
             )}
           </div>
         )}
-        </section>
+        </DiscoverPart>
       )}
 
       <div ref={footerRef} tabIndex={-1} className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
