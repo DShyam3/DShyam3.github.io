@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, CircleOff, Film, Loader2, Pencil, Play, Plus, Trash2, Tv, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, CircleOff, EyeOff, Film, Loader2, Pencil, Play, Plus, Trash2, Tv, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -107,6 +107,8 @@ export function EntryList({
   onOpen,
   onAddToLibrary,
   onSeenIt,
+  onNotSeen,
+  notSeen,
   onDismiss,
   onToggleStopped,
   isAdding,
@@ -116,6 +118,9 @@ export function EntryList({
   onOpen: (entry: OrderEntryView) => void;
   onAddToLibrary?: (entry: OrderEntryView) => void;
   onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
+  /** "Not seen" on a saved film not yet watched; `notSeen` holds the keys already answered. */
+  onNotSeen?: (entry: OrderEntryView) => void;
+  notSeen?: ReadonlySet<string>;
   onDismiss?: (entry: OrderEntryView) => void;
   onToggleStopped?: (entry: OrderEntryView) => void;
   isAdding?: (key: string) => boolean;
@@ -166,6 +171,9 @@ export function EntryList({
           // Once in the library a title is the library's, whatever was dismissed.
           const notInterested = entry.state === 'not-in-library' && dismissed.has(entry.key);
           const isNextUp = view.nextUp?.key === entry.key;
+          // A film already saved may have been seen and not logged.
+          const seenItForLibraryFilm = entry.mediaType === 'movie' && entry.state === 'unwatched' && !entry.stopped && !!releaseDate && released;
+          const askNotSeen = !!onNotSeen && seenItForLibraryFilm && !notSeen?.has(entry.key);
 
           return (
             <li
@@ -238,7 +246,7 @@ export function EntryList({
                   entry.note && <p className="break-words text-xs sm:text-sm text-muted-foreground">{entry.note}</p>
                 )}
 
-                {(edits || ((onAddToLibrary || onSeenIt || onDismiss) && entry.state === 'not-in-library') || (onToggleStopped && entry.mediaType === 'tv' && entry.libraryId && entry.state !== 'watched')) && (
+                {(edits || ((onAddToLibrary || onSeenIt || onDismiss) && entry.state === 'not-in-library') || ((onSeenIt || askNotSeen) && seenItForLibraryFilm) || (onToggleStopped && entry.mediaType === 'tv' && entry.libraryId && entry.state !== 'watched')) && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     {onToggleStopped && entry.mediaType === 'tv' && entry.libraryId && entry.state !== 'watched' && (
                       <Button
@@ -270,7 +278,7 @@ export function EntryList({
                         {adding ? 'Adding…' : 'Add to library'}
                       </Button>
                     )}
-                    {onSeenIt && entry.state === 'not-in-library' && released && (
+                    {onSeenIt && (entry.state === 'not-in-library' || seenItForLibraryFilm) && released && (
                       <WatchedWhenMenu
                         releaseDate={releaseDate || undefined}
                         releaseText={entry.mediaType === 'tv' ? "On each episode's air date" : undefined}
@@ -283,6 +291,18 @@ export function EntryList({
                         <Check className="h-4 w-4" aria-hidden="true" />
                         Seen it
                       </WatchedWhenMenu>
+                    )}
+                    {askNotSeen && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={adding}
+                        onClick={() => onNotSeen?.(entry)}
+                        className="min-h-10 gap-1.5 text-muted-foreground"
+                      >
+                        <EyeOff className="h-4 w-4" aria-hidden="true" />
+                        Not seen
+                      </Button>
                     )}
                     {onDismiss && entry.state === 'not-in-library' && !notInterested && (
                       <Button

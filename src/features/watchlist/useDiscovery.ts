@@ -37,6 +37,7 @@ import {
   collectionsInsideUniverses,
   filmUniversesFromMembers,
   hasWatchGap,
+  unseenFilmCount,
   libraryLookup,
   compareLastTouched,
   lastTouched,
@@ -255,8 +256,10 @@ export interface DiscoveryFranchiseGroup {
 //   them YOU MIGHT LIKE's wildcards and up to four Likely seen's) go at once.
 // - COMING SOON pages until its grid is full, at most 10 pages (20 calls).
 // - YOU MIGHT LIKE and Likely seen page until full, at most 6 and 5 pages
-//   automatically per visit; Show more is the owner's own call. A Likely
-//   seen page is two calls, up to four for its first
+//   automatically per visit; Show more is the owner's own call. An empty
+//   Likely seen on screen pages on until its pool's LIKELY_SEEN_POOL_PAGES
+//   run out (likelySeenStillPaging). A Likely seen page is two calls, up to
+//   four for its first
 //   LIKELY_SEEN_LANGUAGE_PAGES (likelySeenPoolSources).
 const COLLECTIONS_PER_BATCH = 12;
 const FRANCHISES_PER_STEP = 6;
@@ -283,7 +286,8 @@ const fitFor = (profile: TasteProfile) => (item: DiscoveryItem) => tasteScore(pr
 /** How long Likely seen waits for people lookups once its other sources are in. */
 const PEOPLE_WAIT_MS = 8_000;
 
-export function useDiscovery(type: LibraryType) {
+/** `likelySeenOnScreen`: whether Likely seen is shown, so an empty grid may page on. */
+export function useDiscovery(type: LibraryType, likelySeenOnScreen = true) {
   const { watchlist, favourites, loading, ratingsStatus } = useWatchlist();
   const { getCollection, getTvSpinoffs, getFilmUniverses } = useTMDB();
   const { isAdmin } = useAuth();
@@ -621,7 +625,9 @@ export function useDiscovery(type: LibraryType) {
     });
 
   // A franchise is two or more titles, and it shows once one of them is in
-  // the library and another is not.
+  // the library and another is not, or, for the owner, who can answer it, a
+  // released film in it is in the library but not yet watched, stopped or
+  // answered Not seen: one they may have seen and not logged.
   const franchiseGroups = useMemo((): DiscoveryFranchiseGroup[] => {
     const groups: DiscoveryFranchiseGroup[] = [];
     if (type !== 'tv') {
@@ -631,7 +637,7 @@ export function useDiscovery(type: LibraryType) {
       for (const universe of filmUniverseSummaries) {
         const view = buildOrderView(filterDismissedEntries(universe.entries), lookup);
         const missingCount = view.total - view.inLibrary;
-        if (view.total >= 2 && missingCount > 0) {
+        if (view.total >= 2 && (missingCount > 0 || (isAdmin && unseenFilmCount(view, start, notSeen) > 0))) {
           groups.push({
             key: `universe:${universe.id}`,
             name: universe.name,
@@ -649,7 +655,7 @@ export function useDiscovery(type: LibraryType) {
         const filtered = filterDismissedEntries(item.entries);
         const view = buildOrderView(filtered, lookup);
         const missingCount = view.total - view.inLibrary;
-        if (view.total >= 2 && missingCount > 0) {
+        if (view.total >= 2 && (missingCount > 0 || (isAdmin && unseenFilmCount(view, start, notSeen) > 0))) {
           groups.push({
             key: `collection:${item.collectionId}`,
             name: byId.get(item.collectionId)?.name ?? `Collection ${item.collectionId}`,
@@ -668,7 +674,7 @@ export function useDiscovery(type: LibraryType) {
         const filtered = filterDismissedEntries(tvGroup.entries);
         const view = buildOrderView(filtered, lookup);
         const missingCount = view.total - view.inLibrary;
-        if (view.total >= 2 && missingCount > 0) {
+        if (view.total >= 2 && (missingCount > 0 || (isAdmin && unseenFilmCount(view, start, notSeen) > 0))) {
           groups.push({
             key: `spinoff:${tvGroup.key}`,
             name: tvGroup.name,
@@ -688,7 +694,7 @@ export function useDiscovery(type: LibraryType) {
     }
     return orderByLastTouched(groups);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `notInterested` is read through filterDismissedEntries.
-  }, [type, libraryCollections, expandedCollectionsData, filmUniverseSummaries, tvFranchiseSummaries, lookup, notInterested]);
+  }, [type, libraryCollections, expandedCollectionsData, filmUniverseSummaries, tvFranchiseSummaries, lookup, notInterested, start, isAdmin, notSeen]);
 
   const franchiseEntryKeys = useMemo(
     () => new Set(franchiseGroups.flatMap((g) => g.view.entries.map((e) => e.key))),
@@ -964,6 +970,7 @@ export function useDiscovery(type: LibraryType) {
     hasNext: likelySeenHasNext,
     autoPagesLeft: likelySeenAutoPagesLeft,
     answerPagesLeft,
+    onScreen: likelySeenOnScreen,
   });
   useEffect(() => {
     if (!likelySeenPaging || likelySeenFetchingNext || likelySeenPending) return;
@@ -1077,13 +1084,15 @@ export function useDiscovery(type: LibraryType) {
      * lookups past their wait, which join the grid when they are back.
      */
     likelySeenSearching: likelySeen.length === 0 && (likelySeenPaging || (likelySeenReady && !loading && !peopleSettled)),
-    // No page left that this visit will ask for: none at all, or the
-    // automatic ones and those a "None of these" allowed are all spent.
-    likelySeenExhausted: !likelySeenHasNext || (likelySeenAutoPagesLeft <= 0 && answerPagesLeft <= 0),
+    // No page left that this visit will ask for: none at all, or, once the
+    // grid has a tile (an empty one pages on), the automatic ones and those
+    // a "None of these" allowed are all spent.
+    likelySeenExhausted: !likelySeenHasNext || (likelySeen.length > 0 && likelySeenAutoPagesLeft <= 0 && answerPagesLeft <= 0),
     taste: tasteWords,
     dismiss,
     skipMany,
     markNotSeen,
+    notSeen,
     // Likely seen's "None of these": the owner's own call, so it asks for the
     // next page itself rather than spending the automatic ones.
     noneOfTheseLikelySeen: (items: ReadonlyArray<AnswerTarget>) => {

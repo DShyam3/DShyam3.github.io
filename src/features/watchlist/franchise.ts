@@ -19,7 +19,7 @@ export interface OrderEntryInput {
 
 export interface LibraryLookup {
   /** Keyed by TMDB id. `lastActivityAt` is the row's `last_activity_at`. */
-  movies: Map<number, { id: string; watched: boolean; lastActivityAt?: string | null }>;
+  movies: Map<number, { id: string; watched: boolean; stopped?: boolean; lastActivityAt?: string | null }>;
   /** Keyed by TMDB id; specials excluded by `libraryLookup`. */
   shows: Map<number, { id: string; airedEpisodes: number; watchedEpisodes: number; stopped?: boolean; lastActivityAt?: string | null }>;
 }
@@ -36,7 +36,12 @@ export function libraryLookup(watchlist: WatchlistItem[], today: Date): LibraryL
   for (const item of watchlist) {
     if (item.tmdb_id == null) continue;
     if (item.category === 'Movies') {
-      movies.set(item.tmdb_id, { id: item.id, watched: !!item.watched, lastActivityAt: item.last_activity_at ?? null });
+      movies.set(item.tmdb_id, {
+        id: item.id,
+        watched: !!item.watched,
+        ...(item.library_state === 'stopped' ? { stopped: true } : {}),
+        lastActivityAt: item.last_activity_at ?? null,
+      });
     } else if (item.category === 'TV Shows') {
       let airedEpisodes = 0;
       let watchedEpisodes = 0;
@@ -85,7 +90,7 @@ export function entryState(
   if (entry.mediaType === 'movie') {
     const movie = library.movies.get(entry.tmdbId);
     if (!movie) return { state: 'not-in-library', libraryId: null, progress: null };
-    return { state: movie.watched ? 'watched' : 'unwatched', libraryId: movie.id, progress: null };
+    return { state: movie.watched ? 'watched' : 'unwatched', libraryId: movie.id, progress: null, ...(movie.stopped ? { stopped: true } : {}) };
   }
   const show = library.shows.get(entry.tmdbId);
   if (!show) return { state: 'not-in-library', libraryId: null, progress: null };
@@ -628,4 +633,17 @@ export function hasWatchGap(view: OrderView): boolean {
     if (view.entries[i].state !== 'watched') return true;
   }
   return false;
+}
+
+/**
+ * Released films in the library not yet marked watched: ones you may have
+ * seen and not logged, so a Discover card asks about them as it does about
+ * the titles missing from the library. A film stopped, or answered Not seen
+ * (`answered`, by entry key), has been answered.
+ */
+export function unseenFilmCount(view: OrderView, todayIso: string, answered?: ReadonlySet<string>): number {
+  return view.entries.filter((entry) =>
+    entry.mediaType === 'movie' && entry.state === 'unwatched' && !entry.stopped && !answered?.has(entry.key)
+    && !!entry.releaseDate && entry.releaseDate.slice(0, 10) <= todayIso,
+  ).length;
 }

@@ -15,6 +15,7 @@ import {
   orderByLastTouched,
   sortByRelease,
   tvFranchisesFromLinks,
+  unseenFilmCount,
   type LibraryLookup,
   type OrderEntryInput,
   type UniverseLibraryFilm,
@@ -388,6 +389,38 @@ describe('tvFranchisesFromLinks', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].name).toBe('Marvel Cinematic Universe');
     expect(groups[0].entries.map((e) => e.tmdbId)).toEqual([85271, 138501]);
+  });
+});
+
+describe('unseenFilmCount', () => {
+  const today = '2026-11-27';
+  it('counts released films saved but not watched', () => {
+    const view = buildOrderView([
+      entry({ key: 'a', tmdbId: 1, releaseDate: '2001-01-01' }), // watched
+      entry({ key: 'b', tmdbId: 2, releaseDate: '2026-11-27' }), // saved, released today
+      entry({ key: 'c', tmdbId: 3, releaseDate: '2005-01-01' }), // not in library
+    ], library);
+    expect(unseenFilmCount(view, today)).toBe(1);
+  });
+  it('skips unreleased and undated films, and series', () => {
+    const view = buildOrderView([
+      entry({ key: 'a', tmdbId: 2, releaseDate: '2026-12-01' }),
+      entry({ key: 'b', tmdbId: 2, releaseDate: null }),
+      entry({ key: 'c', mediaType: 'tv', tmdbId: 12, releaseDate: '2010-01-01' }),
+    ], library);
+    expect(unseenFilmCount(view, today)).toBe(0);
+  });
+  it('skips films stopped or answered Not seen', () => {
+    const lookup = libraryLookup([
+      { id: 'a', category: 'Movies', tmdb_id: 5, title: 'A', watched: false, library_state: 'stopped' },
+      { id: 'b', category: 'Movies', tmdb_id: 6, title: 'B', watched: false },
+    ] as WatchlistItem[], new Date('2026-11-27'));
+    const view = buildOrderView([
+      entry({ key: 'movie:5', tmdbId: 5, releaseDate: '2001-01-01' }),
+      entry({ key: 'movie:6', tmdbId: 6, releaseDate: '2002-01-01' }),
+    ], lookup);
+    expect(unseenFilmCount(view, today)).toBe(1);
+    expect(unseenFilmCount(view, today, new Set(['movie:6']))).toBe(0);
   });
 });
 

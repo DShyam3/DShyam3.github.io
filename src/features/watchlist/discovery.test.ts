@@ -643,7 +643,7 @@ describe('likelySeenLanguage with answers', () => {
 });
 
 describe('likelySeenStillPaging', () => {
-  const base = { ready: true, shown: 0, target: 12, libraryLoading: false, failed: false, fetchingNext: false, hasNext: true, autoPagesLeft: 3, answerPagesLeft: 0 };
+  const base = { ready: true, shown: 0, target: 12, libraryLoading: false, failed: false, fetchingNext: false, hasNext: true, autoPagesLeft: 3, answerPagesLeft: 0, onScreen: true };
 
   it('is paging while a page is on its way or one is still to be asked for', () => {
     expect(likelySeenStillPaging(base)).toBe(true);
@@ -652,8 +652,14 @@ describe('likelySeenStillPaging', () => {
   });
 
   it('is done once the pages it would ask for are spent or there are none', () => {
-    expect(likelySeenStillPaging({ ...base, autoPagesLeft: 0 })).toBe(false);
+    expect(likelySeenStillPaging({ ...base, shown: 3, autoPagesLeft: 0 })).toBe(false);
     expect(likelySeenStillPaging({ ...base, hasNext: false })).toBe(false);
+  });
+
+  it('pages on past its allowances while the grid is empty and on screen, until the pool runs out', () => {
+    expect(likelySeenStillPaging({ ...base, autoPagesLeft: 0 })).toBe(true);
+    expect(likelySeenStillPaging({ ...base, autoPagesLeft: 0, hasNext: false })).toBe(false);
+    expect(likelySeenStillPaging({ ...base, autoPagesLeft: 0, onScreen: false })).toBe(false);
   });
 
   it('is not paging before the grid opens, when it is full, or after a failure', () => {

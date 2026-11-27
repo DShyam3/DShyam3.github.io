@@ -247,9 +247,11 @@ export function likelySeenPoolPageItems(items: readonly DiscoveryItem[], type: L
 /**
  * Whether Likely seen is still paging its pool for a grid short of `target`:
  * a page on its way (which can wait a minute for Discover's share of calls),
- * or one still to ask for, automatic or after a None of these. The paging
- * effect asks for a page on exactly this, and an empty grid then says it is
- * still looking, not that nothing was found.
+ * or one still to ask for, automatic or after a None of these. An empty grid
+ * on screen pages on past both allowances until the pool runs out: a large
+ * library can know every title on a run of pages. The paging effect asks for a page on
+ * exactly this, and an empty grid then says it is still looking, not that
+ * nothing was found.
  */
 export function likelySeenStillPaging(state: {
   ready: boolean;
@@ -261,9 +263,11 @@ export function likelySeenStillPaging(state: {
   hasNext: boolean;
   autoPagesLeft: number;
   answerPagesLeft: number;
+  /** Likely seen is shown, so an empty grid may page on. */
+  onScreen: boolean;
 }): boolean {
   if (!state.ready || state.shown >= state.target || state.libraryLoading || state.failed) return false;
-  return state.fetchingNext || (state.hasNext && (state.autoPagesLeft > 0 || state.answerPagesLeft > 0));
+  return state.fetchingNext || (state.hasNext && ((state.onScreen && state.shown === 0) || state.autoPagesLeft > 0 || state.answerPagesLeft > 0));
 }
 
 export const MAX_SUGGESTIONS_PER_SEED = 4;

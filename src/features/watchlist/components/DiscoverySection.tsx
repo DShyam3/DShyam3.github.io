@@ -429,6 +429,8 @@ function DiscoveryFranchiseCard({
   onOpen,
   onAddToLibrary,
   onSeenIt,
+  onNotSeen,
+  notSeen,
   onDismiss,
   onToggleStopped,
   isAdding,
@@ -437,6 +439,8 @@ function DiscoveryFranchiseCard({
   onOpen: (entry: OrderEntryView) => void;
   onAddToLibrary?: (entry: OrderEntryView) => void;
   onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
+  onNotSeen?: (entry: OrderEntryView) => void;
+  notSeen?: ReadonlySet<string>;
   onDismiss: (entry: OrderEntryView) => void;
   onToggleStopped?: (entry: OrderEntryView) => void;
   isAdding: (key: string) => boolean;
@@ -448,7 +452,7 @@ function DiscoveryFranchiseCard({
       name={group.name}
       summary={[
         `${view.watched} of ${view.total} watched`,
-        `${group.missingCount} not in library`,
+        group.missingCount > 0 ? `${group.missingCount} not in library` : null,
         group.hasGap ? 'Gap in series' : null,
       ].filter(Boolean).join(' · ')}
       nextUp={view.nextUp?.title}
@@ -466,6 +470,8 @@ function DiscoveryFranchiseCard({
         onOpen={onOpen}
         onAddToLibrary={onAddToLibrary}
         onSeenIt={onSeenIt}
+        onNotSeen={onNotSeen}
+        notSeen={notSeen}
         onDismiss={onDismiss}
         onToggleStopped={onToggleStopped}
         isAdding={isAdding}
@@ -658,7 +664,7 @@ function DiscoverPart({ id, title, collapsible, sectionRef, children }: {
 
 /** Discover: what is coming that you do not follow, grouped franchises/spin-offs you have started, then "more like this". */
 export function DiscoverySection({ type, section = 'all' }: { type: LibraryType; section?: DiscoverSection }) {
-  const discovery = useDiscovery(type);
+  const discovery = useDiscovery(type, section === 'all' || section === 'already_watched');
   const { isAdmin } = useAuth();
   const { watchlist, getAutoStatus, isEpisodeWatched, isSeasonWatched, toggleEpisodeWatched } = useWatchlist();
   const { addToLibrary, toggleStopped, isAdding } = useAddToLibrary();
@@ -797,6 +803,8 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
                 onOpen={openEntry}
                 onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
                 onSeenIt={isAdmin ? (entry, when) => void addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+                onNotSeen={isAdmin ? (entry) => discovery.markNotSeen(entry.mediaType, entry.tmdbId) : undefined}
+                notSeen={discovery.notSeen}
                 onDismiss={(entry) => discovery.dismiss({ media: entry.mediaType, id: entry.tmdbId, release_date: entry.releaseDate }, 'franchise')}
                 onToggleStopped={isAdmin ? (entry) => void toggleStopped(entry) : undefined}
                 isAdding={isAdding}
@@ -920,7 +928,7 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
 
       <div ref={footerRef} tabIndex={-1} className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         <span>
-          Suggestions from TMDB. “Not interested” hides a title across Discover; “Skip these” hides a page of suggestions for {SKIP_DAYS} days, but not from “Have you already watched?”; “Not seen” stops a title being asked about in Likely seen, and “None of these” answers it for every title shown there (Undo takes it back). All are {discovery.synced ? 'saved across your devices' : 'remembered on this browser'}.
+          Suggestions from TMDB. “Not interested” hides a title across Discover; “Skip these” hides a page of suggestions for {SKIP_DAYS} days, but not from “Have you already watched?”; “Not seen” stops a title being asked about in “Have you already watched?”, and “None of these” answers it for every title shown there (Undo takes it back). All are {discovery.synced ? 'saved across your devices' : 'remembered on this browser'}.
         </span>
         {discovery.dismissedCount > 0 && <Button variant="ghost" onClick={confirmReset}>Reset Discover answers…</Button>}
         {resetFailed && <p role="alert" className="text-destructive">Couldn’t reset your answers. Try again.</p>}
