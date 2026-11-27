@@ -322,17 +322,18 @@
   flex-wrap: wrap;
 }
 
-/* ─── Dot-matrix tooltip — centred above the map ────────────────────── */
+/* ─── Dot-matrix tooltip — centred above the map, fixed single-line height ── */
 
 .travel-dot-tooltip {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
-  /* centred */
+  flex-wrap: nowrap;
   gap: 8px 10px;
-  min-height: 26px;
+  height: 28px;
+  min-height: 28px;
   margin-bottom: 2px;
+  overflow: hidden;
 }
 
 .travel-tooltip-flag {
@@ -354,9 +355,9 @@
   border: 1px solid hsl(var(--border) / 0.7);
   background: hsl(var(--muted) / 0.35);
   color: hsl(var(--foreground));
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1.4;
   cursor: pointer;
@@ -378,7 +379,7 @@
   }
 }
 
-@media (pointer: coarse) {
+@media (any-pointer: coarse), (hover: none) {
   .travel-tooltip-open::after {
     content: '';
     position: absolute;
@@ -386,43 +387,10 @@
   }
 }
 
-/* ─── View Mode Toggle ──────────────────────────────────────────────── */
-
-.travel-view-toggle {
-  display: flex;
-  align-items: center;
-  border-radius: 8px;
-  background: hsl(var(--muted) / 0.3);
-  padding: 2px;
-  gap: 2px;
-}
-
-.travel-view-toggle-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
-  font-family: var(--font-sans);
-  white-space: nowrap;
-}
-
-.travel-view-toggle-btn:hover {
-  color: hsl(var(--foreground));
-}
-
-.travel-view-toggle-btn--active {
-  background: hsl(var(--card));
-  color: hsl(var(--foreground));
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+html[data-display="larger"] .travel-tooltip-open::after {
+  content: '';
+  position: absolute;
+  inset: -11px -8px;
 }
 
 /* ─── City Drill-Down Panel ─────────────────────────────────────────── */

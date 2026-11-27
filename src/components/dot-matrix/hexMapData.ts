@@ -42,6 +42,8 @@ export interface HexCell {
 export interface HexBorderSegment {
     /** The cell this edge was found from, so a patch of cells can take its own borders. */
     from: string;
+    code: string;
+    neighborCode?: string;
     p1: UnitVector;
     p2: UnitVector;
     fx1: number;
@@ -81,6 +83,186 @@ export interface HexPatchData {
     /** Both ends on the flat map, 4 per segment. */
     border2: Float32Array;
     borderHide: Float32Array;
+    /** Country lookup indices on either side, zero on the sea side of a coast. */
+    borderCountries: Uint16Array;
+}
+
+/** Reserve zero for water; AA through ZZ occupy slots 1 through 676. */
+export function countryStyleIndex(code: string | undefined): number {
+    if (!code || !/^[A-Z]{2}$/.test(code)) return 0;
+    return (code.charCodeAt(0) - 65) * 26 + code.charCodeAt(1) - 64;
+}
+
+/** Inverse of `countryStyleIndex`: 1..676 back to two-letter ISO code. */
+export function codeFromStyleIndex(index: number): string | undefined {
+    if (index <= 0 || index > 676) return undefined;
+    const zeroBased = index - 1;
+    return String.fromCharCode(65 + Math.floor(zeroBased / 26), 65 + (zeroBased % 26));
+}
+
+/** Formats a split 64-bit H3 index `[lo, hi]` as its lowercase hex string without calling WASM. */
+export function splitLongToHex(lo: number, hi: number): string {
+    return (hi >>> 0).toString(16) + (lo >>> 0).toString(16).padStart(8, '0');
+}
+
+function align4(bytes: number): number {
+    return (bytes + 3) & ~3;
+}
+
+function radToUnit(lat: number, lon: number): UnitVector {
+    const cosLat = Math.cos(lat);
+    return {
+        ux: cosLat * Math.sin(lon),
+        uy: -Math.sin(lat),
+        uz: cosLat * Math.cos(lon),
+    };
+}
+
+/**
+ * Decodes a pre-baked `hex-map-v2-r3.bin` buffer directly into `HexTierData`
+ * without running `uncompactCells`, `cellToBoundary`, `gridDisk`, or
+ * `directedEdgeToBoundary` in the browser.
+ */
+export function decodeHexTierBin(buffer: ArrayBuffer): HexTierData {
+    const header = new Uint32Array(buffer, 0, 4);
+    if (header[0] !== 0x33584548) throw new Error('Invalid hex-map-v2-r3.bin header');
+    const cellCount = header[1];
+    const cornerCount = header[2];
+    const borderCount = header[3];
+
+    const offH3 = 16;
+    const offCountry = offH3 + cellCount * 8;
+    const offMeta = offCountry + cellCount * 2;
+    const offCellLatLon = align4(offMeta + cellCount);
+    const offCornerLatLon = offCellLatLon + cellCount * 8;
+    const offBorderFrom = offCornerLatLon + cornerCount * 8;
+    const offBorderCountries = align4(offBorderFrom + borderCount * 2);
+    const offBorderLatLon = offBorderCountries + borderCount * 4;
+
+    const cellH3 = new Uint32Array(buffer, offH3, cellCount * 2);
+    const cellCountry = new Uint16Array(buffer, offCountry, cellCount);
+    const cellMeta = new Uint8Array(buffer, offMeta, cellCount);
+    const cellLatLon = new Float32Array(buffer, offCellLatLon, cellCount * 2);
+    const cornerLatLon = new Float32Array(buffer, offCornerLatLon, cornerCount * 2);
+    const borderFrom = new Uint16Array(buffer, offBorderFrom, borderCount);
+    const borderCountries = new Uint16Array(buffer, offBorderCountries, borderCount * 2);
+    const borderLatLon = new Float32Array(buffer, offBorderLatLon, borderCount * 4);
+
+    const totalBuckets = BUCKET_COLS * BUCKET_ROWS;
+    const cellBuckets: HexCell[][] = Array.from({ length: totalBuckets }, () => []);
+    const borderBuckets: HexBorderSegment[][] = Array.from({ length: totalBuckets }, () => []);
+    const cells: HexCell[] = new Array(cellCount);
+    const cellCodes = new Map<string, string>();
+    const cellIndexByH3 = new Map<string, number>();
+    const countrySums = new Map<string, { ux: number; uy: number; uz: number; count: number }>();
+
+    let cornerCursor = 0;
+    for (let i = 0; i < cellCount; i++) {
+        const h3Index = splitLongToHex(cellH3[i * 2], cellH3[i * 2 + 1]);
+        const code = codeFromStyleIndex(cellCountry[i]) ?? 'ZZ';
+        const lat = cellLatLon[i * 2];
+        const lon = cellLatLon[i * 2 + 1];
+        const center3d = radToUnit(lat, lon);
+        const center2d = projectEqualEarth(lon, lat);
+
+        const meta = cellMeta[i];
+        const crossesAntimeridian = (meta & 0x80) !== 0;
+        const vCount = meta & 0x7f;
+        const verts3d: UnitVector[] = new Array(vCount);
+        const verts2d: FlatPoint[] = new Array(vCount);
+        for (let k = 0; k < vCount; k++) {
+            const vLat = cornerLatLon[cornerCursor * 2];
+            const vLon = cornerLatLon[cornerCursor * 2 + 1];
+            cornerCursor++;
+            verts3d[k] = radToUnit(vLat, vLon);
+            verts2d[k] = projectEqualEarth(vLon, vLat);
+        }
+
+        const cell: HexCell = {
+            index: i,
+            h3Index,
+            code,
+            lat,
+            lon,
+            center3d,
+            center2d,
+            verts3d,
+            verts2d,
+            crossesAntimeridian,
+            hideBelow: crossesAntimeridian ? HIDE_ACROSS_ANTIMERIDIAN : 0,
+        };
+        cells[i] = cell;
+        cellCodes.set(h3Index, code);
+        cellIndexByH3.set(h3Index, i);
+        if (!crossesAntimeridian) {
+            cellBuckets[bucketIndex(center2d.nx, center2d.ny)].push(cell);
+        }
+
+        const acc = countrySums.get(code) ?? { ux: 0, uy: 0, uz: 0, count: 0 };
+        acc.ux += center3d.ux;
+        acc.uy += center3d.uy;
+        acc.uz += center3d.uz;
+        acc.count += 1;
+        countrySums.set(code, acc);
+    }
+
+    const countryCentroids = new Map<string, { lon: number; lat: number }>();
+    for (const [code, acc] of countrySums) {
+        const mag = Math.hypot(acc.ux, acc.uy, acc.uz) || 1;
+        const ux = acc.ux / mag;
+        const uy = acc.uy / mag;
+        const uz = acc.uz / mag;
+        countryCentroids.set(code, {
+            lon: Math.atan2(ux, uz),
+            lat: Math.asin(Math.max(-1, Math.min(1, -uy))),
+        });
+    }
+
+    const borderSegments: HexBorderSegment[] = new Array(borderCount);
+    for (let i = 0; i < borderCount; i++) {
+        const rawFrom = borderFrom[i];
+        const crossesAntimeridian = (rawFrom & 0x8000) !== 0;
+        const fromCell = cells[rawFrom & 0x7fff];
+        const code = codeFromStyleIndex(borderCountries[i * 2]) ?? fromCell.code;
+        const neighborCode = codeFromStyleIndex(borderCountries[i * 2 + 1]);
+        const aLat = borderLatLon[i * 4];
+        const aLon = borderLatLon[i * 4 + 1];
+        const bLat = borderLatLon[i * 4 + 2];
+        const bLon = borderLatLon[i * 4 + 3];
+        const p1 = radToUnit(aLat, aLon);
+        const p2 = radToUnit(bLat, bLon);
+        const f1 = projectEqualEarth(aLon, aLat);
+        const f2 = projectEqualEarth(bLon, bLat);
+        const seg: HexBorderSegment = {
+            from: fromCell.h3Index,
+            code,
+            neighborCode,
+            p1,
+            p2,
+            fx1: f1.nx,
+            fy1: f1.ny,
+            fx2: f2.nx,
+            fy2: f2.ny,
+            crossesAntimeridian,
+            hideBelow: crossesAntimeridian ? HIDE_ACROSS_ANTIMERIDIAN : 0,
+        };
+        borderSegments[i] = seg;
+        if (!crossesAntimeridian) {
+            borderBuckets[bucketIndex((f1.nx + f2.nx) * 0.5, (f1.ny + f2.ny) * 0.5)].push(seg);
+        }
+    }
+
+    return {
+        res: 3,
+        projection: 'equal-earth',
+        cells,
+        cellCodes,
+        cellIndexByH3,
+        borderSegments,
+        countryCentroids,
+        cellBuckets,
+        borderBuckets,
+    };
 }
 
 export const BUCKET_COLS = 16;
@@ -270,6 +452,8 @@ export async function buildHexTier(raw: RawHexMapJson, chunked = false): Promise
                 const f2 = projectEqualEarth(b.lon, b.lat);
                 const seg: HexBorderSegment = {
                     from: h3Index,
+                    code,
+                    neighborCode: nbCode,
                     p1: a.unit,
                     p2: b.unit,
                     fx1: f1.nx,
@@ -344,12 +528,15 @@ export function tierPatchData(tier: HexTierData, indices?: ArrayLike<number>, se
     const border3 = new Float32Array(segments.length * 6);
     const border2 = new Float32Array(segments.length * 4);
     const borderHide = new Float32Array(segments.length);
+    const borderCountries = new Uint16Array(segments.length * 2);
     segments.forEach((seg, i) => {
+        borderCountries[i * 2] = countryStyleIndex(seg.code);
+        borderCountries[i * 2 + 1] = countryStyleIndex(seg.neighborCode);
         border3.set([seg.p1.ux, seg.p1.uy, seg.p1.uz, seg.p2.ux, seg.p2.uy, seg.p2.uz], i * 6);
         border2.set([seg.fx1, seg.fy1, seg.fx2, seg.fy2], i * 4);
         borderHide[i] = seg.hideBelow;
     });
-    return { count, centre3, centre2, cornerStart, corner3, corner2, hide, borderCount: segments.length, border3, border2, borderHide };
+    return { count, centre3, centre2, cornerStart, corner3, corner2, hide, borderCount: segments.length, border3, border2, borderHide, borderCountries };
 }
 
 function beyondLatitudes(projection: MapProjection, points: UnitVector[]): boolean {
@@ -414,6 +601,12 @@ export async function loadHexTier(res: 3): Promise<HexTierData> {
     let promise = tierPromises.get(res);
     if (!promise) {
         promise = (async () => {
+            const binResponse = await fetch(`/data/hex-map-v2-r${res}.bin`);
+            if (binResponse.ok) {
+                const built = decodeHexTierBin(await binResponse.arrayBuffer());
+                tierCache.set(res, built);
+                return built;
+            }
             const response = await fetch(`/data/hex-map-v2-r${res}.json`);
             if (!response.ok) throw new Error(`Hex map tier r${res} unavailable`);
             const data = (await response.json()) as HexLevelJson;

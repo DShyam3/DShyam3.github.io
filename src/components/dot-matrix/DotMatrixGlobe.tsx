@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { ChevronDown, Globe, Lock, LockOpen, Map as MapIcon, Minus, Plus } from 'lucide-react';
+import { ChevronDown, Globe, Layers, Lock, LockOpen, Map as MapIcon, Minus, Plus } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { cellToLatLng, getResolution, latLngToCell } from 'h3-js';
 import {
@@ -11,6 +11,7 @@ import {
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuLabel,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
     DropdownMenuTrigger,
@@ -29,6 +30,7 @@ import {
 } from './hexMapData';
 import { mapPointAt, projectToGlobe, type GlobeView } from './globeProjection';
 import { createHexGlRenderer, type HexGlRenderer } from './hexGlRenderer';
+import { MAP_SURFACES, useMapSurface } from './mapSurface';
 import {
     cellHideBelow,
     codeOf,
@@ -39,7 +41,8 @@ import {
     type HexDetailLookup,
 } from './hexDetail';
 import { hexPlaceLabel, loadRegionLevel } from './hexRegions';
-import { HEX_KM, HexLevels, LOCKED_LEVEL5_MIN_PX, type HexSizeLock, type ShownRes } from './hexLevels';
+import type { PlaceRequest, PlaceResult } from './hexRegionWorker';
+import { HEX_KM, HexLevels, LOCKED_LEVEL4_MIN_PX, LOCKED_LEVEL5_MIN_PX, LOCKED_LEVEL6_MIN_PX, type HexSizeLock, type ShownRes } from './hexLevels';
 import {
     BORDER_ALPHA,
     BORDER_ALPHA_ZOOMED,
@@ -76,7 +79,6 @@ import {
     movedPastThreshold,
     placeSelectedHex,
     projectionOutline,
-    readStoredHexSize,
     readStoredProjection,
     releaseTargets,
     rubberDelta,
@@ -96,8 +98,7 @@ export interface CountryRegion {
 
 interface DotMatrixGlobeProps {
     visitedCountryCodes: string[];
-    visitedCities?: { lat: number; lon: number; countryCode: string }[];
-    viewMode?: 'countries' | 'cities';   // which highlighting layer to use
+    visitedCities?: { lat: number; lon: number; countryCode: string; name?: string }[];
     size?: number;
     className?: string;
     onCountryHover?: (code: string | null, name: string | null, flagUrl: string | null, dotKey?: string | null) => void;
@@ -113,7 +114,6 @@ interface DotMatrixGlobeProps {
 export function DotMatrixGlobe({
     visitedCountryCodes,
     visitedCities,
-    viewMode = 'countries',
     size = 800,
     className = '',
     onCountryHover,
@@ -153,6 +153,7 @@ export function DotMatrixGlobe({
     // every listener below; now a hover only rewrites the cell styles.
     const hoveredCountryRef = useRef<string | null>(null);
     const lastHoverRef = useRef('');
+    const placeWorkerRef = useRef<Worker | null>();
     // One byte per cell (see CELL_STYLE), rebuilt only when what it depends on changes.
     const stylesRef = useRef(new Uint8Array(0));
     const stylesDirtyRef = useRef(true);
@@ -160,9 +161,10 @@ export function DotMatrixGlobe({
     const styleVersionRef = useRef(0);
     // The finer hex levels and their patches (see hexLevels.ts).
     const [levels] = useState(() => new HexLevels());
-    const [hexSize, setHexSize] = useState<HexSizeChoice>(readStoredHexSize);
+    const [hexSize, setHexSize] = useState<HexSizeChoice>('auto');
     // The size on screen, for the control's readout; set from the frame when it changes.
     const [shownRes, setShownRes] = useState<ShownRes>(3);
+    const { look, chooseLook, surface, loading: loadingSurface, failed: surfaceFailed, detailFailed, retry: retrySurface } = useMapSurface(shownRes === 6);
     const shownResRef = useRef<ShownRes>(3);
     // Whether the WebGL renderer is up: the finer sizes, and so the size menu, need it.
     const [glReady, setGlReady] = useState(false);
@@ -354,17 +356,18 @@ export function DotMatrixGlobe({
     }, [mode, requestDraw]);
 
     /**
-     * 17 km hexes only show zoomed in: zooms in to where they do, in the
-     * mode showing, whose scale at a given zoom differs (the globe is larger
-     * than the flat map at the same zoom).
+     * 45 km, 17 km and 6 km hexes only show once large enough on screen: zooms
+     * in to where they do, in the mode showing, whose scale at a given zoom
+     * differs (the globe is larger than the flat map at the same zoom).
      */
-    const zoomToLevel5 = useCallback(() => {
+    const zoomToFineLevel = useCallback((targetRes: 4 | 5 | 6) => {
         const view = viewRef.current;
         if (!view) return;
         const base = mode === '3d' ? Math.min(view.width, view.height) * 0.45 : fitFlatMap(view.width, view.height, projection.aspect).mapW / (2 * Math.PI);
         if (base <= 0) return;
         const drag = dragRef.current;
-        const needed = (LOCKED_LEVEL5_MIN_PX * 1.5) / (hexSpacingRad(5) * base);
+        const minPx = targetRes === 6 ? LOCKED_LEVEL6_MIN_PX : targetRes === 5 ? LOCKED_LEVEL5_MIN_PX : LOCKED_LEVEL4_MIN_PX;
+        const needed = (minPx * 1.5) / (hexSpacingRad(targetRes) * base);
         if (drag.targetZoom >= needed) return;
         drag.targetZoom = Math.min(MAX_ZOOM, needed);
         drag.zoomCursorX = 0;
@@ -382,20 +385,34 @@ export function DotMatrixGlobe({
         } catch {
             // Storage refused (a private window): the choice lasts the visit.
         }
-        if (next === 5) zoomToLevel5();
+        if (next === 4 || next === 5 || next === 6) zoomToFineLevel(next);
         requestDraw();
-    }, [requestDraw, zoomToLevel5]);
+    }, [requestDraw, zoomToFineLevel]);
 
-    // Holding 17 km and switching between globe and flat map: the flat map is
-    // smaller at the same zoom, so it zooms in again to keep them showing.
+    // Holding a fine size and switching between globe and flat map: the flat
+    // map is smaller at the same zoom, so it zooms in again to keep them showing.
     useEffect(() => {
-        if (hexSize === 5) zoomToLevel5();
-    }, [hexSize, zoomToLevel5]);
+        if (hexSize === 4 || hexSize === 5 || hexSize === 6) zoomToFineLevel(hexSize);
+    }, [hexSize, zoomToFineLevel]);
 
     const visitedCityHexes = useMemo(
         () => buildCityHexSet(visitedCities, activeTier),
         [visitedCities, activeTier],
     );
+
+    const visitedCityNames = useMemo(() => {
+        const byHex = new Map<string, string[]>();
+        if (!visitedCities || !activeTier) return byHex;
+        for (const city of visitedCities) {
+            if (!city.name) continue;
+            const hex = resolveCityHex(city.lat, city.lon, activeTier, city.countryCode);
+            if (!hex) continue;
+            const list = byHex.get(hex);
+            if (list) list.push(city.name);
+            else byHex.set(hex, [city.name]);
+        }
+        return byHex;
+    }, [visitedCities, activeTier]);
 
     const hexSpacing = useMemo(() => (baseTier ? hexSpacingRad(baseTier.res) : 0), [baseTier]);
 
@@ -444,6 +461,7 @@ export function DotMatrixGlobe({
         level: HexDetailLookup;
         inputs: typeof detailInputs;
         cities: Set<string>;
+        cityNames: Map<string, string[]>;
         selected: string | null;
     }>());
     const detailInfo = useCallback((res: DetailRes) => {
@@ -452,9 +470,17 @@ export function DotMatrixGlobe({
         const cached = detailInfoRef.current.get(res);
         if (cached && cached.level === level && cached.inputs === detailInputs) return cached;
         const cities = new Set<string>();
+        const cityNames = new Map<string, string[]>();
         for (const city of detailInputs.visitedCities ?? []) {
             const key = resolveDetailCityHex(city.lat, city.lon, level, city.countryCode);
-            if (key) cities.add(key);
+            if (key) {
+                cities.add(key);
+                if (city.name) {
+                    const list = cityNames.get(key);
+                    if (list) list.push(city.name);
+                    else cityNames.set(key, [city.name]);
+                }
+            }
         }
         let selected: string | null = null;
         if (detailInputs.focusLat !== undefined && detailInputs.focusLon !== undefined) {
@@ -464,7 +490,7 @@ export function DotMatrixGlobe({
             const key = latLngToCell((lat * 180) / Math.PI, (lon * 180) / Math.PI, res);
             selected = codeOf(level, key) !== undefined ? key : null;
         }
-        const info = { level, inputs: detailInputs, cities, selected };
+        const info = { level, inputs: detailInputs, cities, cityNames, selected };
         detailInfoRef.current.set(res, info);
         return info;
     }, [levels, detailInputs]);
@@ -552,15 +578,17 @@ export function DotMatrixGlobe({
         anim.lastTime = time;
 
         const target = mode === '3d' ? 1 : 0;
-        const speed = 0.002; // transition speed
-        if (anim.progress < target) {
+        const reduced = reducedMotionRef.current;
+        const speed = 0.002; // A full globe-to-map morph takes 500 ms.
+        if (reduced) {
+            anim.progress = target;
+        } else if (anim.progress < target) {
             anim.progress = Math.min(target, anim.progress + dt * speed);
         } else if (anim.progress > target) {
             anim.progress = Math.max(target, anim.progress - dt * speed);
         }
 
         // With reduced motion every easing lands in one step.
-        const reduced = reducedMotionRef.current;
         const step = reduced ? 1 : easeOver(0.08, dt);
         const gl = glRef.current;
         let spinning = false;
@@ -802,10 +830,10 @@ export function DotMatrixGlobe({
             oceanCtx.setTransform(1, 0, 0, 1, 0, 0);
             oceanCtx.clearRect(0, 0, ocean.width, ocean.height);
             oceanCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            const sea = isDark ? DOT_PALETTE.dark : DOT_PALETTE.light;
+            const sea = surface ? { ocean: '#254e67', oceanEdge: '#17364d' } : isDark ? DOT_PALETTE.dark : DOT_PALETTE.light;
             // Only with WebGL, which lays the land under its hexes: canvas 2D
             // does not, and its translucent hexes would take the sea's colour.
-            if (gl && progress > 0) {
+            if ((gl || surface) && progress > 0) {
                 const shade = oceanCtx.createRadialGradient(W / 2 - R * 0.25, H / 2 - R * 0.25, R * 0.05, W / 2, H / 2, R);
                 shade.addColorStop(0, sea.ocean);
                 shade.addColorStop(1, sea.oceanEdge);
@@ -815,7 +843,7 @@ export function DotMatrixGlobe({
                 oceanCtx.arc(W / 2, H / 2, R, 0, Math.PI * 2);
                 oceanCtx.fill();
             }
-            if (gl && progress < 1) {
+            if ((gl || surface) && progress < 1) {
                 const outline = projectionOutline(projection);
                 oceanCtx.globalAlpha = 1 - progress;
                 oceanCtx.fillStyle = sea.ocean;
@@ -842,10 +870,7 @@ export function DotMatrixGlobe({
         const styles = stylesRef.current;
         if (stylesDirtyRef.current) {
             fillCellStyles(styles, baseTier, {
-                visited: visitedSet,
                 cityHexes: visitedCityHexes,
-                cities: viewMode === 'cities',
-                hovered: hoveredCountryRef.current,
                 hoveredKey: drag.hoveredDotKey,
                 selected: selectedKey,
                 focusedDot: focusedDotKey,
@@ -887,29 +912,26 @@ export function DotMatrixGlobe({
         }
 
         let levelsFading = false;
+        const frameSurface = surface && { ...surface, zoom: curZoom };
         if (gl) {
-            const hovered = hoveredCountryRef.current;
             const hoveredKey = drag.hoveredDotKey;
             const inputsByRes = new Map<DetailRes, StyleInputs>();
             const frame = levels.frame(view, dt, progress >= 0.5 ? R : W_zoom / (2 * Math.PI), {
                 version: styleVersionRef.current,
                 base: styles,
-                detail: (res, key, code) => {
+                detail: (res, key) => {
                     let inputs = inputsByRes.get(res);
                     if (!inputs) {
                         const info = detailInfo(res);
                         inputs = {
-                            visited: visitedSet,
                             cityHexes: info?.cities ?? NO_CELLS,
-                            cities: viewMode === 'cities',
-                            hovered,
                             hoveredKey,
                             selected: info?.selected ?? null,
                             focusedDot: null,
                         };
                         inputsByRes.set(res, inputs);
                     }
-                    return cellStyle(key, code, inputs);
+                    return cellStyle(key, inputs);
                 },
             }, reduced);
             levelsFading = frame.fading;
@@ -917,17 +939,22 @@ export function DotMatrixGlobe({
                 shownResRef.current = levels.shownRes;
                 setShownRes(levels.shownRes);
             }
-            gl.render(view, isDark ? STYLE_GL.dark : STYLE_GL.light, {
+            const glPalette = isDark ? STYLE_GL.dark : STYLE_GL.light;
+            gl.render(view, frameSurface ? { ...glPalette, surface: frameSurface } : glPalette, {
                 shade: isDark ? 1 : 0,
                 alpha: borderAlpha,
                 halfWidth: borderWidthCss / 2,
+                visited: visitedSet,
+                accent: surface ? [1, 87 / 255, 31 / 255] : isDark ? [196 / 255, 155 / 255, 80 / 255] : [150 / 255, 112 / 255, 45 / 255],
             }, frame.draws);
         } else {
             drawCellsCanvas(ctx, baseTier, styles, isDark ? STYLE_CSS.dark : STYLE_CSS.light, view, {
                 color: isDark ? '#ffffff' : '#000000',
                 alpha: borderAlpha,
-                width: borderWidthCss * dpr,
-            });
+                width: borderWidthCss,
+                visited: visitedSet,
+                accent: surface ? '#ff571f' : palette.visited,
+            }, frameSurface);
         }
 
         const traceHexIntoPath = (cx: number, cy: number, vertsX: number[], vertsY: number[], scale: number) => {
@@ -959,7 +986,7 @@ export function DotMatrixGlobe({
             // from the base cell, over the next patch.
             let cell = baseTier.cells[selectedIndex];
             let res = 3;
-            for (const r of gl ? ([5, 4] as DetailRes[]) : []) {
+            for (const r of gl ? ([6, 5, 4] as DetailRes[]) : []) {
                 const key = detailInfo(r)?.selected;
                 if (!key) continue;
                 const kept = selectedCellRef.current;
@@ -1075,7 +1102,7 @@ export function DotMatrixGlobe({
             );
             spinTimerRef.current = window.setTimeout(requestDraw, Math.max(0, wait) + 16);
         }
-    }, [baseTier, projection, levels, detailInfo, visitedSet, visitedCityHexes, viewMode, mode, stars, focusedDotKey, selectedKey, markerCell, requestDraw]);
+    }, [baseTier, projection, levels, detailInfo, visitedSet, visitedCityHexes, mode, stars, focusedDotKey, selectedKey, markerCell, requestDraw, surface]);
 
     drawRef.current = draw;
 
@@ -1232,52 +1259,71 @@ export function DotMatrixGlobe({
      */
     const emitHover = useCallback((code: string | null, dotKey: string | null) => {
         const name = code ? (countryNames[code] ?? code) : null;
-        // The city view names the hex itself: its largest town and its state,
-        // once that level's regions have loaded.
-        const place = viewMode === 'cities' && code && name && dotKey ? hexPlaceLabel(dotKey, name) : null;
-        const label = code && name ? (place ?? getRegionHoverLabel(code, dotKey, name)) : null;
-        const key = `${code ?? ''}|${label ?? ''}|${viewMode === 'cities' ? (dotKey ?? '') : ''}`;
+        const res = dotKey ? getResolution(dotKey) : 3;
+        const visitedNames = dotKey
+            ? (res === 3 ? visitedCityNames.get(dotKey) : detailInfo(res as DetailRes)?.cityNames.get(dotKey))
+            : undefined;
+        const label = code && name
+            ? (visitedNames?.length ? visitedNames.join(', ') : getRegionHoverLabel(code, dotKey, name))
+            : null;
+        const key = `${code ?? ''}|${label ?? ''}|${dotKey ?? ''}`;
         if (key === lastHoverRef.current) return;
         lastHoverRef.current = key;
-        onCountryHover?.(code, label, code ? `https://flagcdn.com/w80/${code.toLowerCase()}.png` : null, dotKey);
-    }, [countryNames, viewMode, onCountryHover]);
+        const flag = code ? `https://flagcdn.com/w80/${code.toLowerCase()}.png` : null;
+        onCountryHover?.(code, label, flag, dotKey);
+        if (!dotKey || !name || visitedNames?.length || !onCountryHover) return;
 
-    // The city view's region names for the level on screen, fetched when it is
-    // first needed; a hover waiting on them is named again once they land.
-    useEffect(() => {
-        if (viewMode !== 'cities') return;
-        let active = true;
-        loadRegionLevel(shownRes)
-            .then(() => {
-                if (!active) return;
-                lastHoverRef.current = '';
-                emitHover(hoveredCountryRef.current, dragRef.current.hoveredDotKey);
-            })
-            .catch(() => {
-                // Without them the hover names the country, as it always did.
-            });
-        return () => {
-            active = false;
+        const refine = (place: string | null) => {
+            if (lastHoverRef.current === key && place && place !== label) onCountryHover(code, place, flag, dotKey);
         };
-    }, [viewMode, shownRes, emitHover]);
+        const fallback = () => {
+            void loadRegionLevel(res).then(level => refine(hexPlaceLabel(dotKey, name, level))).catch(() => {});
+        };
+        if (placeWorkerRef.current === undefined) {
+            try {
+                placeWorkerRef.current = new Worker(new URL('./hexRegionWorker.ts', import.meta.url), { type: 'module' });
+            } catch {
+                placeWorkerRef.current = null;
+            }
+        }
+        const worker = placeWorkerRef.current;
+        if (worker) {
+            worker.onmessage = ({ data }: MessageEvent<PlaceResult>) => {
+                if (data.cell === dotKey && data.country === name) refine(data.label);
+            };
+            worker.onerror = () => {
+                worker.terminate();
+                placeWorkerRef.current = null;
+                if (lastHoverRef.current === key) fallback();
+            };
+            worker.postMessage({ cell: dotKey, country: name } satisfies PlaceRequest);
+        } else {
+            fallback();
+        }
+    }, [countryNames, detailInfo, onCountryHover, visitedCityNames]);
+
+    useEffect(() => {
+        if (hoveredCountryRef.current) emitHover(hoveredCountryRef.current, dragRef.current.hoveredDotKey);
+    }, [emitHover]);
+
+    useEffect(() => () => {
+        lastHoverRef.current = '';
+        placeWorkerRef.current?.terminate();
+        placeWorkerRef.current = undefined;
+    }, []);
 
     const setHover = useCallback((code: string | null, dotKey: string | null) => {
         const drag = dragRef.current;
-        if (code !== hoveredCountryRef.current) {
+        if (code !== hoveredCountryRef.current || dotKey !== drag.hoveredDotKey) {
             hoveredCountryRef.current = code;
             stylesDirtyRef.current = true;
-            requestDraw();
-        } else if (dotKey !== drag.hoveredDotKey) {
-            // Same country, another hex: the outline moves with the pointer,
-            // and on the city view, where the hex itself lights, so do the styles.
-            if (viewMode === 'cities') stylesDirtyRef.current = true;
             requestDraw();
         }
         drag.hoveredDotKey = dotKey;
         const canvas = canvasRef.current;
         if (canvas) canvas.style.cursor = drag.isDragging ? 'grabbing' : (code ? 'crosshair' : 'grab');
         emitHover(code, dotKey);
-    }, [emitHover, requestDraw, viewMode]);
+    }, [emitHover, requestDraw]);
 
     /** Select whatever is under a mouse click. */
     const selectAtPoint = useCallback((clientX: number, clientY: number) => {
@@ -1299,15 +1345,13 @@ export function DotMatrixGlobe({
             setHover(null, null);
             return;
         }
-        const alreadyPreviewed = viewMode === 'cities'
-            ? dotKey !== null && dotKey === dragRef.current.hoveredDotKey && code === hoveredCountryRef.current
-            : code === hoveredCountryRef.current;
+        const alreadyPreviewed = dotKey !== null && dotKey === dragRef.current.hoveredDotKey && code === hoveredCountryRef.current;
         if (alreadyPreviewed) {
             onCountryClick?.(code, countryNames[code] ?? code);
             return;
         }
         setHover(code, dotKey);
-    }, [countryAtPoint, countryNames, onCountryClick, setHover, viewMode]);
+    }, [countryAtPoint, countryNames, onCountryClick, setHover]);
 
     // Mouse events
     useEffect(() => {
@@ -1548,12 +1592,20 @@ export function DotMatrixGlobe({
     // The legend's swatches are the draw loop's own colours, so the two cannot drift.
     const legendPalette = resolvedTheme === 'dark' ? DOT_PALETTE.dark : DOT_PALETTE.light;
     // What the size control says: the size showing, and whether it is held.
-    // Held at 17 km with 45 km standing in, it says so rather than "45 km held".
+    // Held at a fine tier with a coarser tier standing in when zoomed out, it says so rather than claiming the coarser tier is held.
     const sizeReadout = hexSize === 'auto'
         ? `${HEX_KM[shownRes]} km`
-        : hexSize === 5 && shownRes !== 5
-            ? `${HEX_KM[5]} km · zoom in`
+        : shownRes !== hexSize
+            ? `${HEX_KM[hexSize]} km · zoom in`
             : `${HEX_KM[hexSize]} km · held`;
+
+    const legendPill = (
+        <div className="dot-matrix-legend dot-matrix-floating-pill" role="group" aria-label="Visited places">
+            <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: surface ? '#ff571f' : legendPalette.city }} />Cities{visitedCities?.length ? ` (${visitedCities.length})` : ''}</span>
+            <span><i aria-hidden="true" className="dot-matrix-legend-boundary" style={{ borderColor: surface ? '#ff571f' : legendPalette.visited }} />Countries</span>
+            <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer" className="dot-matrix-legend-link pointer-events-auto underline-offset-2 hover:underline">GeoNames</a>
+        </div>
+    );
 
     if (mapError) return <div role="status" className="flex min-h-64 items-center justify-center rounded-xl border border-border p-6 text-center text-sm text-muted-foreground">The map is unavailable. You can still explore countries and city journals from the list.</div>;
 
@@ -1587,34 +1639,54 @@ export function DotMatrixGlobe({
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
             />
+            {activeTier && (
+                <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-wrap items-start justify-between gap-1 sm:inset-x-4 sm:top-4">
+                    {legendPill}
+                    <div className="ml-auto flex max-w-full flex-col items-end gap-1">
+                    <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger className="dot-matrix-surface-control pointer-events-auto" aria-label={`Map appearance: ${MAP_SURFACES[look]}`}>
+                            <Layers aria-hidden="true" size={15} />
+                            {MAP_SURFACES[look]}
+                            <ChevronDown aria-hidden="true" size={14} />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-60 max-w-[calc(100vw-2rem)] motion-reduce:!animate-none">
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">Map appearance</DropdownMenuLabel>
+                            <DropdownMenuRadioGroup value={look} onValueChange={chooseLook}>
+                                {Object.entries(MAP_SURFACES).map(([value, label]) => (
+                                    <DropdownMenuRadioItem key={value} value={value} className="dot-matrix-surface-option gap-2.5">
+                                        <span aria-hidden="true" className={`dot-matrix-surface-chip dot-matrix-surface-chip--${value}`} />
+                                        {label}
+                                    </DropdownMenuRadioItem>
+                                ))}
+                            </DropdownMenuRadioGroup>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    {surface && (
+                        <a
+                            className="dot-matrix-surface-source pointer-events-auto"
+                            href={surface.look === 'satellite'
+                                ? 'https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/'
+                                : 'https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/topography-bathymetry-maps/'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            {surface.look === 'satellite' ? 'NASA Blue Marble' : 'NASA / GEBCO'}
+                        </a>
+                    )}
+                    {loadingSurface && <span role="status" className="dot-matrix-surface-note pointer-events-auto">Loading map colours…</span>}
+                    {(surfaceFailed || detailFailed) && (
+                        <div className="dot-matrix-surface-note pointer-events-auto">
+                            <span role="status">{surfaceFailed ? 'Showing Classic. Map colours unavailable.' : 'Showing regional colours. Local detail unavailable.'}</span>{' '}
+                            <button type="button" onClick={() => void retrySurface()} className="underline">Retry</button>
+                        </div>
+                    )}
+                    </div>
+                </div>
+            )}
             {/* One bar for both, so on a narrow map the toggle wraps onto a
                 line of its own instead of sliding over the label. */}
             {activeTier && (
                 <div className="absolute inset-x-3 bottom-3 sm:inset-x-4 sm:bottom-4 z-10 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
-                    {/* What gold means, so visited and not visited never rest on
-                        telling two shades apart unaided. */}
-                    <div className="dot-matrix-legend">
-                        {viewMode === 'cities' ? (
-                            <>
-                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: legendPalette.city, boxShadow: `0 0 0 2px ${legendPalette.visitedTint}` }} />City</span>
-                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: legendPalette.visitedTint }} />Country</span>
-                                {/* GeoNames' licence (CC BY 4.0) asks for this wherever its town names show. */}
-                                <a
-                                    href="https://www.geonames.org/"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="pointer-events-auto underline-offset-2 hover:underline"
-                                >
-                                    Places: GeoNames
-                                </a>
-                            </>
-                        ) : (
-                            <>
-                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: legendPalette.visited }} />Visited</span>
-                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: legendPalette.unvisited }} />Not yet</span>
-                            </>
-                        )}
-                    </div>
                     {/* Names the projection the flat map is in, and picks another.
                         Hidden over the globe, which is in no projection at all, so
                         the label never names something the map is not. Fades over
@@ -1622,7 +1694,7 @@ export function DotMatrixGlobe({
                         on a phone, where the map has no room to spare. */}
                     <DropdownMenu modal={false}>
                         <DropdownMenuTrigger
-                            className={`hidden sm:flex min-h-9 items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap transition-[opacity,background-color] duration-500 ${
+                            className={`dot-matrix-floating-pill hidden sm:flex min-h-9 items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap transition-[opacity,background-color] duration-500 ${
                                 mode === '3d' ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
                             }`}
                             title={projection.note}
@@ -1645,14 +1717,14 @@ export function DotMatrixGlobe({
                         </DropdownMenuContent>
                     </DropdownMenu>
                     {/* The map's own controls, kept together on the right. */}
-                    <div className="ml-auto flex items-center gap-2">
+                    <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
                     {/* Holds the globe still for two minutes: no idle spin, no easing
                         back level. Only over the globe, which is all that turns. */}
                     {mode === '3d' && (
                         <button
                             type="button"
                             onClick={toggleSpinLock}
-                            className={`flex h-9 w-9 items-center justify-center rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted pointer-events-auto ${
+                            className={`dot-matrix-floating-pill flex h-9 w-9 items-center justify-center rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted pointer-events-auto ${
                                 spinLocked ? 'text-foreground' : 'text-muted-foreground'
                             }`}
                             aria-label={spinLocked ? 'Globe held still. Let it turn again' : 'Hold the globe still for two minutes'}
@@ -1664,7 +1736,7 @@ export function DotMatrixGlobe({
                     )}
                     {/* Zoom, and the hex size: what is showing, and a size to hold.
                         Left out on a phone, where a pinch zooms and the bar has no room. */}
-                    <div className="hidden sm:flex min-h-9 items-center rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground pointer-events-auto">
+                    <div className="dot-matrix-floating-pill hidden sm:flex min-h-9 items-center rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground pointer-events-auto">
                         <button
                             type="button"
                             onClick={() => zoomBy(1 / ZOOM_BUTTON_STEP)}
@@ -1704,7 +1776,7 @@ export function DotMatrixGlobe({
                     </div>
                     <button
                         onClick={() => setMode(m => m === '2d' ? '3d' : '2d')}
-                        className="flex min-h-9 items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
+                        className="dot-matrix-floating-pill flex min-h-9 items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
                         aria-label="Toggle 3D View"
                         aria-pressed={mode === '3d'}
                     >

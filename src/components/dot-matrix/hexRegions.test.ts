@@ -36,7 +36,7 @@ describe('hex regions', () => {
 
     it('never names a state the same as its country, nor a town across a border', () => {
         expect(hexPlaceLabel(latLngToCell(-80, 0, 5), 'Antarctica', r5)).toBeNull();
-        for (const res of [3, 4, 5]) {
+        for (const res of [3, 4, 5, 6]) {
             const json = JSON.parse(readFileSync(resolve(__dirname, `../../../public/data/hex-regions-v2-r${res}.json`), 'utf8')) as {
                 regions: [string, string][];
                 towns: Record<string, [string, number]>;

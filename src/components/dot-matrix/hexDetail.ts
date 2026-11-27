@@ -13,38 +13,49 @@ import type { MapProjection } from '@/lib/mapProjections';
 import {
     HIDE_ACROSS_ANTIMERIDIAN,
     HIDE_BEYOND_CUT,
+    codeFromStyleIndex,
+    countryStyleIndex,
     degToUnit,
+    splitLongToHex,
     type HexCell,
     type HexLevelJson,
     type HexPatchData,
 } from './hexMapData';
 
 /**
- * The finer hex levels, 4 (~45 km apart) and 5 (~17 km), shown as the map
- * zooms in. Level 5 has over half a million land cells, far too many to
- * build or hold at once, so both are cut into patches -- every cell under
- * one resolution-1 cell, ~700 km across -- and only the patches on screen are
- * built. The files hold each country's cells compacted, so a country's
- * interior is a handful of coarse cells and the lookup below never needs the
- * whole level expanded.
+ * The finer hex levels, 4 (~45 km apart), 5 (~17 km) and 6 (~6 km), shown as
+ * the map zooms in. Finer levels have hundreds of thousands to millions of
+ * land cells, far too many to build or hold at once, so they are cut into
+ * patches (resolution-1 cells for levels 4 and 5, resolution-2 cells for
+ * level 6) and only the patches on screen are built.
  */
 
-export type DetailRes = 4 | 5;
+export type DetailRes = 4 | 5 | 6;
 
-/** Patches are the cells under one cell of this resolution. */
+/** Default patch resolution for levels 4 and 5; level 6 uses resolution-2 patches (~260 km). */
 export const PATCH_RES = 1;
+
+export function patchResFor(res: DetailRes): number {
+    return res >= 6 ? 2 : 1;
+}
 
 /** What the page needs of a level: which country any cell belongs to. */
 export interface HexDetailLookup {
     res: DetailRes;
     /** Compacted cell (any resolution up to `res`) to country. */
-    compact: Map<string, string>;
+    compact: Pick<ReadonlyMap<string, string>, 'get' | 'size'>;
 }
 
 /** What the worker needs as well: the level cut into patches. */
 export interface HexDetailLevel extends HexDetailLookup {
     /** Patch key (a resolution-1 cell) to the compacted cells inside it and their countries. */
     patches: Map<string, [string, string][]>;
+    /**
+     * Pre-baked directed border edges per patch from `hex-map-v2-r{4,5}.bin`,
+     * 4 uint32 words per edge: `[edgeLo, edgeHi, cellIdx | (localNbIdx << 16), countryA | (countryB << 16)]`.
+     * When present, `buildPatch` skips `gridDisk` and `codeOf` completely.
+     */
+    prebakedEdges?: Map<string, Uint32Array>;
 }
 
 export function buildDetailLookup(json: HexLevelJson): HexDetailLookup {
@@ -53,6 +64,103 @@ export function buildDetailLookup(json: HexLevelJson): HexDetailLookup {
         for (const cell of json.countries[code]) compact.set(cell, code);
     }
     return { res: json.res as DetailRes, compact };
+}
+
+/** Index patch headers immediately and decode only the countries queried by a city or pointer. */
+export function decodeDetailLookupBin(buffer: ArrayBuffer): HexDetailLookup {
+    const header = new Uint32Array(buffer, 0, 5);
+    if (header[0] !== 0x44584548) throw new Error('Invalid hex detail binary header');
+    const res = header[1] as DetailRes;
+    const patchCount = header[2];
+    const compactCount = header[3];
+
+    const offPatchH3 = 20;
+    const offPatchStart = offPatchH3 + patchCount * 8;
+    const offEdgeStart = offPatchStart + (patchCount + 1) * 4;
+    const offCompactH3 = offEdgeStart + (patchCount + 1) * 4;
+    const offCompactCountry = offCompactH3 + compactCount * 8;
+
+    const compactH3 = new Uint32Array(buffer, offCompactH3, compactCount * 2);
+    const compactCountry = new Uint16Array(buffer, offCompactCountry, compactCount);
+    const patchH3 = new Uint32Array(buffer, offPatchH3, patchCount * 2);
+    const patchStart = new Uint32Array(buffer, offPatchStart, patchCount + 1);
+    const patchIndices = new Map<string, number>();
+    for (let p = 0; p < patchCount; p++) {
+        patchIndices.set(splitLongToHex(patchH3[p * 2], patchH3[p * 2 + 1]), p);
+    }
+    const patchRes = patchResFor(res);
+    const decoded = new Map<string, Map<string, string>>();
+    return {
+        res,
+        compact: {
+            size: compactCount,
+            get(cell) {
+                const r = getResolution(cell);
+                // The binary has already expanded coarser entries to the patch level.
+                if (r < patchRes) return undefined;
+                const home = r === patchRes ? cell : cellToParent(cell, patchRes);
+                const p = patchIndices.get(home);
+                if (p === undefined) return undefined;
+                let countries = decoded.get(home);
+                if (!countries) {
+                    countries = new Map();
+                    for (let i = patchStart[p]; i < patchStart[p + 1]; i++) {
+                        const code = codeFromStyleIndex(compactCountry[i]);
+                        if (code) countries.set(splitLongToHex(compactH3[i * 2], compactH3[i * 2 + 1]), code);
+                    }
+                    decoded.set(home, countries);
+                }
+                return countries.get(cell);
+            },
+        },
+    };
+}
+
+/** Decodes a full `hex-map-v2-r{4,5}.bin` buffer with pre-grouped patches and pre-baked border edges. */
+export function decodeDetailLevelBin(buffer: ArrayBuffer): HexDetailLevel {
+    const header = new Uint32Array(buffer, 0, 5);
+    if (header[0] !== 0x44584548) throw new Error('Invalid hex detail binary header');
+    const res = header[1] as DetailRes;
+    const patchCount = header[2];
+    const compactCount = header[3];
+    const edgeCount = header[4];
+
+    const offPatchH3 = 20;
+    const offPatchStart = offPatchH3 + patchCount * 8;
+    const offEdgeStart = offPatchStart + (patchCount + 1) * 4;
+    const offCompactH3 = offEdgeStart + (patchCount + 1) * 4;
+    const offCompactCountry = offCompactH3 + compactCount * 8;
+    const offEdges = (offCompactCountry + compactCount * 2 + 3) & ~3;
+
+    const patchH3 = new Uint32Array(buffer, offPatchH3, patchCount * 2);
+    const patchStart = new Uint32Array(buffer, offPatchStart, patchCount + 1);
+    const edgeStart = new Uint32Array(buffer, offEdgeStart, patchCount + 1);
+    const compactH3 = new Uint32Array(buffer, offCompactH3, compactCount * 2);
+    const compactCountry = new Uint16Array(buffer, offCompactCountry, compactCount);
+    const edges = new Uint32Array(buffer, offEdges, edgeCount * 4);
+
+    const compact = new Map<string, string>();
+    const patches = new Map<string, [string, string][]>();
+    const prebakedEdges = new Map<string, Uint32Array>();
+
+    for (let p = 0; p < patchCount; p++) {
+        const pKey = splitLongToHex(patchH3[p * 2], patchH3[p * 2 + 1]);
+        const cStart = patchStart[p];
+        const cEnd = patchStart[p + 1];
+        const list: [string, string][] = new Array(cEnd - cStart);
+        for (let i = cStart; i < cEnd; i++) {
+            const cell = splitLongToHex(compactH3[i * 2], compactH3[i * 2 + 1]);
+            const code = codeFromStyleIndex(compactCountry[i]) ?? 'ZZ';
+            compact.set(cell, code);
+            list[i - cStart] = [cell, code];
+        }
+        patches.set(pKey, list);
+        const eStart = edgeStart[p];
+        const eEnd = edgeStart[p + 1];
+        prebakedEdges.set(pKey, edges.subarray(eStart * 4, eEnd * 4));
+    }
+
+    return { res, compact, patches, prebakedEdges };
 }
 
 export interface HexPatch {
@@ -67,6 +175,7 @@ export interface HexPatch {
 
 export function buildDetailLevel(json: HexLevelJson): HexDetailLevel {
     const res = json.res as DetailRes;
+    const patchRes = patchResFor(res);
     const compact = new Map<string, string>();
     const patches = new Map<string, [string, string][]>();
     const add = (key: string, cell: string, code: string) => {
@@ -81,15 +190,25 @@ export function buildDetailLevel(json: HexLevelJson): HexDetailLevel {
         for (const cell of json.countries[code]) {
             compact.set(cell, code);
             const r = getResolution(cell);
-            if (r < PATCH_RES) {
+            if (r < patchRes) {
                 // Coarser than a patch: each child is a whole patch of this country.
-                for (const child of cellToChildren(cell, PATCH_RES)) add(child, child, code);
+                for (const child of cellToChildren(cell, patchRes)) add(child, child, code);
             } else {
-                add(r === PATCH_RES ? cell : cellToParent(cell, PATCH_RES), cell, code);
+                add(r === patchRes ? cell : cellToParent(cell, patchRes), cell, code);
             }
         }
     }
     return { res, compact, patches };
+}
+
+async function fetchLevelBin(res: DetailRes): Promise<ArrayBuffer | null> {
+    try {
+        const response = await fetch(`/data/hex-map-v2-r${res}.bin`);
+        if (response.ok) return await response.arrayBuffer();
+    } catch {
+        // Fall back to JSON.
+    }
+    return null;
 }
 
 async function fetchLevel(res: DetailRes): Promise<HexLevelJson> {
@@ -100,15 +219,22 @@ async function fetchLevel(res: DetailRes): Promise<HexLevelJson> {
     return json;
 }
 
-function cached<T>(cache: Map<DetailRes, Promise<T>>, res: DetailRes, build: (json: HexLevelJson) => T): Promise<T> {
+function cached<T>(
+    cache: Map<DetailRes, Promise<T>>,
+    res: DetailRes,
+    fromBin: (buf: ArrayBuffer) => T,
+    fromJson: (json: HexLevelJson) => T,
+): Promise<T> {
     let promise = cache.get(res);
     if (!promise) {
-        promise = fetchLevel(res)
-            .then(build)
-            .catch((error) => {
-                cache.delete(res);
-                throw error;
-            });
+        promise = (async () => {
+            const bin = await fetchLevelBin(res);
+            if (bin) return fromBin(bin);
+            return fromJson(await fetchLevel(res));
+        })().catch((error) => {
+            cache.delete(res);
+            throw error;
+        });
         cache.set(res, promise);
     }
     return promise;
@@ -119,12 +245,12 @@ const lookupPromises = new Map<DetailRes, Promise<HexDetailLookup>>();
 
 /** The whole level, patches and all: for the worker. */
 export function loadDetailLevel(res: DetailRes): Promise<HexDetailLevel> {
-    return cached(levelPromises, res, buildDetailLevel);
+    return cached(levelPromises, res, decodeDetailLevelBin, buildDetailLevel);
 }
 
 /** Only the country lookup: for the page, where cutting the level into patches would stall a frame. */
 export function loadDetailLookup(res: DetailRes): Promise<HexDetailLookup> {
-    return cached(lookupPromises, res, buildDetailLookup);
+    return cached(lookupPromises, res, decodeDetailLookupBin, buildDetailLookup);
 }
 
 /** The country a cell of this level belongs to, or undefined at sea. */
@@ -181,9 +307,6 @@ export function buildPatch(level: HexDetailLevel, key: string, projection: MapPr
         }
     }
     const count = h3.length;
-    const indexByH3 = new Map<string, number>();
-    h3.forEach((cell, i) => indexByH3.set(cell, i));
-
     const boundaries = h3.map((cell) => cellToBoundary(cell));
     let corners = 0;
     for (const b of boundaries) corners += b.length;
@@ -221,28 +344,55 @@ export function buildPatch(level: HexDetailLevel, key: string, projection: MapPr
     const b3: number[] = [];
     const b2: number[] = [];
     const bHide: number[] = [];
-    for (let i = 0; i < count; i++) {
-        const cell = h3[i];
-        const code = codes[i];
-        for (const nb of gridDisk(cell, 1)) {
-            if (nb === cell) continue;
-            const local = indexByH3.get(nb);
-            const nbCode = local !== undefined ? codes[local] : codeOf(level, nb);
-            if (nbCode === code) continue;
-            // Two cells of this patch share the edge: draw it once.
-            if (local !== undefined && nb < cell) continue;
-            try {
-                const pts = directedEdgeToBoundary(cellsToDirectedEdge(cell, nb));
-                if (pts.length < 2) continue;
-                const a = degToUnit(pts[0][0], pts[0][1]);
-                const b = degToUnit(pts[pts.length - 1][0], pts[pts.length - 1][1]);
-                const fa = projection.project(a.lon, a.lat);
-                const fb = projection.project(b.lon, b.lat);
-                b3.push(a.unit.ux, a.unit.uy, a.unit.uz, b.unit.ux, b.unit.uy, b.unit.uz);
-                b2.push(fa.nx, fa.ny, fb.nx, fb.ny);
-                bHide.push(Math.max(hide[i], local !== undefined ? hide[local] : 0, hideFor(projection, pts)));
-            } catch {
-                // Not neighbours after all (a pentagon's missing edge).
+    const borderCountries: number[] = [];
+    const prebaked = level.prebakedEdges?.get(key);
+    if (prebaked) {
+        for (let e = 0; e < prebaked.length; e += 4) {
+            const edge = splitLongToHex(prebaked[e], prebaked[e + 1]);
+            const pts = directedEdgeToBoundary(edge);
+            if (pts.length < 2) continue;
+            const cellsWord = prebaked[e + 2];
+            const cellIdx = cellsWord & 0xffff;
+            const localNb = (cellsWord >>> 16) & 0xffff;
+            const countriesWord = prebaked[e + 3];
+            const c1 = countriesWord & 0xffff;
+            const c2 = (countriesWord >>> 16) & 0xffff;
+            const a = degToUnit(pts[0][0], pts[0][1]);
+            const b = degToUnit(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+            const fa = projection.project(a.lon, a.lat);
+            const fb = projection.project(b.lon, b.lat);
+            b3.push(a.unit.ux, a.unit.uy, a.unit.uz, b.unit.ux, b.unit.uy, b.unit.uz);
+            b2.push(fa.nx, fa.ny, fb.nx, fb.ny);
+            borderCountries.push(c1, c2);
+            bHide.push(Math.max(hide[cellIdx] ?? 0, localNb !== 0xffff ? (hide[localNb] ?? 0) : 0, hideFor(projection, pts)));
+        }
+    } else {
+        const indexByH3 = new Map<string, number>();
+        h3.forEach((cell, i) => indexByH3.set(cell, i));
+        for (let i = 0; i < count; i++) {
+            const cell = h3[i];
+            const code = codes[i];
+            for (const nb of gridDisk(cell, 1)) {
+                if (nb === cell) continue;
+                const local = indexByH3.get(nb);
+                const nbCode = local !== undefined ? codes[local] : codeOf(level, nb);
+                if (nbCode === code) continue;
+                // Two cells of this patch share the edge: draw it once.
+                if (local !== undefined && nb < cell) continue;
+                try {
+                    const pts = directedEdgeToBoundary(cellsToDirectedEdge(cell, nb));
+                    if (pts.length < 2) continue;
+                    const a = degToUnit(pts[0][0], pts[0][1]);
+                    const b = degToUnit(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+                    const fa = projection.project(a.lon, a.lat);
+                    const fb = projection.project(b.lon, b.lat);
+                    b3.push(a.unit.ux, a.unit.uy, a.unit.uz, b.unit.ux, b.unit.uy, b.unit.uz);
+                    b2.push(fa.nx, fa.ny, fb.nx, fb.ny);
+                    borderCountries.push(countryStyleIndex(code), countryStyleIndex(nbCode));
+                    bHide.push(Math.max(hide[i], local !== undefined ? hide[local] : 0, hideFor(projection, pts)));
+                } catch {
+                    // Not neighbours after all (a pentagon's missing edge).
+                }
             }
         }
     }
@@ -265,6 +415,7 @@ export function buildPatch(level: HexDetailLevel, key: string, projection: MapPr
             border3: new Float32Array(b3),
             border2: new Float32Array(b2),
             borderHide: new Float32Array(bHide),
+            borderCountries: new Uint16Array(borderCountries),
         },
     };
 }

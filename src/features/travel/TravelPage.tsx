@@ -3,7 +3,6 @@ import { buildMemberships, countMembers, assertTotals, countPlaces } from '@/fea
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixGlobe } from '@/components/dot-matrix/DotMatrixGlobe';
 import { AnimatedNumber } from '@/components/ui/animated-number';
-import { getResolution, isValidCell, latLngToCell } from 'h3-js';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVisitedCountries } from '@/features/travel/useVisitedCountries';
 import { useVisitedCities } from '@/features/travel/useVisitedCities';
@@ -15,7 +14,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { FlagStrip } from '@/components/shared/FlagStrip';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
-import { Globe, MapPin, Search, X, Loader2, ChevronDown } from 'lucide-react';
+import { MapPin, Search, X, Loader2, ChevronDown } from 'lucide-react';
 import { CountryCityPanel, type City } from '@/features/travel/CountryCityPanel';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -40,7 +39,6 @@ interface RestCountry {
 // and trigger a second full render after the first paint.
 let cachedAllCountries: { code: string; name: string }[] | null = null;
 
-type ViewMode = 'countries' | 'cities';
 
 /** The query responsive.css and Index.css use for the side-by-side travel layout. */
 const SIDE_BY_SIDE = '(min-width: 1024px) and (min-height: 600px)';
@@ -104,9 +102,6 @@ const TravelContent = () => {
         const point = cityKeyPoint(selectedCity.city_key);
         return point && { ...point, countryCode: selectedCity.country_code };
     }, [selectedCity, visitedCities]);
-
-    // View mode toggle
-    const [viewMode, setViewMode] = useState<ViewMode>('countries');
 
     // Stacked (a phone, or a short window) the list follows the map down the
     // page, and every country at once was several screens of scrolling. There
@@ -172,14 +167,7 @@ const TravelContent = () => {
         return largest && { lat: largest.lat, lon: largest.lon };
     }, [selectedCountry, getCitiesForCountry]);
 
-    // Pre-load city map data when switching to cities mode
-    useEffect(() => {
-        if (viewMode === 'cities' && !cityMapLoaded) {
-            loadCityMap();
-        }
-    }, [viewMode, cityMapLoaded, loadCityMap]);
-
-    // Also load city map when a country is selected for drill-down
+    // City markers come from visited rows. Load the place catalogue for country drill-down.
     useEffect(() => {
         if (selectedCountry && !cityMapLoaded) {
             loadCityMap();
@@ -297,33 +285,15 @@ const TravelContent = () => {
         setHovered(code && name && flagUrl ? { code, name, flagUrl, dotKey } : null);
     }, []);
 
-    const hoveredCities = useMemo(() => {
-        if (!hovered?.dotKey || viewMode !== 'cities') return [];
-        const key = hovered.dotKey;
-        return visitedCities.filter(c =>
-            `${c.dot_col},${c.dot_row}` === key ||
-            // The map hovers at whichever hex level it is showing.
-            (isValidCell(key) && latLngToCell(c.lat, c.lon, getResolution(key)) === key)
-        );
-    }, [hovered?.dotKey, visitedCities, viewMode]);
-
     const visitedCitiesForMap = useMemo(
-        () => visitedCities.map(c => ({ lat: c.lat, lon: c.lon, countryCode: c.country_code })),
+        () => visitedCities.map(c => ({ lat: c.lat, lon: c.lon, countryCode: c.country_code, name: c.city_name })),
         [visitedCities],
     );
 
     const tooltipText = useMemo(() => {
         if (!hovered) return selectedCountry ? `${selectedCountry.name.toUpperCase()} · SELECTED` : canHover ? 'HOVER TO EXPLORE' : 'TAP TO EXPLORE';
-        if (viewMode === 'cities' && hoveredCities.length > 0) {
-            return hoveredCities.map(c => c.city_name).join(', ').toUpperCase();
-        }
-        // The city view names the hex's town or state, which being in a
-        // visited country does not make visited; the tint shows the country.
-        if (viewMode === 'cities') return hovered.name.toUpperCase();
-        return visitedCodes.includes(hovered.code)
-            ? `${hovered.name.toUpperCase()} - VISITED`
-            : hovered.name.toUpperCase();
-    }, [hovered, viewMode, hoveredCities, visitedCodes, canHover, selectedCountry]);
+        return hovered.name.toUpperCase();
+    }, [hovered, canHover, selectedCountry]);
 
     // Group SOVEREIGN visited countries by continent
     const byContinent = useMemo(() => {
@@ -449,9 +419,6 @@ const TravelContent = () => {
         });
     }, [selectedItemId, selectedItem, journal, isAdmin, airports, setDockedDetail]);
     useEffect(() => () => setDockedDetail(null), [setDockedDetail]);
-
-    // Total visited cities count
-    const totalCitiesVisited = visitedCities.length;
 
     const renderCountryRow = (country: (typeof visitedCountries)[number], showUn: boolean) => {
         const flag = country.flag_url || `https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png`;
@@ -625,24 +592,6 @@ const TravelContent = () => {
                                     </div>
                                 )}
 
-                                {/* View mode toggle — Countries / Cities */}
-                                <div className="travel-view-toggle">
-                                    <button
-                                        className={`travel-view-toggle-btn${viewMode === 'countries' ? ' travel-view-toggle-btn--active' : ''}`}
-                                        onClick={() => { setViewMode('countries'); setSelectedCountry(null); }}
-                                    >
-                                        <Globe className="w-3.5 h-3.5" />
-                                        Countries
-                                    </button>
-                                    <button
-                                        className={`travel-view-toggle-btn${viewMode === 'cities' ? ' travel-view-toggle-btn--active' : ''}`}
-                                        onClick={() => setViewMode('cities')}
-                                    >
-                                        <MapPin className="w-3.5 h-3.5" />
-                                        Cities{totalCitiesVisited > 0 ? <> (<AnimatedNumber value={totalCitiesVisited} />)</> : ''}
-                                    </button>
-                                </div>
-
                                 {/* Country list card — sectioned by continent  OR  City drill-down panel */}
                                 <aside className="travel-sidebar">
                                     {selectedCountry ? (
@@ -761,11 +710,12 @@ const TravelContent = () => {
                             {/* RIGHT — centred tooltip above map */}
                             <div className="travel-map-col">
 
-                                {/* Dot-matrix tooltip */}
+                                {/* Dot-matrix tooltip — fixed single-line height so hover never shifts the map */}
                                 <div className="travel-dot-tooltip">
                                     <DotMatrixText
                                         text={tooltipText}
                                         size="sm"
+                                        wrap={false}
                                         className={hovered
                                             ? (visitedCodes.includes(hovered.code) ? 'text-amber-500' : 'text-muted-foreground')
                                             : 'text-muted-foreground'
@@ -799,8 +749,7 @@ const TravelContent = () => {
                                 {/* Map */}
                                 <DotMatrixGlobe
                                     visitedCountryCodes={visitedCodes}
-                                    visitedCities={viewMode === 'cities' ? visitedCitiesForMap : undefined}
-                                    viewMode={viewMode}
+                                    visitedCities={visitedCitiesForMap}
                                     focusedCountryCode={selectedCountry?.code}
                                     focusTrigger={focusTrigger}
                                     focusedCity={focusedCity}

@@ -294,6 +294,8 @@ uppercase-label question that `REHAUL_PLAN.md` carried until 11 September
 | Dialog | Frosted container over a dimmed, blurred backdrop | `DialogContent`, `glass-dialog` |
 | Native select | A plain `<select>` at 44px, its browser arrow hidden and a `ChevronDown` drawn in the muted foreground colour; no fixed-colour arrow images | `NativeSelect` |
 | Travel | Map framed as the main visual, separate readable list | `travel-map-col`, `travel-sidebar` |
+| Travel map marks | Outline visited countries along their borders and coastlines. Reserve marked hexes for cities so country interiors retain their terrain in every appearance. | `DotMatrixGlobe` |
+| Travel map appearance | Match the projection and hex-size pickers with a pill trigger and the shared radio menu. Each look has a labelled hex swatch so its colours are visible before selection. | `DotMatrixGlobe`, `DropdownMenuRadioGroup` |
 | Gradient metric tile | Soft two-stop radial mesh, dot-grid halftone fade, oversized light `NumberFlow` figure | `.gradient-metric-tile` in `src/theme/motion.css`, used by `SurfaceHero` and `FactCards` |
 | Instrument panel *(planned)* | Dark card, hairline rule, corner brackets, tabular readout rail | Not built — extend `ambient-card`, do not fork `Card` |
 | Readout rail *(planned)* | Label above figure, tabular numerals, unit always shown | Not built — compose from `MetricProgress` and existing figure styles |

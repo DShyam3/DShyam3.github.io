@@ -1,9 +1,9 @@
-import { cellToParent, gridDisk, latLngToCell } from 'h3-js';
-import type { MapProjection } from '@/lib/mapProjections';
-import { mapPointAt, type GlobeView } from './globeProjection';
-import { PATCH_RES, loadDetailLookup, type DetailRes, type HexDetailLookup } from './hexDetail';
+import { cellToChildren, cellToLatLng, cellToParent, getResolution, latLngToCell } from 'h3-js';
+import type { FlatPoint, MapProjection } from '@/lib/mapProjections';
+import { projectToGlobe, type GlobeView } from './globeProjection';
+import { PATCH_RES, loadDetailLookup, patchResFor, type DetailRes, type HexDetailLookup } from './hexDetail';
 import type { HexGlDraw, HexGlRenderer } from './hexGlRenderer';
-import { hexSpacingRad, tierPatchData, type HexTierData } from './hexMapData';
+import { degToUnit, hexSpacingRad, tierPatchData, type HexTierData, type UnitVector } from './hexMapData';
 import type { LevelPrepare, LevelReady, PatchBuilt, PatchFailed, PatchForget, PatchWant } from './hexPatchWorker';
 
 /**
@@ -22,22 +22,26 @@ import type { LevelPrepare, LevelReady, PatchBuilt, PatchFailed, PatchForget, Pa
  * is drawn as one piece, as it always was: two draw calls, not hundreds.
  */
 
-export type ShownRes = 3 | 4 | 5;
+export type ShownRes = 3 | 4 | 5 | 6;
 
 /** A hex size held whatever the zoom, or null to follow the zoom. */
 export type HexSizeLock = ShownRes | null;
 
 /** About how far apart each level's cell centres are, for the size control. */
-export const HEX_KM: Record<ShownRes, number> = { 3: 120, 4: 45, 5: 17 };
+export const HEX_KM: Record<ShownRes, number> = { 3: 120, 4: 45, 5: 17, 6: 6 };
 
 /**
- * Held at 17 km, level 5 still waits until its cells are this many pixels
- * across: over the whole world it is ~570,000 cells, each under a pixel, and
- * the 45 km level stands in until then. It goes again under `LOCKED_LEVEL5_HIDE_PX`,
- * so a zoom resting on the line does not flicker.
+ * Held at 45 km, 17 km or 6 km, the finer levels still wait until their cells
+ * are this many pixels across: over the whole world level 4 is ~82,000 cells,
+ * level 5 is ~570,000 and level 6 is ~3.9 million, so the coarser level stands
+ * in when zoomed out.
  */
+export const LOCKED_LEVEL4_MIN_PX = 4.5;
+const LOCKED_LEVEL4_HIDE_PX = 3.8;
 export const LOCKED_LEVEL5_MIN_PX = 5;
 const LOCKED_LEVEL5_HIDE_PX = 4;
+export const LOCKED_LEVEL6_MIN_PX = 4.5;
+const LOCKED_LEVEL6_HIDE_PX = 3.6;
 
 /** A finer level comes in once its cells are this many pixels across... */
 const SHOW_PX = 8;
@@ -45,14 +49,16 @@ const SHOW_PX = 8;
 const HIDE_PX = 6.5;
 /** Its file is fetched once its cells reach this, a little before it is needed. */
 const PREFETCH_PX = 4;
-/** The share of a fade done per 60 Hz frame. */
-const FADE_PER_FRAME = 0.16;
+/** Duration of the synchronized fluid resolution transition, in milliseconds. */
+const TRANSITION_MS = 220;
 /** At most this many built patches of a level are kept, GPU and all; the longest off screen go first. */
-const CAP: Record<DetailRes, number> = { 4: 480, 5: 90 };
-/** How often the set of patches on screen is worked out again while the view moves. */
-const VISIBLE_EVERY_MS = 120;
+const CAP: Record<DetailRes, number> = { 4: 480, 5: 120, 6: 140 };
 
-const PATCH_SPACING = hexSpacingRad(PATCH_RES);
+interface PatchAnchor {
+    key: string;
+    unit: UnitVector;
+    flat: FlatPoint;
+}
 
 export interface LevelStyles {
     /** Changes whenever any style input does. */
@@ -60,26 +66,18 @@ export interface LevelStyles {
     /** The base level's style bytes, by `HexCell.index`. */
     base: Uint8Array;
     /** A detail cell's style byte. */
-    detail(res: DetailRes, h3: string, code: string): number;
+    detail(res: DetailRes, h3: string): number;
 }
 
 /** A built patch. Its geometry lives on the GPU only; this keeps what restyling needs. */
 interface StoredPatch {
     res: DetailRes;
     h3: string[];
-    codes: string[];
     lastSeen: number;
 }
 
 interface PatchState {
     shown: ShownRes;
-    alpha: number;
-    prev: ShownRes | null;
-    prevAlpha: number;
-}
-
-function easeOver(perFrame: number, dt: number): number {
-    return 1 - Math.pow(1 - perFrame, dt / (1000 / 60));
 }
 
 export class HexLevels {
@@ -101,11 +99,16 @@ export class HexLevels {
     private store = new Map<string, StoredPatch>();
     private states = new Map<string, PatchState>();
     private styled = new Map<string, number>();
+    private anchors1 = new Map<string, PatchAnchor>();
+    private anchors2 = new Map<string, PatchAnchor>();
     private visible: string[] = [];
-    private visibleAt = -Infinity;
+    private visiblePatchRes = PATCH_RES;
     private visibleView = '';
     private wantSent = '';
     private current: ShownRes = 3;
+    private displayed: ShownRes = 3;
+    private prevDisplayed: ShownRes | null = null;
+    private transition = 1;
     private lock: HexSizeLock = null;
 
     setOnChange(onChange: () => void) {
@@ -126,7 +129,12 @@ export class HexLevels {
         this.projection = projection;
         this.states.clear();
         this.styled.clear();
-        this.visibleAt = -Infinity;
+        this.anchors1.clear();
+        this.anchors2.clear();
+        this.displayed = 3;
+        this.prevDisplayed = null;
+        this.transition = 1;
+        this.visibleView = '';
         const grouped = groupBase(tier);
         this.baseCells = grouped.cells;
         this.baseBorders = grouped.borders;
@@ -148,9 +156,9 @@ export class HexLevels {
         this.lock = lock;
     }
 
-    /** The level the last frame asked for. */
+    /** The level the last frame showed. */
     get shownRes(): ShownRes {
-        return this.current;
+        return this.displayed;
     }
 
     level(res: DetailRes): HexDetailLookup | undefined {
@@ -159,11 +167,10 @@ export class HexLevels {
 
     /** The level shown at a place, in radians: where a pointer there picks from. */
     shownAt(lat: number, lon: number): ShownRes {
-        if (this.states.size === 0) return 3;
-        const key = latLngToCell((lat * 180) / Math.PI, (lon * 180) / Math.PI, PATCH_RES);
-        const state = this.states.get(key);
-        if (!state) return 3;
-        return state.alpha >= 0.5 || state.prev === null ? state.shown : state.prev;
+        if (this.displayed === 3 || this.states.size === 0) return 3;
+        const pRes = patchResFor(this.displayed as DetailRes);
+        const key = latLngToCell((lat * 180) / Math.PI, (lon * 180) / Math.PI, pRes);
+        return this.states.get(key)?.shown ?? this.displayed;
     }
 
     private ensureLevel(res: DetailRes) {
@@ -184,7 +191,10 @@ export class HexLevels {
                 this.styled.clear();
                 this.onChange();
             })
-            .catch(() => this.failed.add(res))
+            .catch(() => {
+                this.failed.add(res);
+                this.onChange();
+            })
             .finally(() => this.loading.delete(res));
     }
 
@@ -196,6 +206,7 @@ export class HexLevels {
                 const message = event.data;
                 if (message.type === 'failed') {
                     this.failed.add(message.res);
+                    this.onChange();
                     return;
                 }
                 if (message.type === 'level') {
@@ -206,11 +217,10 @@ export class HexLevels {
                 if (message.projection !== this.projection?.id) return;
                 const key = `${message.res}:${message.key}`;
                 if (!this.gl) return;
-                this.gl.addPatch(key, message.data);
+                this.gl.addPatch(key, message.data, message.res);
                 this.store.set(key, {
                     res: message.res,
                     h3: message.h3,
-                    codes: message.codes,
                     lastSeen: performance.now(),
                 });
                 this.styled.delete(key);
@@ -220,6 +230,9 @@ export class HexLevels {
             worker.onerror = () => {
                 this.worker?.terminate();
                 this.worker = null;
+                this.wantSent = '';
+                this.prepared.clear();
+                this.onChange();
             };
             this.worker = worker;
         } catch {
@@ -233,69 +246,126 @@ export class HexLevels {
         const px = (res: ShownRes) => hexSpacingRad(res) * pxPerRad;
         let res: ShownRes = 3;
         if (this.lock !== null) {
+            const showFour = px(4) >= (this.current >= 4 ? LOCKED_LEVEL4_HIDE_PX : LOCKED_LEVEL4_MIN_PX);
             const showFive = px(5) >= (this.current >= 5 ? LOCKED_LEVEL5_HIDE_PX : LOCKED_LEVEL5_MIN_PX);
-            res = this.lock === 5 && !showFive ? 4 : this.lock;
+            const showSix = px(6) >= (this.current >= 6 ? LOCKED_LEVEL6_HIDE_PX : LOCKED_LEVEL6_MIN_PX);
+            if (this.lock === 6) res = showSix ? 6 : showFive ? 5 : showFour ? 4 : 3;
+            else if (this.lock === 5) res = showFive ? 5 : showFour ? 4 : 3;
+            else if (this.lock === 4) res = showFour ? 4 : 3;
+            else res = 3;
         } else {
             if (px(4) >= (this.current >= 4 ? HIDE_PX : SHOW_PX)) res = 4;
             if (px(5) >= (this.current >= 5 ? HIDE_PX : SHOW_PX)) res = 5;
+            if (px(6) >= (this.current >= 6 ? HIDE_PX : SHOW_PX)) res = 6;
         }
-        // Never fetched past a held size: holding 45 km never loads level 5.
-        const ceiling = this.lock ?? 5;
+        // Never fetched past a held size: holding 45 km never loads level 5 or 6.
+        const ceiling = this.lock ?? 6;
         if (ceiling >= 4 && (res >= 4 || px(4) >= PREFETCH_PX)) this.ensureLevel(4);
         if (ceiling >= 5 && (res >= 5 || px(5) >= PREFETCH_PX)) this.ensureLevel(5);
+        if (ceiling >= 6 && (res >= 6 || px(6) >= PREFETCH_PX)) this.ensureLevel(6);
         // Without a worker, or with a level that would not load, stay coarser.
         while (res > 3 && (this.failed.has(res as DetailRes) || this.ensureWorker() === null)) res = (res - 1) as ShownRes;
         this.current = res;
         return res;
     }
 
-    private hasLand(key: string): boolean {
+    private hasLand(key: string, patchRes: number): boolean {
+        if (patchRes === 2) {
+            return this.patchKeys[6] ? this.patchKeys[6].has(key) : this.baseCells.has(cellToParent(key, PATCH_RES));
+        }
         return this.baseCells.has(key) || !!this.patchKeys[4]?.has(key) || !!this.patchKeys[5]?.has(key);
     }
 
-    /** The patches on screen, nearest the middle first; null mid-morph, when no point stands for a place. */
-    private patchesOnScreen(view: GlobeView, pxPerRad: number): string[] | null {
-        const projection = this.projection!;
-        const step = Math.max(24, Math.min(160, PATCH_SPACING * pxPerRad * 0.5));
+    private getAnchor(key: string, patchRes: number): PatchAnchor {
+        const cache = patchRes === 2 ? this.anchors2 : this.anchors1;
+        let anchor = cache.get(key);
+        if (!anchor) {
+            const [lat, lon] = cellToLatLng(key);
+            const c = degToUnit(lat, lon);
+            anchor = { key, unit: c.unit, flat: this.projection!.project(c.lon, c.lat) };
+            cache.set(key, anchor);
+        }
+        return anchor;
+    }
+
+    /**
+     * All land patches visible in `view`, nearest the middle first, tested by
+     * projecting each patch's 3D/2D centre with a full patch-radius horizon
+     * and viewport margin so spinning the globe never clips patches at the limb.
+     */
+    private patchesOnScreen(view: GlobeView, _pxPerRad: number, patchRes: number): string[] | null {
+        if (view.progress > 0 && view.progress < 1) return null;
+        const res1Set = new Set<string>(this.baseCells.keys());
+        for (const k of this.patchKeys[4] ?? []) res1Set.add(k);
+        for (const k of this.patchKeys[5] ?? []) res1Set.add(k);
+
         const cx = view.width / 2;
         const cy = view.height / 2;
-        const points: [number, number, number][] = [];
-        for (let y = step / 2; y < view.height; y += step) {
-            for (let x = step / 2; x < view.width; x += step) points.push([x, y, (x - cx) ** 2 + (y - cy) ** 2]);
+        const isGlobe = view.progress >= 0.5;
+        const pad1X = isGlobe ? Math.max(140, view.radius * 0.42) : Math.max(140, view.flatW * 0.1);
+        const pad1Y = isGlobe ? Math.max(140, view.radius * 0.42) : Math.max(140, view.flatH * 0.14);
+
+        const visible1: [string, number][] = [];
+        for (const key of res1Set) {
+            const a = this.getAnchor(key, 1);
+            let x: number;
+            let y: number;
+            if (isGlobe) {
+                const g = projectToGlobe(view, a.unit);
+                if (g.z < -0.38) continue;
+                x = g.x;
+                y = g.y;
+            } else {
+                x = view.flatX + a.flat.nx * view.flatW;
+                y = view.flatY + a.flat.ny * view.flatH;
+            }
+            if (x < -pad1X || x > view.width + pad1X || y < -pad1Y || y > view.height + pad1Y) continue;
+            visible1.push([key, (x - cx) ** 2 + (y - cy) ** 2]);
         }
-        points.push([0, 0, Infinity], [view.width, 0, Infinity], [0, view.height, Infinity], [view.width, view.height, Infinity]);
-        points.sort((a, b) => a[2] - b[2]);
-        const keys = new Set<string>();
-        const homes = new Set<string>();
-        let any = false;
-        for (const [x, y] of points) {
-            const place = mapPointAt(view, x, y, projection);
-            if (!place) continue;
-            any = true;
-            const home = latLngToCell((place.lat * 180) / Math.PI, (place.lon * 180) / Math.PI, PATCH_RES);
-            // Most points land in a patch another point already found.
-            if (homes.has(home)) continue;
-            homes.add(home);
-            for (const key of gridDisk(home, 1)) {
-                if (!keys.has(key) && this.hasLand(key)) keys.add(key);
+        visible1.sort((a, b) => a[1] - b[1]);
+        if (patchRes === 1) return visible1.map(([k]) => k);
+
+        const pad2X = isGlobe ? Math.max(90, view.radius * 0.18) : Math.max(90, view.flatW * 0.045);
+        const pad2Y = isGlobe ? Math.max(90, view.radius * 0.18) : Math.max(90, view.flatH * 0.065);
+        const visible2: [string, number][] = [];
+        for (const [parentKey] of visible1) {
+            for (const childKey of cellToChildren(parentKey, 2)) {
+                if (!this.hasLand(childKey, 2)) continue;
+                const a = this.getAnchor(childKey, 2);
+                let x: number;
+                let y: number;
+                if (isGlobe) {
+                    const g = projectToGlobe(view, a.unit);
+                    if (g.z < -0.22) continue;
+                    x = g.x;
+                    y = g.y;
+                } else {
+                    x = view.flatX + a.flat.nx * view.flatW;
+                    y = view.flatY + a.flat.ny * view.flatH;
+                }
+                if (x < -pad2X || x > view.width + pad2X || y < -pad2Y || y > view.height + pad2Y) continue;
+                visible2.push([childKey, (x - cx) ** 2 + (y - cy) ** 2]);
             }
         }
-        if (!any) return view.progress === 0 || view.progress === 1 ? [] : null;
-        return [...keys];
+        visible2.sort((a, b) => a[1] - b[1]);
+        return visible2.map(([k]) => k);
     }
 
     private evict(now: number) {
-        for (const res of [4, 5] as DetailRes[]) {
+        const active = new Set([...this.visible, ...this.states.keys()]);
+        for (const res of [4, 5, 6] as DetailRes[]) {
             const mine = [...this.store.entries()].filter(([, p]) => p.res === res);
             let excess = mine.length - CAP[res];
             if (excess <= 0) continue;
             mine.sort((a, b) => a[1].lastSeen - b[1].lastSeen);
             const dropped: string[] = [];
             for (const [key, patch] of mine) {
-                // Never one on screen in the last second.
-                if (excess <= 0 || now - patch.lastSeen < 1000) break;
+                const patchKey = key.slice(key.indexOf(':') + 1);
+                // Never evict an on-screen patch or one seen in the last second.
+                if (excess <= 0) break;
+                if (active.has(patchKey) || now - patch.lastSeen < 1000) continue;
                 this.drop(key);
-                dropped.push(key.slice(key.indexOf(':') + 1));
+                dropped.push(patchKey);
                 excess--;
             }
             this.forget(res, dropped);
@@ -323,8 +393,11 @@ export class HexLevels {
     }
 
     /**
-     * This frame's draws. `fading` is true while any patch is still part-way
-     * through a fade, so the caller keeps the loop running.
+     * This frame's draws. Zooming in waits until the visible patches of the
+     * finer resolution are built on the GPU, then runs one synchronized
+     * viewport-wide fluid transition (`transition`: 0 -> 1 over 220 ms) where
+     * only the active resolution's borders and `u_base` land footprint are
+     * drawn while the hex cells smoothly cross-fade and bloom into place.
      */
     frame(
         view: GlobeView,
@@ -339,85 +412,76 @@ export class HexLevels {
         const now = performance.now();
         if (want === 3) this.stopWanting();
 
+        const startTransition = (next: ShownRes) => {
+            if (next === this.displayed) return;
+            if (reducedMotion) {
+                this.displayed = next;
+                this.prevDisplayed = null;
+                this.transition = 1;
+            } else {
+                this.prevDisplayed = this.displayed;
+                this.displayed = next;
+                this.transition = 0;
+            }
+        };
+
         // Mid-morph no point on screen stands for a place, so the patches on
         // screen cannot be worked out: the base in one piece until it lands.
         const morphing = view.progress > 0 && view.progress < 1;
-        // Everything on the base level and settled: the base in one piece.
-        if (morphing || (want === 3 && [...this.states.values()].every((s) => s.shown === 3 && s.alpha === 1 && s.prevAlpha === 0))) {
+        if (morphing) {
             this.states.clear();
+            this.displayed = 3;
+            this.prevDisplayed = null;
+            this.transition = 1;
             this.restyle('base', styles);
             return { draws: [{ key: 'base', alpha: 1 }], fading: false };
         }
 
-        const viewKey = `${!!this.patchKeys[4]}${!!this.patchKeys[5]}|${view.width}|${view.height}|${view.radius.toFixed(1)}|${view.cosRot.toFixed(4)}|${view.sinRot.toFixed(4)}|${view.sinLat.toFixed(4)}|${view.flatX.toFixed(0)}|${view.flatY.toFixed(0)}|${view.flatW.toFixed(0)}|${view.progress}`;
-        if (viewKey !== this.visibleView && now - this.visibleAt >= VISIBLE_EVERY_MS) {
-            const onScreen = this.patchesOnScreen(view, pxPerRad);
+        if (want === 3) {
+            startTransition(3);
+            if (this.transition < 1) {
+                this.transition = Math.min(1, this.transition + dt / TRANSITION_MS);
+            }
+            if (this.transition >= 1 || this.prevDisplayed === null || this.prevDisplayed === 3) {
+                this.states.clear();
+                this.prevDisplayed = null;
+                this.transition = 1;
+                this.restyle('base', styles);
+                return { draws: [{ key: 'base', alpha: 1 }], fading: false };
+            }
+        }
+
+        const activeDetailRes = (want > 3 ? want : (this.prevDisplayed && this.prevDisplayed > 3 ? this.prevDisplayed : this.displayed)) as DetailRes;
+        const targetPatchRes = activeDetailRes >= 6 ? 2 : 1;
+        const viewKey = `${targetPatchRes}|${!!this.patchKeys[4]}${!!this.patchKeys[5]}${!!this.patchKeys[6]}|${view.width}|${view.height}|${view.radius.toFixed(1)}|${view.cosRot.toFixed(4)}|${view.sinRot.toFixed(4)}|${view.sinLat.toFixed(4)}|${view.flatX.toFixed(0)}|${view.flatY.toFixed(0)}|${view.flatW.toFixed(0)}|${view.progress}`;
+        if (viewKey !== this.visibleView) {
+            const onScreen = this.patchesOnScreen(view, pxPerRad, targetPatchRes);
             if (onScreen) {
                 this.visible = onScreen;
+                this.visiblePatchRes = targetPatchRes;
                 this.visibleView = viewKey;
-                this.visibleAt = now;
             }
         }
 
-        const draws: HexGlDraw[] = [];
         const missing: string[] = [];
-        // With reduced motion a level lands in one step, as every other ease does.
-        const fade = reducedMotion ? 1 : easeOver(FADE_PER_FRAME, dt);
-        // A view the patch list has not caught up with keeps the loop running until it does.
-        let fading = viewKey !== this.visibleView;
-        const onScreen = new Set(this.visible);
-        for (const key of this.states.keys()) {
-            if (!onScreen.has(key)) this.states.delete(key);
-        }
-
-        for (const key of this.visible) {
-            let avail: ShownRes = 3;
-            for (let res = want; res > 3; res--) {
-                const stored = this.store.get(`${res}:${key}`);
-                if (!stored) continue;
-                if (!gl.hasPatch(`${res}:${key}`)) {
-                    // Gone from the GPU: built again when next wanted.
-                    this.drop(`${res}:${key}`);
-                    this.forget(res as DetailRes, [key]);
-                    continue;
-                }
-                stored.lastSeen = now;
-                avail = res as ShownRes;
-                break;
-            }
-            if (want > 3 && avail < want && this.patchKeys[want as DetailRes]?.has(key)) missing.push(key);
-
-            let state = this.states.get(key);
-            if (!state) {
-                state = { shown: avail, alpha: 1, prev: null, prevAlpha: 0 };
-                this.states.set(key, state);
-            } else if (state.shown !== avail && state.prev === avail) {
-                // Back to the level that was fading out: it fades back in from where it was.
-                [state.shown, state.prev] = [avail, state.shown];
-                [state.alpha, state.prevAlpha] = [state.prevAlpha, state.alpha];
-            } else if (state.shown !== avail) {
-                // The level that was most visible fades out; the new one fades in.
-                if (state.alpha >= state.prevAlpha || state.prev === null) {
-                    state.prev = state.shown;
-                    state.prevAlpha = state.alpha;
-                }
-                state.shown = avail;
-                state.alpha = 0;
-            }
-            state.alpha = Math.min(1, state.alpha + (1 - state.alpha) * fade);
-            if (state.alpha > 0.995) state.alpha = 1;
-            state.prevAlpha = Math.max(0, state.prevAlpha - state.prevAlpha * fade);
-            if (state.prevAlpha < 0.005) {
-                state.prevAlpha = 0;
-                state.prev = null;
-            }
-            if (state.alpha < 1 || state.prevAlpha > 0) fading = true;
-
-            if (state.prev !== null) this.drawPatch(draws, key, state.prev, state.prevAlpha, styles);
-            this.drawPatch(draws, key, state.shown, state.alpha, styles);
-        }
-
         if (want > 3) {
+            const wantKeys = targetPatchRes === 2 && want < 6
+                ? [...new Set(this.visible.map((k) => cellToParent(k, 1)))]
+                : this.visible;
+            for (const key of wantKeys) {
+                const gpuKey = `${want}:${key}`;
+                const stored = this.store.get(gpuKey);
+                if (stored && !gl.hasPatch(gpuKey)) {
+                    this.drop(gpuKey);
+                    this.forget(want as DetailRes, [key]);
+                }
+                if (this.patchKeys[want as DetailRes]?.has(key) && !this.store.has(gpuKey)) {
+                    missing.push(key);
+                }
+            }
+        }
+
+        if (missing.length > 0) {
             const worker = this.ensureWorker();
             const sent = `${want}|${this.projection!.id}|${missing.join(',')}`;
             if (worker && sent !== this.wantSent) {
@@ -425,11 +489,111 @@ export class HexLevels {
                 worker.postMessage({ type: 'want', res: want as DetailRes, projection: this.projection!.id, keys: missing } satisfies PatchWant);
             }
         }
-        return { draws, fading };
+
+        const wantReady = want === 3 || (!!this.patchKeys[want as DetailRes] && missing.length === 0);
+        if (want < this.displayed || wantReady) {
+            startTransition(want);
+        }
+
+        if (this.transition < 1) {
+            this.transition = Math.min(1, this.transition + dt / TRANSITION_MS);
+            if (this.transition >= 1) this.prevDisplayed = null;
+        }
+
+        const ceiling = this.displayed;
+        const eased = 1 - Math.pow(1 - this.transition, 3);
+        const transitioning = this.transition < 1 && this.prevDisplayed !== null && this.prevDisplayed !== ceiling;
+
+        if (ceiling === 3 && !transitioning) {
+            this.states.clear();
+            this.restyle('base', styles);
+            return { draws: [{ key: 'base', alpha: 1 }], fading: viewKey !== this.visibleView };
+        }
+
+        const draws: HexGlDraw[] = [];
+        const onScreen = new Set(this.visible);
+        for (const key of this.states.keys()) {
+            if (!onScreen.has(key)) this.states.delete(key);
+        }
+
+        const appendLevelDraws = (res: ShownRes, cellAlpha: number, backdropAlpha: number, morph: number, recordState: boolean) => {
+            if (res === 3) {
+                this.restyle('base', styles);
+                draws.push({ key: 'base', alpha: cellAlpha, backdropAlpha, morph });
+                return;
+            }
+            const resPatchRes = patchResFor(res as DetailRes);
+            const keysForRes = this.visiblePatchRes > resPatchRes
+                ? [...new Set(this.visible.map((k) => cellToParent(k, resPatchRes)))]
+                : this.visiblePatchRes < resPatchRes
+                    ? this.visible.flatMap((k) => cellToChildren(k, resPatchRes))
+                    : this.visible;
+            for (const key of keysForRes) {
+                let avail: ShownRes = 3;
+                for (let r = res; r > 3; r--) {
+                    const pRes = patchResFor(r as DetailRes);
+                    const checkKey = getResolution(key) > pRes ? cellToParent(key, pRes) : key;
+                    // If level `r`'s patch index is loaded and `checkKey` has no land at `r`,
+                    // this sub-patch is pure sea at `r` — never fall back to a coarser parent
+                    // patch whose borders and cells overlap sibling sub-patches of `r`.
+                    if (this.patchKeys[r as DetailRes] && !this.patchKeys[r as DetailRes]!.has(checkKey)) {
+                        avail = r as ShownRes;
+                        break;
+                    }
+                    const stored = this.store.get(`${r}:${checkKey}`);
+                    if (!stored) continue;
+                    if (!gl.hasPatch(`${r}:${checkKey}`)) {
+                        this.drop(`${r}:${checkKey}`);
+                        this.forget(r as DetailRes, [checkKey]);
+                        continue;
+                    }
+                    stored.lastSeen = now;
+                    avail = r as ShownRes;
+                    break;
+                }
+                const availPatchRes = avail === 3 ? PATCH_RES : patchResFor(avail as DetailRes);
+                const drawKey = getResolution(key) > availPatchRes ? cellToParent(key, availPatchRes) : key;
+                if (avail > 3 && this.patchKeys[avail as DetailRes] && !this.patchKeys[avail as DetailRes]!.has(drawKey)) {
+                    continue;
+                }
+                if (recordState) this.states.set(key, { shown: avail });
+                const effectiveBackdrop = avail === res ? backdropAlpha : 0;
+                this.drawPatch(draws, drawKey, avail, cellAlpha, styles, effectiveBackdrop, morph);
+            }
+        };
+
+        const dedupedDraws: HexGlDraw[] = [];
+        const pushDeduped = () => {
+            const seen = new Set<string>();
+            for (const d of draws) {
+                const id = `${d.key}|${d.backdropAlpha ?? d.alpha}`;
+                if (seen.has(id)) continue;
+                seen.add(id);
+                dedupedDraws.push(d);
+            }
+            draws.length = 0;
+        };
+
+        if (transitioning && this.prevDisplayed !== null) {
+            const finer = ceiling > this.prevDisplayed;
+            const prevMorph = finer ? 1 + 0.04 * eased : 1 - 0.06 * eased;
+            const nextMorph = finer ? 0.86 + 0.14 * eased : 1.06 - 0.06 * eased;
+            // Incoming resolution owns the border and u_base land footprint (backdropAlpha = 1)
+            // so coastlines never double up, while outgoing and incoming hex cells cross-fade and morph.
+            appendLevelDraws(this.prevDisplayed, 1 - eased, 0, prevMorph, false);
+            pushDeduped();
+            appendLevelDraws(ceiling, eased, 1, nextMorph, true);
+            pushDeduped();
+        } else {
+            appendLevelDraws(ceiling, 1, 1, 1, true);
+            pushDeduped();
+        }
+
+        return { draws: dedupedDraws, fading: transitioning || viewKey !== this.visibleView };
     }
 
-    private drawPatch(draws: HexGlDraw[], key: string, res: ShownRes, alpha: number, styles: LevelStyles) {
-        if (alpha <= 0) return;
+    private drawPatch(draws: HexGlDraw[], key: string, res: ShownRes, alpha: number, styles: LevelStyles, backdropAlpha = alpha, morph = 1) {
+        if (alpha <= 0 && backdropAlpha <= 0) return;
         const gpuKey = `${res}:${key}`;
         if (res === 3) {
             const cells = this.baseCells.get(key);
@@ -441,7 +605,7 @@ export class HexLevels {
             return;
         }
         this.restyle(gpuKey, styles);
-        draws.push({ key: gpuKey, alpha });
+        draws.push({ key: gpuKey, alpha, backdropAlpha, morph });
     }
 
     /** Rewrites a patch's style bytes if any style input changed since it last was. */
@@ -457,7 +621,7 @@ export class HexLevels {
             const stored = this.store.get(gpuKey);
             if (!stored) return;
             bytes = new Uint8Array(stored.h3.length);
-            for (let i = 0; i < bytes.length; i++) bytes[i] = styles.detail(stored.res, stored.h3[i], stored.codes[i]);
+            for (let i = 0; i < bytes.length; i++) bytes[i] = styles.detail(stored.res, stored.h3[i]);
         }
         this.gl!.setPatchStyles(gpuKey, bytes);
         this.styled.set(gpuKey, styles.version);

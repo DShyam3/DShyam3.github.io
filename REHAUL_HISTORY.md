@@ -3429,6 +3429,65 @@ Closure: shipped 2026-11-27. The hosted migration (`image_cache`) is applied, wi
 
 Closure: committed and pushed 2026-11-27, not on Pages while GitHub's billing lock stops deploys. Verified on the local stack with data backdated: the first run took the index from 158 rows to 156 and the bucket from 729 files to 152. A simulated picture change, marked unused three days earlier, pruned exactly that row and file, and the worker copied it again once restored. With a copy's file removed, its card showed the original, the next prune dropped the row, and the next load re-made the copy. No row was left naming a missing file. The reviewer's second pass found three risks; all three are fixed. Those fixes were not reviewed again.
 
+### Travel map: visited countries as border outlines and visited cities as marked hexes across all appearances — 2026-11-27
+
+Why: Filling every hex of a visited country hid nearly all NASA/GEBCO elevation and Blue Marble satellite terrain inside large visited countries (such as the US) and split the map into two competing modes.
+
+Decisions:
+
+1. **One map mode across all three looks.** Visited countries are traced along their international borders and coastlines (carrying both sides' country codes on base and detail border segments so shared borders and coasts highlight wherever either side is visited), while interior hexes keep their surface or unvisited land fill.
+2. **Marked hexes are reserved for visited cities (and the active selection).** In Classic, visited city hexes are amber/brass; in Topographic and Satellite mosaic, they are solid orange at world scale and switch to an orange keylined ring at close zoom so the city's own terrain still shows through. Country browsing and drill-down stay in the sidebar.
+3. **Cross-fading detail patches keep destination-over land opaque.** When fading between hex resolutions, the incoming patch draws first at `alpha` and the outgoing patch second at `1.0` in the destination-over (`u_base` / `surface`) and `gl.MAX` border passes so ocean never bleeds through land mid-fade.
+
+Closure: uncommitted in local tree on `main` (head `30bde1f4`). Verified in local Chrome across Classic, Topographic and Satellite mosaic in 3D Globe and 2D Map (including 120 → 45 km zoom on NYC) and reviewed by `reviewer` (Opus) with all 8 findings fixed. Production deployment and real-device iPhone/iPad checks remain open.
+
+### Travel map performance and transition polish: pre-baked binary hex maps, single-resolution cross-fades, and compact legend pill — 2026-11-27
+
+Why: Loading large JSON tier files at startup caused H3 WASM decoding overhead, cross-fading two competing hex resolutions simultaneously caused visual clutter (coarse and fine coastlines overlapping), and the bottom-left legend banner occupied too much screen space.
+
+Decisions:
+
+1. **Pre-baked binary hex map files (`public/data/hex-map-v2-r{3,4,5}.bin`)**. `scripts/generate-hex-map.mjs` pre-computes base 120 km cells and border segments in radians (`hex-map-v2-r3.bin`) so startup does zero H3 WASM calls (`decodeHexTierBin`), and compacted cells grouped by patch with pre-computed directed border edges (`hex-map-v2-r{4,5}.bin`) so detail workers skip `gridDisk` and `codeOf` searches (`decodeDetailLevelBin` / `decodeDetailLookupBin`), falling back to JSON automatically.
+2. **Coherent single-resolution transitions**. Detail patches no longer cross-fade two hex resolutions simultaneously (which rendered coarse and fine coastlines and protruding cream land pockets together). Instead, the worker builds visible patches in 24 ms batches and the viewport swaps cleanly to the finer resolution once its visible patches are ready.
+3. **Compact rounded legend pill**. The bottom-left legend is styled as a compact translucent pill (`Cities (N)`, `Countries`, `GeoNames`) matching floating map controls, with an invisible 44px `::after` touch target on the `GeoNames` link for coarse pointers and Larger mode.
+
+Closure: in the tree on `main`, verified in local Chrome with binary `.bin` loads and Italy 120 → 45 → 17 km zoom, and 12 files / 85 tests passing. Production deployment and real-device checks remain open.
+
+### Travel map 6 km hex tier, fluid synchronized transitions, and top-bar legend placement — 2026-11-27
+
+Why: Zooming in further required a finer resolution tier than 17 km (~3.99M land cells at `res 6`), multi-resolution cross-fades needed synchronization to prevent visual artifacts, and the legend pill needed to sit in the header bar alongside the hover readout.
+
+Decisions:
+
+1. **6 km hex tier (`res 6`, up to `64x` zoom)**. Adds a fourth hex tier (~3.99M land cells cut into 2,441 resolution-2 patches of ~260 km) with zoom up to `64×`. All three appearances (`Classic`, `Topographic`, `Satellite mosaic`) support `6 km`, with sub-texel bilinear sampling within the 900-row surface slice for smooth terrain/imagery interpolation. Hover labels (`hex-regions-v2-r6.json`, 4,247 regions, 122,449 towns) cover 6 km hexes with 3-ring (~20 km) town fallback. Binary files now cover all four levels (`hex-map-v2-r{3,4,5,6}.bin`).
+2. **Fluid synchronized resolution transitions**. When target patches are ready, the viewport runs a synchronized 220 ms cubic ease-out transition where the active resolution owns borders and `u_base` land backdrop while hex cells cross-fade and scale (`u_morph`).
+3. **Top-bar legend pill placement**. The compact legend pill (`Cities (N)`, `Countries`, `GeoNames`) sits in the top right header bar next to the hover readout rather than inside the bottom-left corner of the map canvas.
+
+Closure: in the tree on `main`, verified in local Chrome with 6 km tier across all three looks, hover labels, fluid transitions, and top-right legend, with 12 files / 86 tests passing. Production deployment and real-device checks remain open.
+
+### Travel map 6 km surface slices and every-frame 3D limb patch visibility — 2026-11-27
+
+Why: Bilinear smoothing of the smaller 1800×900 surface slice blurred the 6 km tier, and a throttled 2D raycast for patch visibility dropped foreshortened patches at the 3D globe limb.
+
+Decisions:
+
+1. **Native `5400 × 2700` (`rows: 2700`) res-6 surface slices**. Topographic (`public/data/surface-topographic.png`) and Satellite mosaic (`public/data/surface-satellite.png`) now include a dedicated high-resolution slice for the `6 km` (`res 6`) tier so fine terrain and Blue Marble imagery render sharply.
+2. **Every-frame 3D/2D patch-anchor horizon check**. Detail patches check their anchor position every frame (`g.z >= -0.38` for `res 1`, `g.z >= -0.22` for `res 2`) so spinning the 3D globe never drops continent patches at the limb.
+3. **Top-left legend pill and fixed 28px hover header**. The legend pill sits at the top-left of the canvas (opposite the appearance dropdown), and the place hover bar stays a fixed single-line height (`28px`).
+
+Closure: in the tree on `main`, verified in local Chrome with 86 tests passing and 0 lint/typecheck errors. Production deployment and real-device checks remain open.
+
+### Fix double-coastline bug at 6 km (`res 6`) — 2026-11-27
+
+Why: Because `res 6` uses resolution-2 patches (`patchRes = 2`) while `res 3`, `4`, and `5` use resolution-1 patches (`patchRes = 1`), coastal resolution-1 patches have 7 resolution-2 children where some are land and others are pure sea. The previous `hasLand` check incorrectly treated pure-sea resolution-2 sub-patches of a coastal resolution-1 patch as land, falling back to drawing the entire coarser parent patch with `backdropAlpha = 1` on top of the sibling `res 6` coastal patches and etching a double coastline one ring inside.
+
+Decisions:
+
+1. **Strict sub-patch land checking (`hasLand`)**. Once `patchKeys[r]` is loaded, a sub-patch outside `patchKeys[r]` is correctly recognized as pure sea at level `r` and never falls back to a coarser parent patch.
+2. **Zero backdrop alpha on coarse fallback patches**. Any temporary coarser fallback patch while the worker is still building uses `backdropAlpha = 0` so its borders never draw over finer coastal hexes.
+
+Closure: in the tree on `main`, verified in local Chrome with clean single-coastline rendering at 6 km across all map looks and 86 passing tests. Production deployment and real-device checks remain open.
+
 ### Finance: a table that fails to load after a profile switch is emptied and named, not kept — 2026-11-27
 
 Why: A failed read left whatever was on screen. After a profile switch that was the previous profile's rows under the new profile's name. Saves were already refused for a failed table (save-safety), so this was display only, but a wrong ledger reads exactly like a right one, which Part 0.5 rules out.

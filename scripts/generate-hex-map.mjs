@@ -39,11 +39,304 @@ const SOURCE_URL =
 const CACHE = resolve(ROOT, '.cache/ne_50m_admin_0_countries.geojson');
 const NE_RAW = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson';
 
-const LEVELS = [3, 4, 5];
+const LEVELS = [3, 4, 5, 6];
+const patchResFor = (res) => (res >= 6 ? 2 : 1);
 /** The resolution coverage is measured at. */
 const SAMPLE_RES = 6;
 /** A cell is land when at least this share of it is. */
 const LAND_SHARE = 0.5;
+
+function countryStyleIndex(code) {
+    if (!code || !/^[A-Z]{2}$/.test(code)) return 0;
+    return (code.charCodeAt(0) - 65) * 26 + code.charCodeAt(1) - 64;
+}
+
+function align4(bytes) {
+    return (bytes + 3) & ~3;
+}
+
+/**
+ * Pre-bakes public/data/hex-map-v2-r3.bin (full base-tier cell & border geometry
+ * in radians so the browser does zero H3 WASM calls on startup) and
+ * public/data/hex-map-v2-r{4,5}.bin (compacted cells pre-grouped by patch plus
+ * pre-computed directed border edges so detail workers do zero gridDisk or
+ * codeOf searches at runtime).
+ */
+function writeBinaryLevels() {
+    const t0 = Date.now();
+    // --- Base tier (res 3) ---
+    const json3 = JSON.parse(readFileSync(resolve(ROOT, 'public/data/hex-map-v2-r3.json'), 'utf8'));
+    const rawCells3 = [];
+    for (const code of Object.keys(json3.countries).sort()) {
+        for (const cell of h3.uncompactCells(json3.countries[code], 3).sort()) {
+            rawCells3.push([cell, code]);
+        }
+    }
+    const cellCount3 = rawCells3.length;
+    const cellCodes3 = new Map(rawCells3);
+    const cellIndexByH3 = new Map(rawCells3.map(([c], i) => [c, i]));
+    const boundaries3 = rawCells3.map(([c]) => h3.cellToBoundary(c));
+    const cornerCount3 = boundaries3.reduce((n, b) => n + b.length, 0);
+
+    const seenPairs = new Set();
+    const borders3 = [];
+    for (let i = 0; i < cellCount3; i++) {
+        const [cell, code] = rawCells3[i];
+        for (const nb of h3.gridDisk(cell, 1)) {
+            if (nb === cell) continue;
+            const nbCode = cellCodes3.get(nb);
+            if (nbCode === code) continue;
+            const pairKey = cell < nb ? `${cell}|${nb}` : `${nb}|${cell}`;
+            if (seenPairs.has(pairKey)) continue;
+            seenPairs.add(pairKey);
+            try {
+                const pts = h3.directedEdgeToBoundary(h3.cellsToDirectedEdge(cell, nb));
+                if (pts.length < 2) continue;
+                const aLat = (pts[0][0] * Math.PI) / 180;
+                const aLon = (pts[0][1] * Math.PI) / 180;
+                const bLat = (pts[pts.length - 1][0] * Math.PI) / 180;
+                const bLon = (pts[pts.length - 1][1] * Math.PI) / 180;
+                const crosses = Math.abs(aLon - bLon) > Math.PI;
+                borders3.push({
+                    from: i | (crosses ? 0x8000 : 0),
+                    c1: countryStyleIndex(code),
+                    c2: countryStyleIndex(nbCode),
+                    aLat, aLon, bLat, bLon,
+                });
+            } catch {
+                // Skip invalid pentagon edge pairs.
+            }
+        }
+    }
+    const borderCount3 = borders3.length;
+
+    const offH3 = 16;
+    const offCountry = offH3 + cellCount3 * 8;
+    const offMeta = offCountry + cellCount3 * 2;
+    const offCellLatLon = align4(offMeta + cellCount3);
+    const offCornerLatLon = offCellLatLon + cellCount3 * 8;
+    const offBorderFrom = offCornerLatLon + cornerCount3 * 8;
+    const offBorderCountries = align4(offBorderFrom + borderCount3 * 2);
+    const offBorderLatLon = offBorderCountries + borderCount3 * 4;
+    const totalBytes3 = offBorderLatLon + borderCount3 * 16;
+
+    const buf3 = new ArrayBuffer(totalBytes3);
+    const header3 = new Uint32Array(buf3, 0, 4);
+    header3[0] = 0x33584548; // "HEX3"
+    header3[1] = cellCount3;
+    header3[2] = cornerCount3;
+    header3[3] = borderCount3;
+
+    const cellH3_3 = new Uint32Array(buf3, offH3, cellCount3 * 2);
+    const cellCountry3 = new Uint16Array(buf3, offCountry, cellCount3);
+    const cellMeta3 = new Uint8Array(buf3, offMeta, cellCount3);
+    const cellLatLon3 = new Float32Array(buf3, offCellLatLon, cellCount3 * 2);
+    const cornerLatLon3 = new Float32Array(buf3, offCornerLatLon, cornerCount3 * 2);
+    const borderFrom3 = new Uint16Array(buf3, offBorderFrom, borderCount3);
+    const borderCountries3 = new Uint16Array(buf3, offBorderCountries, borderCount3 * 2);
+    const borderLatLon3 = new Float32Array(buf3, offBorderLatLon, borderCount3 * 4);
+
+    let cornerCursor = 0;
+    for (let i = 0; i < cellCount3; i++) {
+        const [cell, code] = rawCells3[i];
+        const [lo, hi] = h3.h3IndexToSplitLong(cell);
+        cellH3_3[i * 2] = lo;
+        cellH3_3[i * 2 + 1] = hi;
+        cellCountry3[i] = countryStyleIndex(code);
+        const [clat, clon] = h3.cellToLatLng(cell);
+        cellLatLon3[i * 2] = (clat * Math.PI) / 180;
+        cellLatLon3[i * 2 + 1] = (clon * Math.PI) / 180;
+        const boundary = boundaries3[i];
+        let minLon = Infinity;
+        let maxLon = -Infinity;
+        for (const [vLat, vLon] of boundary) {
+            const rLat = (vLat * Math.PI) / 180;
+            const rLon = (vLon * Math.PI) / 180;
+            if (rLon < minLon) minLon = rLon;
+            if (rLon > maxLon) maxLon = rLon;
+            cornerLatLon3[cornerCursor * 2] = rLat;
+            cornerLatLon3[cornerCursor * 2 + 1] = rLon;
+            cornerCursor++;
+        }
+        const crosses = maxLon - minLon > Math.PI;
+        cellMeta3[i] = (crosses ? 0x80 : 0) | boundary.length;
+    }
+    for (let i = 0; i < borderCount3; i++) {
+        const b = borders3[i];
+        borderFrom3[i] = b.from;
+        borderCountries3[i * 2] = b.c1;
+        borderCountries3[i * 2 + 1] = b.c2;
+        borderLatLon3[i * 4] = b.aLat;
+        borderLatLon3[i * 4 + 1] = b.aLon;
+        borderLatLon3[i * 4 + 2] = b.bLat;
+        borderLatLon3[i * 4 + 3] = b.bLon;
+    }
+    const path3 = resolve(ROOT, 'public/data/hex-map-v2-r3.bin');
+    writeFileSync(path3, Buffer.from(buf3));
+    console.log(`binary res 3: ${cellCount3.toLocaleString()} cells, ${borderCount3.toLocaleString()} borders, ${Math.round(totalBytes3 / 1024)} KB`);
+
+    // --- Detail tiers (res 4, 5, 6) ---
+    for (const res of [4, 5, 6]) {
+        const patchRes = patchResFor(res);
+        const json = JSON.parse(readFileSync(resolve(ROOT, `public/data/hex-map-v2-r${res}.json`), 'utf8'));
+        const patches = new Map();
+        const compactCountryByCell = new Map();
+        const full = new Map();
+        for (const code of Object.keys(json.countries).sort()) {
+            const cIdx = countryStyleIndex(code);
+            for (const cell of json.countries[code]) {
+                compactCountryByCell.set(cell, cIdx);
+                const r = h3.getResolution(cell);
+                const add = (pKey, c) => {
+                    let list = patches.get(pKey);
+                    if (!list) {
+                        list = [];
+                        patches.set(pKey, list);
+                    }
+                    list.push([c, cIdx]);
+                };
+                if (r < patchRes) {
+                    for (const child of h3.cellToChildren(cell, patchRes)) add(child, child);
+                } else {
+                    add(r === patchRes ? cell : h3.cellToParent(cell, patchRes), cell);
+                }
+            }
+            for (const c of h3.uncompactCells(json.countries[code], res)) {
+                full.set(c, cIdx);
+            }
+        }
+
+        const isWhollyOwnedAtRes = (cell, r, targetCountry) => {
+            for (let k = r; k >= 0; k--) {
+                const owner = compactCountryByCell.get(k === r ? cell : h3.cellToParent(cell, k));
+                if (owner !== undefined) return owner === targetCountry;
+            }
+            return false;
+        };
+
+        const patchKeys = [...patches.keys()].sort();
+        const patchCount = patchKeys.length;
+        const patchStart = new Uint32Array(patchCount + 1);
+        const edgeStart = new Uint32Array(patchCount + 1);
+        const compactList = [];
+        const edgeList = [];
+
+        for (let p = 0; p < patchCount; p++) {
+            const pKey = patchKeys[p];
+            const entries = patches.get(pKey);
+            patchStart[p] = compactList.length;
+            edgeStart[p] = edgeList.length;
+
+            const h3Cells = [];
+            const cIndices = [];
+            const checkBorders = [];
+            for (const [cell, cIdx] of entries) {
+                compactList.push([cell, cIdx]);
+                const r = h3.getResolution(cell);
+                if (r === res) {
+                    h3Cells.push(cell);
+                    cIndices.push(cIdx);
+                    checkBorders.push(true);
+                } else {
+                    const ring = h3.gridDisk(cell, 1);
+                    const strictlyInterior = ring.every((nb) => nb === cell || isWhollyOwnedAtRes(nb, r, cIdx));
+                    for (const ch of h3.cellToChildren(cell, res)) {
+                        h3Cells.push(ch);
+                        cIndices.push(cIdx);
+                        checkBorders.push(!strictlyInterior);
+                    }
+                }
+            }
+
+            const indexByH3 = new Map();
+            h3Cells.forEach((c, i) => indexByH3.set(c, i));
+
+            for (let i = 0; i < h3Cells.length; i++) {
+                if (!checkBorders[i]) continue;
+                const cell = h3Cells[i];
+                const cIdx = cIndices[i];
+                for (const nb of h3.gridDisk(cell, 1)) {
+                    if (nb === cell) continue;
+                    const local = indexByH3.get(nb);
+                    const nbIdx = local !== undefined ? cIndices[local] : (full.get(nb) ?? 0);
+                    if (nbIdx === cIdx) continue;
+                    if (local !== undefined && nb < cell) continue;
+                    try {
+                        const edge = h3.cellsToDirectedEdge(cell, nb);
+                        const [eLo, eHi] = h3.h3IndexToSplitLong(edge);
+                        edgeList.push({
+                            eLo,
+                            eHi,
+                            cells: (i & 0xFFFF) | (((local ?? 0xFFFF) & 0xFFFF) << 16),
+                            countries: (cIdx & 0xFFFF) | ((nbIdx & 0xFFFF) << 16),
+                        });
+                    } catch {
+                        // Pentagon missing edge.
+                    }
+                }
+            }
+        }
+        patchStart[patchCount] = compactList.length;
+        edgeStart[patchCount] = edgeList.length;
+
+        const compactCount = compactList.length;
+        const edgeCount = edgeList.length;
+
+        const offPatchH3 = 20;
+        const offPatchStart = offPatchH3 + patchCount * 8;
+        const offEdgeStart = offPatchStart + (patchCount + 1) * 4;
+        const offCompactH3 = offEdgeStart + (patchCount + 1) * 4;
+        const offCompactCountry = offCompactH3 + compactCount * 8;
+        const offEdges = align4(offCompactCountry + compactCount * 2);
+        const totalBytes = offEdges + edgeCount * 16;
+
+        const buf = new ArrayBuffer(totalBytes);
+        const header = new Uint32Array(buf, 0, 5);
+        header[0] = 0x44584548; // "HEXD"
+        header[1] = res;
+        header[2] = patchCount;
+        header[3] = compactCount;
+        header[4] = edgeCount;
+
+        const patchH3Arr = new Uint32Array(buf, offPatchH3, patchCount * 2);
+        const patchStartArr = new Uint32Array(buf, offPatchStart, patchCount + 1);
+        const edgeStartArr = new Uint32Array(buf, offEdgeStart, patchCount + 1);
+        const compactH3Arr = new Uint32Array(buf, offCompactH3, compactCount * 2);
+        const compactCountryArr = new Uint16Array(buf, offCompactCountry, compactCount);
+        const edgesArr = new Uint32Array(buf, offEdges, edgeCount * 4);
+
+        patchStartArr.set(patchStart);
+        edgeStartArr.set(edgeStart);
+
+        for (let p = 0; p < patchCount; p++) {
+            const [lo, hi] = h3.h3IndexToSplitLong(patchKeys[p]);
+            patchH3Arr[p * 2] = lo;
+            patchH3Arr[p * 2 + 1] = hi;
+        }
+        for (let i = 0; i < compactCount; i++) {
+            const [cell, cIdx] = compactList[i];
+            const [lo, hi] = h3.h3IndexToSplitLong(cell);
+            compactH3Arr[i * 2] = lo;
+            compactH3Arr[i * 2 + 1] = hi;
+            compactCountryArr[i] = cIdx;
+        }
+        for (let i = 0; i < edgeCount; i++) {
+            const e = edgeList[i];
+            edgesArr[i * 4] = e.eLo;
+            edgesArr[i * 4 + 1] = e.eHi;
+            edgesArr[i * 4 + 2] = e.cells >>> 0;
+            edgesArr[i * 4 + 3] = e.countries >>> 0;
+        }
+
+        const path = resolve(ROOT, `public/data/hex-map-v2-r${res}.bin`);
+        writeFileSync(path, Buffer.from(buf));
+        console.log(
+            `binary res ${res}: ${patchCount} patches, ${compactCount.toLocaleString()} compacted cells, ` +
+                `${edgeCount.toLocaleString()} pre-baked border edges, ${Math.round(totalBytes / 1024)} KB`,
+        );
+    }
+    console.log(`Built binary levels in ${((Date.now() - t0) / 1000).toFixed(2)}s`);
+}
 
 /** Countries smaller than any cell, placed by hand so they still appear. */
 const MICROSTATES = [
@@ -248,7 +541,9 @@ async function writeRegions(assignedByRes) {
                 continue;
             }
             for (const sample of samples) {
-                for (const res of LEVELS) increment(tallies.get(res), h3.cellToParent(sample, res), index);
+                for (const res of LEVELS) {
+                    increment(tallies.get(res), res === SAMPLE_RES ? sample : h3.cellToParent(sample, res), index);
+                }
                 if (townAt.has(sample)) townAt.set(sample, index);
             }
         }
@@ -342,7 +637,7 @@ async function main() {
             const own = new Map(LEVELS.map((res) => [res, new Map()]));
             for (const sample of samples) {
                 for (const res of LEVELS) {
-                    const parent = h3.cellToParent(sample, res);
+                    const parent = res === SAMPLE_RES ? sample : h3.cellToParent(sample, res);
                     increment(tallies.get(res), parent, code);
                     const mine = own.get(res);
                     mine.set(parent, (mine.get(parent) ?? 0) + 1);
@@ -368,7 +663,8 @@ async function main() {
                     bestCount = count;
                 }
             }
-            if (land >= LAND_SHARE * h3.cellToChildrenSize(cell, SAMPLE_RES)) assigned.set(cell, best);
+            const childrenSize = res === SAMPLE_RES ? 1 : h3.cellToChildrenSize(cell, SAMPLE_RES);
+            if (land >= LAND_SHARE * childrenSize) assigned.set(cell, best);
         }
 
         // An island no cell is mostly made of still gets the cell it covers most.
@@ -445,10 +741,15 @@ async function main() {
         );
     }
     await writeRegions(assignedByRes);
+    writeBinaryLevels();
     console.log(`Done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 
-main().catch((error) => {
-    console.error(error);
-    process.exit(1);
-});
+if (process.argv.includes('--binary-only')) {
+    writeBinaryLevels();
+} else {
+    main().catch((error) => {
+        console.error(error);
+        process.exit(1);
+    });
+}

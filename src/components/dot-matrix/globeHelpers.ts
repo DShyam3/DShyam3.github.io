@@ -7,13 +7,16 @@ import {
 import {
     BUCKET_COLS,
     BUCKET_ROWS,
+    hexSpacingRad,
     loadHexTier,
+    type HexBorderSegment,
     type HexCell,
     type HexTierData,
 } from './hexMapData';
 import { projectToGlobe, type GlobeView } from './globeProjection';
 import type { HexGlPalette } from './hexGlRenderer';
 import { HEX_KM, type ShownRes } from './hexLevels';
+import { surfaceRows } from './surfaceColors';
 
 /** The selected cell, placed for this frame, for the glow drawn over the map. */
 export interface SelectedHex {
@@ -40,10 +43,10 @@ export const IDLE_SPIN_RAMP_MS = 4000;
 export const FOCUS_ZOOM = { country: { '3d': 2.5, '2d': 4 }, city: { '3d': 3.5, '2d': 6 } } as const;
 
 /**
- * As far in as the wheel or a pinch goes. Deep enough for level 5's cells,
- * ~17km apart, to be 30-40px across: towns a few miles apart get their own.
+ * As far in as the wheel or a pinch goes. Deep enough for level 6's cells,
+ * ~6km apart, to be 25-35px across: neighbourhoods and small islands get their own.
  */
-export const MAX_ZOOM = 32;
+export const MAX_ZOOM = 64;
 
 /**
  * How far the globe turns per pixel dragged, at 1x. Divided by the zoom, so
@@ -86,10 +89,7 @@ export const DOT_PALETTE = {
         unvisited: 'rgba(237, 227, 207, 0.2)',
         unvisitedHovered: 'rgba(237, 227, 207, 0.58)',
         visited: 'rgba(196, 155, 80, 1)',
-        visitedHovered: 'rgba(222, 184, 108, 1)',
-        // Cities view: the country is still marked, so its cities stand out of
-        // a tinted patch rather than out of the same grey as everywhere else.
-        visitedTint: 'rgba(196, 155, 80, 0.36)',
+        cityHovered: 'rgba(222, 184, 108, 1)',
         city: 'rgba(216, 134, 48, 1)',
         // The selection is the one dot in a different hue, matte Indicolite,
         // so it never reads as one more antique brass dot.
@@ -108,8 +108,7 @@ export const DOT_PALETTE = {
         unvisited: 'rgba(31, 25, 36, 0.18)',
         unvisitedHovered: 'rgba(31, 25, 36, 0.58)',
         visited: 'rgba(150, 112, 45, 1)',
-        visitedHovered: 'rgba(122, 88, 28, 1)',
-        visitedTint: 'rgba(150, 112, 45, 0.34)',
+        cityHovered: 'rgba(122, 88, 28, 1)',
         city: 'rgba(179, 98, 18, 1)',
         selected: 'rgba(15, 100, 109, 1)',
         selectedGlow: 'rgba(15, 100, 109, 0.38)',
@@ -157,13 +156,8 @@ export type DotPalette = Record<keyof typeof DOT_PALETTE.dark, string>;
 export const CELL_STYLES = [
     { name: 'unvisited', scale: 0.84, color: 'unvisited' },
     { name: 'unvisitedHovered', scale: 0.9, color: 'unvisitedHovered' },
-    { name: 'visited', scale: 0.9, color: 'visited' },
-    { name: 'visitedHovered', scale: 0.94, color: 'visitedHovered' },
-    // Cities view: a visited country is a tint, and hovering it lights the full colour.
-    { name: 'tint', scale: 0.84, color: 'visitedTint' },
-    { name: 'tintHovered', scale: 0.94, color: 'visited' },
     { name: 'city', scale: 0.92, color: 'city' },
-    { name: 'cityHovered', scale: 0.96, color: 'visitedHovered' },
+    { name: 'cityHovered', scale: 0.96, color: 'cityHovered' },
     { name: 'selected', scale: 0.92, color: 'selected' },
 ] as const satisfies readonly { name: string; scale: number; color: keyof DotPalette }[];
 
@@ -190,37 +184,25 @@ export const STYLE_GL = {
 };
 
 export interface StyleInputs {
-    visited: Set<string>;
     cityHexes: ReadonlySet<string>;
-    cities: boolean;
-    /** The hovered country: lights all of it on the country view. */
-    hovered: string | null;
-    /** The hovered cell: on the city view only it lights, the country stays unlit. */
     hoveredKey: string | null;
     selected: string | null;
     focusedDot: string | null;
 }
 
 /** A cell's `CELL_STYLE`, at any level: `key` is its H3 index. */
-export function cellStyle(key: string, code: string, s: StyleInputs): number {
-    // The city view is read hex by hex, so a hover lights the one hex; lighting
-    // the whole country washed out the cities in it.
-    const hovered = s.cities ? key === s.hoveredKey : code === s.hovered;
+export function cellStyle(key: string, s: StyleInputs): number {
     if (key === s.selected) return CELL_STYLE.selected;
-    if (s.cities && (s.cityHexes.has(key) || key === s.focusedDot)) {
+    const hovered = key === s.hoveredKey;
+    if (s.cityHexes.has(key) || key === s.focusedDot) {
         return hovered ? CELL_STYLE.cityHovered : CELL_STYLE.city;
-    }
-    if (s.visited.has(code)) {
-        return s.cities
-            ? (hovered ? CELL_STYLE.tintHovered : CELL_STYLE.tint)
-            : (hovered ? CELL_STYLE.visitedHovered : CELL_STYLE.visited);
     }
     return hovered ? CELL_STYLE.unvisitedHovered : CELL_STYLE.unvisited;
 }
 
 /** Writes each cell's `CELL_STYLE` into `out`, by `HexCell.index`. */
 export function fillCellStyles(out: Uint8Array, tier: HexTierData, s: StyleInputs) {
-    for (const cell of tier.cells) out[cell.index] = cellStyle(cell.h3Index, cell.code, s);
+    for (const cell of tier.cells) out[cell.index] = cellStyle(cell.h3Index, s);
 }
 
 /** Where the selected cell sits this frame, or null where it is hidden (the back of the globe). */
@@ -252,10 +234,40 @@ export function placeSelectedHex(cell: HexCell, view: GlobeView, radius: number)
 }
 
 export interface CanvasBorders {
+    visited: ReadonlySet<string>;
+    accent: string;
     color: string;
     alpha: number;
     width: number;
 }
+
+type CanvasSurface = Pick<NonNullable<HexGlPalette['surface']>, 'raster' | 'colors' | 'zoom'>;
+const surfaceIndices = new WeakMap<HexTierData, WeakMap<ImageData, Uint8Array>>();
+const baseHexSpacing = hexSpacingRad(3);
+
+function canvasTerrainIndices(tier: HexTierData, raster: ImageData): Uint8Array {
+    let byRaster = surfaceIndices.get(tier);
+    if (!byRaster) {
+        byRaster = new WeakMap();
+        surfaceIndices.set(tier, byRaster);
+    }
+    const cached = byRaster.get(raster);
+    if (cached) return cached;
+    const indices = new Uint8Array(tier.cells.length);
+    for (const cell of tier.cells) {
+        const u = 0.5 + cell.lon / (2 * Math.PI);
+        const x = Math.floor((u - Math.floor(u)) * raster.width);
+        const { first, rows } = surfaceRows[tier.res];
+        const y = first + Math.max(0, Math.min(rows - 1, Math.floor((0.5 - cell.lat / Math.PI) * rows)));
+        indices[cell.index] = raster.data[(y * raster.width + x) * 4];
+    }
+    byRaster.set(raster, indices);
+    return indices;
+}
+
+const isCityStyle = (style: number) => style === CELL_STYLE.city || style === CELL_STYLE.cityHovered;
+const visitedOrange = (style: number) => style === CELL_STYLE.cityHovered
+    ? '#ff8c60' : '#ff571f';
 
 /**
  * The canvas 2D renderer, for a browser without WebGL2 or a GPU that dropped
@@ -269,11 +281,79 @@ export function drawCellsCanvas(
     colors: string[],
     view: GlobeView,
     borders: CanvasBorders,
+    surface?: CanvasSurface,
 ) {
     const { width: W, height: H, progress, radius: R, cosRot, sinRot, cosLat, sinLat, flatW, flatH, flatX, flatY } = view;
     const W_half = W / 2;
     const H_half = H / 2;
     const margin = 80;
+
+    let visitedBoundary: Path2D | undefined;
+    function traceBoundary(seg: HexBorderSegment, x1: number, y1: number, x2: number, y2: number) {
+        const visited = borders.visited.has(seg.code) || (seg.neighborCode && borders.visited.has(seg.neighborCode));
+        const path = visited ? (visitedBoundary ??= new Path2D()) : ctx;
+        path.moveTo(x1, y1);
+        path.lineTo(x2, y2);
+    }
+
+    const indices = surface && canvasTerrainIndices(tier, surface.raster);
+    const bands = surface?.colors.length ?? 0;
+    const steps = progress === 0 ? 1 : OPACITY_STEPS;
+    const batches: Path2D[] = [];
+    // Project the base hex spacing in CSS pixels. Near the globe's limb the
+    // short dimension shrinks further, so those cells keep their solid mark.
+    const flatSpacing = baseHexSpacing * flatW / (2 * Math.PI);
+    const globeSpacing = baseHexSpacing * R;
+    const pathFor = (cell: HexCell, style: number, step: number, depth: number) => {
+        let paint = style;
+        if (surface && indices && style !== CELL_STYLE.selected) {
+            const width = flatSpacing * (1 - progress) + globeSpacing * progress * Math.max(0, depth);
+            const outline = surface.zoom >= 3 && width >= 8;
+            if (!isCityStyle(style) || outline) {
+                paint = CELL_STYLES.length + style * bands + indices[cell.index];
+            }
+        }
+        return batches[paint * steps + step] ??= new Path2D();
+    };
+
+    const paintBatches = () => {
+        batches.forEach((path, key) => {
+            const paint = Math.floor(key / steps);
+            const alpha = steps === 1 ? 1 : (key % steps) / (steps - 1);
+            if (alpha <= 0.01) return;
+            ctx.globalAlpha = alpha;
+            if (surface && paint >= CELL_STYLES.length) {
+                const offset = paint - CELL_STYLES.length;
+                const style = Math.floor(offset / bands);
+                let color = surface.colors[offset % bands];
+                if (style === CELL_STYLE.unvisitedHovered) {
+                    color = `color-mix(in srgb, ${color} 68%, white)`;
+                }
+                ctx.fillStyle = color;
+                ctx.fill(path);
+                if (isCityStyle(style)) {
+                    ctx.strokeStyle = '#552519';
+                    ctx.lineWidth = 2.6;
+                    ctx.stroke(path);
+                    ctx.strokeStyle = visitedOrange(style);
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke(path);
+                }
+            } else {
+                ctx.fillStyle = surface && isCityStyle(paint) ? visitedOrange(paint) : colors[paint];
+                ctx.fill(path);
+            }
+        });
+        // The visited outline goes above the cells, so opaque terrain cannot
+        // cover their coastlines or their shared edges with other countries.
+        if (visitedBoundary) {
+            ctx.globalAlpha = Math.min(1, 3 * borders.alpha);
+            ctx.strokeStyle = borders.accent;
+            ctx.lineWidth = Math.max(1.5, borders.width + 0.8);
+            ctx.stroke(visitedBoundary);
+        }
+        ctx.globalAlpha = 1;
+    };
 
     // --- Flat map: spatial-bucket viewport culling, one path per style ---
     if (progress === 0) {
@@ -304,8 +384,7 @@ export function drawCellsCanvas(
                         ) {
                             continue;
                         }
-                        ctx.moveTo(x1, y1);
-                        ctx.lineTo(x2, y2);
+                        traceBoundary(seg, x1, y1, x2, y2);
                     }
                 }
             }
@@ -314,7 +393,6 @@ export function drawCellsCanvas(
             ctx.stroke();
         }
 
-        const paths: (Path2D | null)[] = new Array(CELL_STYLES.length).fill(null);
         for (let by = byMin; by <= byMax; by++) {
             for (let bx = bxMin; bx <= bxMax; bx++) {
                 for (const cell of tier.cellBuckets[by * BUCKET_COLS + bx]) {
@@ -322,8 +400,8 @@ export function drawCellsCanvas(
                     const cy = cell.center2d.ny * flatH + flatY;
                     if (cx < -margin || cx > W + margin || cy < -margin || cy > H + margin) continue;
                     const style = styles[cell.index];
-                    const scale = STYLE_SCALES[style];
-                    const path = (paths[style] ??= new Path2D());
+                    const scale = surface ? 0.96 : STYLE_SCALES[style];
+                    const path = pathFor(cell, style, 0, 1);
                     const v2 = cell.verts2d;
                     for (let i = 0; i < v2.length; i++) {
                         const px = cx + (v2[i].nx * flatW + flatX - cx) * scale;
@@ -335,12 +413,7 @@ export function drawCellsCanvas(
                 }
             }
         }
-        ctx.globalAlpha = 1;
-        paths.forEach((path, style) => {
-            if (!path) return;
-            ctx.fillStyle = colors[style];
-            ctx.fill(path);
-        });
+        paintBatches();
         return;
     }
 
@@ -375,8 +448,7 @@ export function drawCellsCanvas(
             ) {
                 continue;
             }
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
+            traceBoundary(seg, x1, y1, x2, y2);
         }
         ctx.strokeStyle = borders.color;
         ctx.lineWidth = borders.width;
@@ -384,7 +456,6 @@ export function drawCellsCanvas(
         ctx.globalAlpha = 1;
     }
 
-    const batches: (Path2D | null)[] = new Array(CELL_STYLES.length * OPACITY_STEPS).fill(null);
     for (const cell of tier.cells) {
         if (progress < cell.hideBelow) continue;
         const c3 = cell.center3d;
@@ -410,8 +481,8 @@ export function drawCellsCanvas(
         const opacity = (1 - progress) + Math.max(0.1, 0.45 + 0.55 * (czt / R)) * progress;
         const step = Math.max(0, Math.min(OPACITY_STEPS - 1, Math.round(opacity * (OPACITY_STEPS - 1))));
         const style = styles[cell.index];
-        const scale = STYLE_SCALES[style];
-        const path = (batches[style * OPACITY_STEPS + step] ??= new Path2D());
+        const scale = surface ? 0.96 : STYLE_SCALES[style];
+        const path = pathFor(cell, style, step, czt / R);
 
         const v3 = cell.verts3d;
         const v2 = cell.verts2d;
@@ -438,16 +509,7 @@ export function drawCellsCanvas(
         }
         path.closePath();
     }
-
-    batches.forEach((path, key) => {
-        if (!path) return;
-        const alpha = (key % OPACITY_STEPS) / (OPACITY_STEPS - 1);
-        if (alpha <= 0.01) return;
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = colors[Math.floor(key / OPACITY_STEPS)];
-        ctx.fill(path);
-    });
-    ctx.globalAlpha = 1;
+    paintBatches();
 }
 
 // Country name lookup - loaded from REST Countries API
@@ -497,12 +559,13 @@ export const HEX_SIZE_CHOICES: readonly { value: HexSizeChoice; label: string; n
     { value: 3, label: `${HEX_KM[3]} km`, note: 'The whole-world size, at any zoom.' },
     { value: 4, label: `${HEX_KM[4]} km`, note: 'At any zoom; the whole world is about 82,000 hexes.' },
     { value: 5, label: `${HEX_KM[5]} km`, note: 'Towns a few miles apart get their own. Zooms in to where these show.' },
+    { value: 6, label: `${HEX_KM[6]} km`, note: 'Neighbourhoods and small islands get their own. Zooms in to where these show.' },
 ];
 
 export function readStoredHexSize(): HexSizeChoice {
     try {
         const stored = window.localStorage.getItem(HEX_SIZE_STORAGE_KEY);
-        if (stored === '3' || stored === '4' || stored === '5') return Number(stored) as ShownRes;
+        if (stored === '3' || stored === '4' || stored === '5' || stored === '6') return Number(stored) as ShownRes;
     } catch {
         // Storage refused: the default.
     }

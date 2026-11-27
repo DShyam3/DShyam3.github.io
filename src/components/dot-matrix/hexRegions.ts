@@ -97,10 +97,10 @@ export function regionOf(level: HexRegionLevel, cell: string): string | undefine
 
 /**
  * How many rings out a hex with no town of its own looks for the nearest:
- * about 35 km at 17 km hexes, 45 km at 45 km ones, and not at all at 120 km,
- * where the next hex's town is too far off to call near.
+ * about 20 km at 6 km hexes, 35 km at 17 km hexes, 45 km at 45 km ones, and
+ * not at all at 120 km, where the next hex's town is too far off to call near.
  */
-const NEAR_RINGS: Record<number, number> = { 3: 0, 4: 1, 5: 2 };
+const NEAR_RINGS: Record<number, number> = { 3: 0, 4: 1, 5: 2, 6: 3 };
 
 /** The nearest town to an empty cell, within `NEAR_RINGS`, in the same country. */
 function nearTown(level: HexRegionLevel, cell: string): [string, number] | undefined {

@@ -8,11 +8,13 @@ import {
     buildDetailLevel,
     buildPatch,
     codeOf,
+    decodeDetailLevelBin,
+    decodeDetailLookupBin,
     detailHexAtPoint,
     resolveDetailCityHex,
     type HexDetailLevel,
 } from './hexDetail';
-import { expandLevel, type HexLevelJson } from './hexMapData';
+import { countryStyleIndex, expandLevel, type HexLevelJson } from './hexMapData';
 
 const read = (res: number) =>
     JSON.parse(readFileSync(resolve(__dirname, `../../../public/data/hex-map-v2-r${res}.json`), 'utf8')) as HexLevelJson;
@@ -54,11 +56,50 @@ describe('buildPatch', () => {
         expect([...data.centre2].every(Number.isFinite)).toBe(true);
     });
 
+    it('keeps both country codes at a cross-patch boundary and only the outside coast', () => {
+        // The French and Belgian cells touch across a resolution-1 patch boundary.
+        const french = '841fb45ffffffff';
+        const belgian = '841865bffffffff';
+        const domestic = '841fb6bffffffff'; // Touches the French cell only.
+        const level = buildDetailLevel({ res: 4, countries: { FR: [french, domestic], BE: [belgian] } });
+        for (const [cell, own, other, coasts] of [
+            [french, 'FR', 'BE', 9],
+            [belgian, 'BE', 'FR', 5],
+        ] as const) {
+            const patch = buildPatch(level, cellToParent(cell, PATCH_RES), equalEarth).data;
+            expect(patch.borderCount).toBe(coasts + 1);
+            expect(patch.borderCountries.length).toBe(2 * patch.borderCount);
+            const neighbors: number[] = [];
+            for (let i = 0; i < patch.borderCount; i++) {
+                expect(patch.borderCountries[2 * i]).toBe(countryStyleIndex(own));
+                neighbors.push(patch.borderCountries[2 * i + 1]);
+            }
+            expect(neighbors.filter(Boolean)).toEqual([countryStyleIndex(other)]);
+        }
+    });
+
     it('covers the whole level once across its patches', () => {
         const expanded = expandLevel(read(4)).length;
         let built = 0;
         for (const key of level4.patches.keys()) built += buildPatch(level4, key, equalEarth).data.count;
         expect(built).toBe(expanded);
+    });
+
+    it('decodes pre-baked binary detail levels with identical patch cells and border counts', () => {
+        for (const [res, jsonLevel] of [[4, level4], [5, level5]] as const) {
+            const buf = readFileSync(resolve(__dirname, `../../../public/data/hex-map-v2-r${res}.bin`));
+            const slice = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+            const lookup = decodeDetailLookupBin(slice);
+            const binLevel = decodeDetailLevelBin(slice);
+            expect(lookup.compact.size).toBe(jsonLevel.compact.size);
+            expect(binLevel.patches.size).toBe(jsonLevel.patches.size);
+            const key = cellToParent(latLngToCell(51.5, -0.12, res), PATCH_RES);
+            const fromJson = buildPatch(jsonLevel, key, equalEarth);
+            const fromBin = buildPatch(binLevel, key, equalEarth);
+            expect(fromBin.data.count).toBe(fromJson.data.count);
+            expect(fromBin.data.borderCount).toBe(fromJson.data.borderCount);
+            expect([...fromBin.data.borderCountries]).toEqual([...fromJson.data.borderCountries]);
+        }
     });
 });
 
@@ -82,7 +123,7 @@ describe('level files', () => {
         (JSON.parse(readFileSync(resolve(__dirname, '../../../public/countries.json'), 'utf8')) as { cca2: string }[]).map((c) => c.cca2),
     );
 
-    it.each([3, 4, 5])('names only real countries at level %i', (res) => {
+    it.each([3, 4, 5, 6])('names only real countries at level %i', (res) => {
         const unknown = Object.keys(read(res).countries).filter((code) => !known.has(code));
         expect(unknown).toEqual([]);
     });

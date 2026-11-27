@@ -24,7 +24,6 @@ export interface PatchBuilt {
     projection: MapProjectionId;
     key: string;
     h3: string[];
-    codes: string[];
     data: import('./hexMapData').HexPatchData;
 }
 
@@ -69,6 +68,7 @@ async function run() {
     if (running) return;
     running = true;
     try {
+        let sliceStart = performance.now();
         while (wanted && wanted.keys.length > 0) {
             const { res, projection } = wanted;
             const key = wanted.keys.shift()!;
@@ -84,7 +84,7 @@ async function run() {
             const patch = buildPatch(level, key, getMapProjection(projection));
             const { data } = patch;
             built.add(idOf(res, projection, key));
-            const message: PatchBuilt = { type: 'built', res, projection, key, h3: patch.h3, codes: patch.codes, data };
+            const message: PatchBuilt = { type: 'built', res, projection, key, h3: patch.h3, data };
             scope.postMessage(message, [
                 data.centre3.buffer,
                 data.centre2.buffer,
@@ -95,9 +95,13 @@ async function run() {
                 data.border3.buffer,
                 data.border2.buffer,
                 data.borderHide.buffer,
+                data.borderCountries.buffer,
             ]);
-            // Let a newer list in before the next build.
-            await new Promise((resolve) => setTimeout(resolve, 0));
+            // Yield only periodically so a visible batch finishes together without timer lag.
+            if (performance.now() - sliceStart >= 24) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+                sliceStart = performance.now();
+            }
         }
     } finally {
         running = false;
