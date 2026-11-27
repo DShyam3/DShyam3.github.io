@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { openAndDownload } from '@/lib/download';
 import { safeHref } from '@/lib/safe-url';
-import { plateProps, shownImageClass, useShownImage } from '@/lib/images/image-cache';
+import { plateProps, reportImageError, shownImageClass, useShownImage } from '@/lib/images/image-cache';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 
 interface CardDetailDialogProps {
@@ -262,7 +262,10 @@ function DetailImage({
       <img
         src={src}
         alt={alt}
-        onError={() => setFailedSrc(src)}
+        onError={() => {
+          reportImageError(src);
+          setFailedSrc(src);
+        }}
         className={cn('max-h-56 w-auto object-contain rounded-lg', logo && 'no-outline', cutout)}
       />
     </div>

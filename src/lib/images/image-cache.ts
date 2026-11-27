@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { FunctionsHttpError, type PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -60,8 +60,8 @@ export const imageCacheQuery = {
   retry: 1,
   retryOnMount: false,
   queryFn: async (): Promise<ImageCacheRow[]> => {
-    // Every row, past the server's 1,000-row page: rows are kept for sources
-    // no longer shown, so the index only grows.
+    // Every row, past the server's 1,000-row page: a row outlives its source's
+    // last use until the daily prune (prune.ts) clears it.
     const { data, error } = await selectAllPages(
       (from, to) =>
         supabase.from('image_cache').select(COLUMNS, { count: 'exact' }).order('source_hash').range(from, to),
@@ -118,13 +118,40 @@ const original = (src: string): ShownImage => ({
   keepBackground: false,
 });
 
+/** Stored copies that would not load in this tab; cards show their originals instead. */
+const brokenCopies = new Set<string>();
+const brokenListeners = new Set<() => void>();
+let brokenVersion = 0;
+const subscribeBroken = (listener: () => void) => {
+  brokenListeners.add(listener);
+  return () => {
+    brokenListeners.delete(listener);
+  };
+};
+const brokenSnapshot = () => brokenVersion;
+
+/**
+ * For an <img>'s onError. A stored copy that will not load -- pruned while a
+ * visitor's saved index still named it, lost from the bucket -- is swapped
+ * for its original on every card that shows it, rather than a fallback icon.
+ * Any other address is ignored: the card's own fallback handles it.
+ */
+export function reportImageError(src: string | undefined): void {
+  if (!src || brokenCopies.has(src) || !src.startsWith(storedImageUrl(''))) return;
+  brokenCopies.add(src);
+  brokenVersion++;
+  for (const listener of brokenListeners) listener();
+}
+
 /**
  * What a card should show for `source`: the stored copy when there is one,
  * else the source. `pending` while the index is first loading, so a card
  * does not load the original only to swap it a moment later. If the index
- * cannot be read, the source is shown at once, as before copies existed.
+ * cannot be read, or the copy would not load, the source is shown, as before
+ * copies existed.
  */
 export function useShownImage(source: string | undefined, enabled: boolean): { image?: ShownImage; pending: boolean } {
+  useSyncExternalStore(subscribeBroken, brokenSnapshot);
   const { data: row, isPending, isError, failureCount } = useQuery({
     ...imageCacheQuery,
     enabled: enabled && Boolean(source),
@@ -135,10 +162,11 @@ export function useShownImage(source: string | undefined, enabled: boolean): { i
   if (!source) return { pending: false };
   if (!enabled || isError || failureCount > 0) return { image: original(source), pending: false };
   if (isPending) return { pending: true };
-  if (row?.storage_path) {
+  const copy = row?.storage_path ? storedImageUrl(row.storage_path) : undefined;
+  if (row && copy && !brokenCopies.has(copy)) {
     return {
       image: {
-        src: storedImageUrl(row.storage_path),
+        src: copy,
         transparent: row.transparent,
         tone: row.tone,
         backdrop: row.backdrop,
@@ -322,6 +350,36 @@ async function fetchPixels(src: string): Promise<Fetched> {
   return { failure: FUNCTION_FAILURES[reason] ?? 'unreachable' };
 }
 
+let lockTail: Promise<unknown> = Promise.resolve();
+/**
+ * The longest one holder keeps the lock. Storage requests have no deadline of
+ * their own, and one left hanging (a laptop asleep mid-upload) must fail that
+ * one image, not stall copying in every tab until this one closes.
+ */
+const LOCK_DEADLINE_MS = 60_000;
+
+/**
+ * Runs `work` alone among writes to the copies: every store and recorded
+ * failure, and the whole of a prune (prune.ts). So a prune never deletes a
+ * file that is being written, and never reads an index a store is half-way
+ * through. Web Locks reach every tab of the site; where they are missing, a
+ * promise chain covers this one.
+ */
+export function withImageCacheLock<T>(work: () => Promise<T>): Promise<T> {
+  const bounded = () =>
+    new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new RequestFailed('The image cache lock was held too long')), LOCK_DEADLINE_MS);
+      work()
+        .then(resolve, reject)
+        .finally(() => clearTimeout(timer));
+    });
+  const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+  if (locks) return locks.request('image-cache', bounded);
+  const run = lockTail.then(bounded, bounded);
+  lockTail = run.catch(() => undefined);
+  return run;
+}
+
 /** Makes, stores and records a copy of `source`; null if the pixels cannot be decoded. */
 async function storeCopy(source: string, pixels: Pixels, keepBackground: boolean): Promise<ImageCacheRow | null> {
   let cleaned: Awaited<ReturnType<typeof cleanImage>>;
@@ -332,30 +390,32 @@ async function storeCopy(source: string, pixels: Pixels, keepBackground: boolean
   }
   const hash = await sha256Hex(source);
   const path = storagePathFor(hash, keepBackground, cleaned.ext);
-  const upload = await supabase.storage.from(IMAGE_BUCKET).upload(path, cleaned.blob, {
-    contentType: cleaned.blob.type,
-    // The name holds the source's hash and the cutout version, so a name's
-    // content never changes: cache it for good.
-    cacheControl: '31536000',
-    upsert: true,
+  return withImageCacheLock(async () => {
+    const upload = await supabase.storage.from(IMAGE_BUCKET).upload(path, cleaned.blob, {
+      contentType: cleaned.blob.type,
+      // The name holds the source's hash and the cutout version, so a name's
+      // content never changes: cache it for good.
+      cacheControl: '31536000',
+      upsert: true,
+    });
+    if (upload.error) throw storageFailure(upload.error);
+    const row: ImageCacheRow & { width: number; height: number } = {
+      source_hash: hash,
+      source_url: source,
+      storage_path: path,
+      transparent: cleaned.transparent,
+      tone: cleaned.tone,
+      backdrop: cleaned.backdrop,
+      keep_background: keepBackground,
+      failure: null,
+      processed_at: new Date().toISOString(),
+      width: cleaned.width,
+      height: cleaned.height,
+    };
+    const { error } = await supabase.from('image_cache').upsert(row);
+    if (error) throw tableFailure(error);
+    return row;
   });
-  if (upload.error) throw storageFailure(upload.error);
-  const row: ImageCacheRow & { width: number; height: number } = {
-    source_hash: hash,
-    source_url: source,
-    storage_path: path,
-    transparent: cleaned.transparent,
-    tone: cleaned.tone,
-    backdrop: cleaned.backdrop,
-    keep_background: keepBackground,
-    failure: null,
-    processed_at: new Date().toISOString(),
-    width: cleaned.width,
-    height: cleaned.height,
-  };
-  const { error } = await supabase.from('image_cache').upsert(row);
-  if (error) throw tableFailure(error);
-  return row;
 }
 
 async function recordFailure(source: string, failure: ImageFailure, keepBackground: boolean): Promise<ImageCacheRow> {
@@ -370,9 +430,11 @@ async function recordFailure(source: string, failure: ImageFailure, keepBackgrou
     failure,
     processed_at: new Date().toISOString(),
   };
-  const { error } = await supabase.from('image_cache').upsert(row);
-  if (error) throw tableFailure(error);
-  return row;
+  return withImageCacheLock(async () => {
+    const { error } = await supabase.from('image_cache').upsert(row);
+    if (error) throw tableFailure(error);
+    return row;
+  });
 }
 
 /** Pictures the items' pages name, then their fallbacks; never the broken source, never one the index cannot hold. */
@@ -476,8 +538,9 @@ function mergeRows(queryClient: QueryClient, rows: ImageCacheRow[]): void {
  * than recording every image as failed.
  *
  * Mount it where a re-render is cheap: it re-renders as the count falls.
+ * `idle` once the index has loaded and nothing is being copied.
  */
-export function useImageCacheWorker(jobs: ImageJob[], enabled: boolean): { remaining: number } {
+export function useImageCacheWorker(jobs: ImageJob[], enabled: boolean): { remaining: number; idle: boolean } {
   const queryClient = useQueryClient();
   // Only whether the index has loaded: a copy landing must not re-render the
   // component running the worker.
@@ -541,7 +604,10 @@ export function useImageCacheWorker(jobs: ImageJob[], enabled: boolean): { remai
     });
   }, [enabled, isSuccess, jobs, queryClient, round]);
 
-  return { remaining };
+  // A run sets `remaining` above zero in the same effect that starts it, so
+  // `idle` is true for at most one render before a run: long enough to start
+  // a timer, never long enough for one to fire.
+  return { remaining, idle: enabled && isSuccess && remaining === 0 };
 }
 
 /**

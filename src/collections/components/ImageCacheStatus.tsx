@@ -1,5 +1,7 @@
 import { useImageCacheWorker, type ImageJob } from '@/lib/images/image-cache';
+import { useImageCachePrune } from '@/lib/images/prune';
 import { cn } from '@/lib/utils';
+import { imageSourcesInUse } from '../image-sources';
 
 /**
  * Runs the owner's background copying of card images and says how far it has
@@ -11,7 +13,9 @@ import { cn } from '@/lib/utils';
  * out every step would drown everything else.
  */
 export function ImageCacheStatus({ jobs }: { jobs: ImageJob[] }) {
-  const { remaining } = useImageCacheWorker(jobs, true);
+  const { remaining, idle } = useImageCacheWorker(jobs, true);
+  // Once the copying is done, clear out copies no card has shown for a while.
+  useImageCachePrune(imageSourcesInUse, idle);
   return (
     <span
       role="status"

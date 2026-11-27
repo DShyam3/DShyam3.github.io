@@ -3415,6 +3415,20 @@ Four decisions, each with its reason:
 
 Closure: shipped 2026-11-27. The hosted migration (`image_cache`) is applied, with the advisors showing nothing new, and `item-image` is deployed with JWT verification on (an anonymous call gets 401). The code is on `main`. No copy exists on the hosted bucket until the owner next opens Inventory or Links signed in; that first pass was verified only on the local stack. What is still open, including the owner's check of the few whole-on-plate shots, is in `STATE.md`; orphaned copies and the image-search fallback are in `REHAUL_PLAN.md`.
 
+### Pruning unused image copies: in the owner's browser, under a lock, two days after last use, and cards that fall back to the original — 2026-11-27
+
+1. **The prune runs in the owner's browser, once a day, not as a scheduled database job.** What a card shows is worked out in the browser: a link with no icon shows a favicon address built from its URL, so SQL cannot list every source in use. A stored file can also be deleted only through the Storage API, never by SQL, so a database job could drop index rows but would leave their files.
+
+2. **The prune and every store share one lock.** It uses Web Locks, so it covers every tab of the site. Without it, a copy written while a prune ran could lose its file under a row that names it. That loss would be permanent, because a row with a current copy is never redone. Work holding the lock fails after a minute: storage requests have no deadline of their own, and one left hanging must not stall copying in every tab.
+
+3. **A copy goes two days after it was last in use, not two days after it was made.** The owner's browser records when it first sees each source unused, at its prunes. A file is kept until two days after its row moved to a newer copy. A file of a source still in use is never deleted while that source has no row.
+
+4. **Any copy that fails to load gives way to its original on every card that shows it.** That covers what the grace cannot: use the owner's browser never saw, because each browser keeps its own record and only notices at a prune; and a visitor's saved index naming a deleted file. So a deleted copy costs a visitor the original picture, never a blank tile. Separately, a row whose file is missing is dropped at the next prune, however many there are, so the worker copies it again. The bucket listing is the owner's own reading: only the owner can list it or delete from it.
+
+5. **Unused rows are not pruned when a reading is in doubt.** That means a collection read that fails or comes back empty (each is read whole, past the 1,000-row cap), an empty index beside stored files, or more than half the index unused.
+
+Closure: committed and pushed 2026-11-27, not on Pages while GitHub's billing lock stops deploys. Verified on the local stack with data backdated: the first run took the index from 158 rows to 156 and the bucket from 729 files to 152. A simulated picture change, marked unused three days earlier, pruned exactly that row and file, and the worker copied it again once restored. With a copy's file removed, its card showed the original, the next prune dropped the row, and the next load re-made the copy. No row was left naming a missing file. The reviewer's second pass found three risks; all three are fixed. Those fixes were not reviewed again.
+
 ### Finance: a table that fails to load after a profile switch is emptied and named, not kept — 2026-11-27
 
 Why: A failed read left whatever was on screen. After a profile switch that was the previous profile's rows under the new profile's name. Saves were already refused for a failed table (save-safety), so this was display only, but a wrong ledger reads exactly like a right one, which Part 0.5 rules out.

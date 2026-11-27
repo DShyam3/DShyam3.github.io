@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { cn } from '@/lib/utils';
-import { useShownImage } from '@/lib/images/image-cache';
+import { reportImageError, useShownImage } from '@/lib/images/image-cache';
 import { edcCategoryLabel, isInEdc } from './categories';
 import type { InventoryRow } from '@/collections/inventory';
 
@@ -109,7 +109,7 @@ function EdcThumb({ image }: { image?: string }) {
   return (
     <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted p-1">
       {shown.image ? (
-        <img src={shown.image.src} alt="" loading="lazy" className="no-outline h-full w-full object-contain" />
+        <img src={shown.image.src} alt="" loading="lazy" className="no-outline h-full w-full object-contain" onError={() => reportImageError(shown.image?.src)} />
       ) : shown.pending ? null : (
         <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
       )}

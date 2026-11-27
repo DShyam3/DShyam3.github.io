@@ -2,6 +2,7 @@ import type { WatchlistItem } from './WatchlistContext';
 import { normaliseTitle, type LetterboxdFilm } from './letterboxd-import';
 import type { TraktParseResult, TraktTitleRef } from './trakt-import';
 import { localNoonIso } from './watched-when';
+import { inChunks } from '@/lib/in-chunks';
 
 /** The RPC takes at most 5000 elements an array; stay well inside it. */
 export const IMPORT_BATCH_SIZE = 1000;
@@ -272,9 +273,7 @@ export function summarisePlan(plan: ImportPlan) {
 }
 
 export function chunk<T>(items: T[], size: number = IMPORT_BATCH_SIZE): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
+  return inChunks(items, size);
 }
 
 const earlier = (a: string | null, b: string | null) => (a && b ? (a <= b ? a : b) : a ?? b);

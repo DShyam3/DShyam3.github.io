@@ -173,11 +173,7 @@ export const rowsToWrite = <T extends object>(rows: readonly T[], isStored: (row
   rows.filter(row => !isStored(row));
 
 /** `items` in runs of `size`, so an id filter stays within a URL's length. */
-export const inChunks = <T,>(items: readonly T[], size: number): T[][] => {
-  const runs: T[][] = [];
-  for (let at = 0; at < items.length; at += size) runs.push(items.slice(at, at + size));
-  return runs;
-};
+export { inChunks } from '@/lib/in-chunks';
 
 /** The row as this page knew it in one load generation. */
 export interface SeenRow {

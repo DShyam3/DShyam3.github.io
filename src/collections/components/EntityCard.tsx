@@ -7,7 +7,7 @@ import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { cn } from '@/lib/utils';
 import { EntityFormDialog } from './EntityFormDialog';
 import { safeHref } from '@/lib/safe-url';
-import { plateProps, shownImageClass, useShownImage } from '@/lib/images/image-cache';
+import { plateProps, reportImageError, shownImageClass, useShownImage } from '@/lib/images/image-cache';
 import type { CardVariant, CollectionConfig, CollectionRow, ImageFit } from '../types';
 
 /**
@@ -142,7 +142,11 @@ function MediaFace({
             )}
             loading="lazy"
             onLoad={() => setLoadedImage(image || null)}
-            onError={() => setFailedImage(image || null)}
+            onError={() => {
+              // A stored copy that fails gives way to its original first.
+              reportImageError(image);
+              setFailedImage(image || null);
+            }}
           />
         ) : (
           <div className="missing-art w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center">

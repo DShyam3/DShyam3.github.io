@@ -156,7 +156,8 @@ one-colour mark is inverted to show on the theme it would vanish into, and a log
 that is its own coloured square sits on the stage rounded like an app icon. The
 owner's browser makes these copies automatically while Links is open. A dead icon
 is replaced from the link's own site where the site allows it, and the owner can
-keep or remove an icon's background in the edit form.
+keep or remove an icon's background in the edit form. If a copy ever fails to
+load, the original icon is shown instead.
 
 Each saved link is checked once a day, at 04:40 UTC. A link is failing after three failed checks in a row. A check fails when the final address, after up to five redirects, answers with a status outside 2xx, or does not answer at all: the domain does not resolve, the connection fails or times out, there are too many redirects, the address is not a web address, or it points at a private network address. Responses of 401, 403, 429 and Cloudflare bot challenges count as working. Only the signed-in owner sees the results. While any link is failing, the Links toolbar shows "N links failing"; it opens a list of each failing link, the reason, and the day it began failing, and each row opens the link (a drawer on a phone, a popover elsewhere). If no link is failing but a link has not been checked for over two days, or the check has never run, the button reads "Link check stalled" and says so. A link whose address is edited starts again from zero. Visitors see none of this.
 
@@ -490,6 +491,7 @@ copy yet, a couple at a time, with a "Cleaning images · N left" line in the
 toolbar. A picture that no longer loads is replaced with the one the item's own
 product page shows, where the shop allows the page to be read. The edit form
 offers "Keep original background" or "Remove background" for a saved picture.
+If a copy ever fails to load, the card shows the original picture instead.
 
 ---
 

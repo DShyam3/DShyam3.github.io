@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Package } from 'lucide-react';
 import { CardDetailDialog } from '@/components/cards/CardDetailDialog';
-import { plateProps, shownImageClass, useShownImage } from '@/lib/images/image-cache';
+import { plateProps, reportImageError, shownImageClass, useShownImage } from '@/lib/images/image-cache';
 import { cn } from '@/lib/utils';
 import { edcCategoryLabel } from './categories';
 import type { InventoryRow } from '@/collections/inventory';
@@ -34,7 +34,7 @@ export function EdcProductCard({ item, config }: EdcProductCardProps) {
           style={plate?.style}
         >
           {shown.pending ? null : image && failedImage !== image ? (
-            <img src={image} alt="" loading="lazy" className={cn('h-full w-full object-contain', cutout)} onError={() => setFailedImage(image)} />
+            <img src={image} alt="" loading="lazy" className={cn('h-full w-full object-contain', cutout)} onError={() => { reportImageError(image); setFailedImage(image); }} />
           ) : <Package className="h-10 w-10 text-muted-foreground" aria-hidden="true" />}
         </div>
         <div className="w-full space-y-1 p-3">
