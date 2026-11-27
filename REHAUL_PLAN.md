@@ -320,11 +320,12 @@ verification work retains its priority.
 
 ### CI runtime
 
-The workflows (`.github/workflows/ci.yml`, `deploy.yml`) run on `ubuntu-latest`
-and pin their Actions to major versions 3 and 4. An earlier handoff recorded that
-GitHub will run Actions on Node 24 and move `ubuntu-latest` to 26. That was not
-checked against GitHub's announcement on 2026-10-24. Confirm it, then move the
-Actions and the Node version before the change is enforced.
+GitHub's two runner changes are done, and the workflows already run on both:
+every pinned action uses `node24`, and `ubuntu-latest` is Ubuntu 26.04 (seen in
+the 2026-11-26 deploy). What is left is the build's own Node, 22 in both
+workflows and locally. Node 22 reaches end of life on 2027-04-30. Move
+`setup-node` and local development to 24 together before then, not CI alone, so
+the deploy keeps testing what was tested locally.
 
 ### Watchlist News and Library — what is left
 
