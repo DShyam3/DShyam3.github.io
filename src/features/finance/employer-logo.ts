@@ -44,8 +44,8 @@ export function matchEmployerOrg<T extends { name: string; aliases?: readonly st
   // Prefixes are compared on whole slug words, so "Arm" never finds "Armagh
   // Council", and the longest match wins when several orgs qualify.
   const uniqueOrg = (matches: typeof slugged) => {
-    const matched = new Set(matches.map(({ org }) => org));
-    return matched.size === 1 ? [...matched][0] : null;
+    const logos = new Set(matches.map(({ org }) => org.logoUrl ?? null));
+    return logos.size === 1 ? matches[0].org : null;
   };
   const longest = (matches: typeof slugged) => {
     const length = Math.max(...matches.map(match => match.slug.length));
