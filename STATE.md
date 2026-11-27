@@ -2,7 +2,7 @@ Updated 2026-11-27. Local `main` and `origin/main` synced with anon default priv
 
 ## Closed
 
-- **Ponytail setup & whole-repo audit fixes** (pushed; **Edge Functions not yet deployed** to hosted Supabase): Installed Ponytail skills in `.agents/skills/ponytail*` and added the always-on ruleset to `AGENTS.md`. Fixed TrueLayer token-refresh error handling, 401/403 masking, non-finite amount filtering, concurrent source-sync upsert race, and fetch timeouts; eliminated module-level `activeUsage` races in `watchlist-cron-sync` and `merchant-logo-cache`, stream-capped Brandfetch logo downloads, paginated `links-check`, fixed JPEG `0xFF 0xFF` fill bytes, and added Deno tests (`require-admin`, `cooldown`, `jpeg`). Fixed finance insert-before-delete for 4 settings tables, DB-first debt observations sorted by date, same-day CSV duplicate imports, debt month-overflow, cash-benefit tax stacking, negative pension pot, and rule-applied baseline drift. Deleted orphaned `src/lib/in-chunks.ts`, dead `equalEarth`/`sf-symbols` exports, duplicated helpers, and `dotenv`; replaced all `src/` `date-fns` call sites (`date-fns` kept in `package.json` as a `react-day-picker` peer dependency).
+- **Ponytail setup & whole-repo audit fixes** (`5791ffeb`, live on Pages via deploy `46063005569`; all 8 modified Edge Functions deployed to hosted Supabase): Installed Ponytail skills in `.agents/skills/ponytail*` and added the always-on ruleset to `AGENTS.md`. Fixed TrueLayer token-refresh error handling, 401/403 masking, non-finite amount filtering, concurrent source-sync upsert race, and fetch timeouts; eliminated module-level `activeUsage` races in `watchlist-cron-sync` and `merchant-logo-cache`, stream-capped Brandfetch logo downloads, paginated `links-check`, fixed JPEG `0xFF 0xFF` fill bytes, and added Deno tests (`require-admin`, `cooldown`, `jpeg`). Fixed finance insert-before-delete for 4 settings tables, DB-first debt observations sorted by date, same-day CSV duplicate imports, debt month-overflow, cash-benefit tax stacking, negative pension pot, and rule-applied baseline drift. Deleted orphaned `src/lib/in-chunks.ts`, dead `equalEarth`/`sf-symbols` exports, duplicated helpers, and `dotenv`; replaced all `src/` `date-fns` call sites (`date-fns` kept in `package.json` as a `react-day-picker` peer dependency).
 - **Cleaned card images** (`64aa9de3`, live on Pages via deploy `46042232214` attempt 2).
 
 ## Travel (pushed)
@@ -26,15 +26,16 @@ Updated 2026-11-27. Local `main` and `origin/main` synced with anon default priv
 
 ## Still open / not verified
 
-- **Ponytail audit fixes:** Modified Edge Functions (`truelayer-sync`, `watchlist-cron-sync`, `merchant-logo-cache`, `item-image`, `links-check`, `sync-bank-holidays`, `tmdb-proxy`, `travel-photo`) are **not yet deployed** to hosted Supabase. Monolith splits (#18) and `src/lib/finance/llm.ts` removal were intentionally deferred.
+- **Ponytail audit follow-ups:** Monolith splits (#18) and `src/lib/finance/llm.ts` removal were intentionally deferred.
 - **Travel & Inventory:** Real-device iPhone/iPad checks of map pinch zoom and touches.
 - **Other surfaces:** Live owner-signed-in checks of `/watchlist/franchises`, `/watchlist/facts`, Dead-link failures, and manual TV sync.
+- **Hosted migration history drift:** hosted records seven versions the repo lacks, so `supabase db push` refuses until repaired (owner's call; REHAUL_PLAN.md database follow-ups).
+- **Live on Pages, not checked signed in:** cleaned card images, image pruning and the Finance profile-switch notice.
 
 ## Next
 
-1. Deploy updated Edge Functions to hosted Supabase.
-2. Verify map appearance on iPhone/iPad; open Inventory and Links signed in on Pages; complete live owner-signed-in checks.
+1. Verify map appearance on iPhone/iPad; open Inventory and Links signed in on Pages; complete live owner-signed-in checks.
 
 ## Blockers
 
-The billing lock cleared. The last confirmed Pages deployment is `46042232214` attempt 2.
+None. The billing lock is cleared; Pages was last deployed by `46063005569` (`5791ffeb`, success) on 2026-11-27.
