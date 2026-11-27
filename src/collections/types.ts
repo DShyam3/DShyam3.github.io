@@ -208,6 +208,22 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
     subtitle?: (item: T) => string | undefined;
     /** Thumbnail, icon or cover. */
     image?: (item: T) => string | undefined;
+    /**
+     * Keep a cleaned copy of each card image in our own bucket -- studio
+     * background removed, so the picture sits on the theme -- and show that
+     * instead of the original (see `image-cache.ts`). For product shots and
+     * logos; never for photographs or covers, whose background is the picture.
+     */
+    cleanImage?: {
+      /** What the picture shows, which decides where a replacement is looked for. */
+      want: 'product' | 'icon';
+      /** The item's own page, asked for its current picture once the stored one stops loading. */
+      page?: (item: T) => string | undefined;
+      /** The column a replacement picture is written to. */
+      field: keyof T & string;
+      /** Pictures to try after the page's own, e.g. a favicon service. */
+      fallbacks?: (item: T) => string[];
+    };
     /** External link the detail dialog opens. */
     href?: (item: T) => string | undefined;
     /** Body text on the card face. */

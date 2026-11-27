@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { openAndDownload } from '@/lib/download';
 import { safeHref } from '@/lib/safe-url';
+import { plateProps, shownImageClass, useShownImage } from '@/lib/images/image-cache';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 
 interface CardDetailDialogProps {
@@ -16,6 +17,8 @@ interface CardDetailDialogProps {
   downloadName?: string;
   /** Sit the image on a logo's white plate, without the photo hairline. */
   imageIsLogo?: boolean;
+  /** Show the collection's cleaned copy of the image, if it has one (`image-cache.ts`). */
+  cleanImage?: boolean;
   /** Whoever can fix the record is told when its image has stopped loading. */
   canEdit?: boolean;
   open: boolean;
@@ -51,6 +54,7 @@ export function CardDetailDialog({
   imageIsContent,
   downloadName,
   imageIsLogo,
+  cleanImage,
   canEdit,
   editAction,
   onDelete,
@@ -93,6 +97,7 @@ export function CardDetailDialog({
               src={imageUrl}
               alt={title}
               logo={Boolean(imageIsLogo)}
+              clean={Boolean(cleanImage)}
               canEdit={Boolean(canEdit)}
             />
           ) : null}
@@ -188,6 +193,7 @@ export function CardDetailDialog({
     imageIsContent,
     downloadName,
     imageIsLogo,
+    cleanImage,
     canEdit,
     editAction,
     onDelete,
@@ -218,19 +224,26 @@ export function CardDetailDialog({
  * edit the record is told to replace it.
  */
 function DetailImage({
-  src,
+  src: source,
   alt,
   logo,
+  clean,
   canEdit,
 }: {
   src: string;
   alt: string;
   logo: boolean;
+  clean: boolean;
   canEdit: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const shown = useShownImage(source, clean);
+  if (shown.pending || !shown.image) return null;
+  const { src } = shown.image;
+  const cutout = shownImageClass(shown.image, logo);
+  const plate = plateProps(shown.image);
 
-  if (failed) {
+  if (failedSrc === src) {
     return canEdit ? (
       <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
         Image no longer loads. Edit to replace it.
@@ -242,14 +255,15 @@ function DetailImage({
     <div
       className={cn(
         'flex justify-center rounded-xl border border-border/50 p-2',
-        logo ? 'bg-white' : 'bg-background/50',
+        cutout ? 'media-stage p-4' : plate ? plate.className : logo ? 'bg-white' : 'bg-background/50',
       )}
+      style={plate?.style}
     >
       <img
         src={src}
         alt={alt}
-        onError={() => setFailed(true)}
-        className={cn('max-h-56 w-auto object-contain rounded-lg', logo && 'no-outline')}
+        onError={() => setFailedSrc(src)}
+        className={cn('max-h-56 w-auto object-contain rounded-lg', logo && 'no-outline', cutout)}
       />
     </div>
   );

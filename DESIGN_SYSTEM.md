@@ -286,6 +286,7 @@ uppercase-label question that `REHAUL_PLAN.md` carried until 11 September
 | Ordinary panel | Quiet tint, fine border, shallow shadow | `Card` / `surface-card` |
 | Focal panel | Stronger radial gradient with readable text | `ambient-card` or `Card` with `data-palette` |
 | Collection card | Consistent image ratio, tinted text area, modest hover lift | `item-card`, `card-body` |
+| Cleaned card image | Product shots and logos sit on the theme, never on a white square: a cut-out copy on a softly lit muted stage with a drop shadow; a shot that cannot be cut safely (white on white, a large opening) on a plate of its own backdrop colour, dimmed with the picture in the dark theme; a one-colour logo inverted on the theme it would vanish into | `media-stage`, `media-cutout`, `media-plate`, `logo-tone-*`; `lib/images/image-cache.ts` |
 | Navigation | Pill control, frosted menu, coloured destination markers | `NavMenu`, `navigation-panel` |
 | Filters | Compact toolbar: primary facet select, search with a clear button, Filters popover whose trigger counts facets moved off their default, sort select | `FilterBar`, `CollectionPage` (sort) |
 | Toolbar panel | A small panel opened from a toolbar button: a bottom drawer on a phone, a popover anchored to the button elsewhere, scrolling inside itself. Use it rather than writing the Drawer/Popover switch again | `ResponsivePopover` (Filters, Links' failing-links panel) |

@@ -2203,6 +2203,48 @@ export type Database = {
           },
         ]
       }
+      image_cache: {
+        Row: {
+          backdrop: string | null
+          failure: string | null
+          height: number | null
+          keep_background: boolean
+          processed_at: string
+          source_hash: string
+          source_url: string
+          storage_path: string | null
+          tone: string | null
+          transparent: boolean
+          width: number | null
+        }
+        Insert: {
+          backdrop?: string | null
+          failure?: string | null
+          height?: number | null
+          keep_background?: boolean
+          processed_at?: string
+          source_hash: string
+          source_url: string
+          storage_path?: string | null
+          tone?: string | null
+          transparent?: boolean
+          width?: number | null
+        }
+        Update: {
+          backdrop?: string | null
+          failure?: string | null
+          height?: number | null
+          keep_background?: boolean
+          processed_at?: string
+          source_hash?: string
+          source_url?: string
+          storage_path?: string | null
+          tone?: string | null
+          transparent?: boolean
+          width?: number | null
+        }
+        Relationships: []
+      }
       inspirations: {
         Row: {
           category: string

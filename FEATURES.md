@@ -146,8 +146,17 @@ record from its detail as well as from the card.
 
 Links are organised into categories: All, Dev Setup, Websites, iPhone, iPad, Mac.
 Link icons resolve at high resolution, displaying an Apple ecosystem mark for
-generic Apple addresses when no custom icon is set. Link icons show whole on a
-white plate, with no outline.
+generic Apple addresses when no custom icon is set. Link icons show whole, with
+no outline; one whose copy has not been made yet sits on a white plate.
+
+Each link's icon is shown from a copy the site keeps in its own storage, so it
+does not break when the source moves. The copy has its background removed where
+that can be done safely and sits on the theme rather than on a white square. A
+one-colour mark is inverted to show on the theme it would vanish into, and a logo
+that is its own coloured square sits on the stage rounded like an app icon. The
+owner's browser makes these copies automatically while Links is open. A dead icon
+is replaced from the link's own site where the site allows it, and the owner can
+keep or remove an icon's background in the edit form.
 
 Each saved link is checked once a day, at 04:40 UTC. A link is failing after three failed checks in a row. A check fails when the final address, after up to five redirects, answers with a status outside 2xx, or does not answer at all: the domain does not resolve, the connection fails or times out, there are too many redirects, the address is not a web address, or it points at a private network address. Responses of 401, 403, 429 and Cloudflare bot challenges count as working. Only the signed-in owner sees the results. While any link is failing, the Links toolbar shows "N links failing"; it opens a list of each failing link, the reason, and the day it began failing, and each row opens the link (a drawer on a phone, a popover elsewhere). If no link is failing but a link has not been checked for over two days, or the check has never run, the button reads "Link check stalled" and says so. A link whose address is edited starts again from zero. Visitors see none of this.
 
@@ -468,6 +477,19 @@ once removed. Each selection saves automatically. The editor wraps long item
 names and brands on narrow screens and keeps focused controls fully visible.
 The item edit form refuses Include in Everyday Carry (EDC) set to Yes on a
 wishlist item, with the message "Wishlist items cannot be in your EDC".
+
+Each product picture, on the cards, in the details and in the EDC showcase, is
+shown from a copy the site keeps in its own storage, so it does not break when
+the shop moves or removes the original. The copy has its studio background
+removed and is trimmed, so the product sits on the theme with a soft shadow. A
+shot that cannot be cut out safely, such as a white product on white or one with
+a large opening, is shown whole on a plate of its own background colour, dimmed
+in the dark theme. Photos with busy or coloured backgrounds are left as they are.
+While the owner has Inventory open, their browser copies any picture that has no
+copy yet, a couple at a time, with a "Cleaning images · N left" line in the
+toolbar. A picture that no longer loads is replaced with the one the item's own
+product page shows, where the shop allows the page to be read. The edit form
+offers "Keep original background" or "Remove background" for a saved picture.
 
 ---
 

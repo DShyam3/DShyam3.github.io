@@ -238,6 +238,34 @@
   background: hsl(var(--well));
   border-bottom: 1px solid hsl(var(--border));
 }
+/* A cleaned card image (lib/images/image-cache.ts) has no background of its
+   own, so it sits on a stage in the theme's colours rather than on white: the
+   muted tile, lit softly from the middle so a black product still has
+   something to stand against in the dark theme. */
+.media-stage {
+  background:
+    radial-gradient(ellipse 65% 55% at 50% 48%, hsl(var(--foreground) / 0.06), transparent 72%),
+    hsl(var(--muted));
+}
+.dark .media-stage {
+  background:
+    radial-gradient(ellipse 65% 55% at 50% 48%, hsl(var(--foreground) / 0.1), transparent 72%),
+    hsl(var(--muted));
+}
+img.media-cutout { filter: drop-shadow(0 6px 10px hsl(var(--foreground) / 0.14)); }
+.dark img.media-cutout { filter: drop-shadow(0 8px 14px rgb(0 0 0 / 0.5)); }
+/* A copy kept whole -- a white product on white, which cannot be cut out
+   safely -- fills its tile with its own backdrop colour, so the picture has no
+   edge. The dark theme dims plate and picture alike, by the same factor, so
+   they still meet without a seam. */
+.media-plate { background-color: var(--plate); }
+.dark .media-plate img { filter: brightness(0.82); }
+@supports (background-color: color-mix(in srgb, white 50%, black)) {
+  .dark .media-plate { background-color: color-mix(in srgb, var(--plate) 82%, black); }
+}
+/* A one-colour logo flips on the theme it would vanish into. */
+.dark img.logo-tone-dark,
+:root:not(.dark) img.logo-tone-light { filter: invert(1); }
 .item-card:focus-visible,
 .record-preview:focus-visible,
 .travel-country-row:focus-visible,

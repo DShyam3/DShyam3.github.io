@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { Library, Plus } from 'lucide-react';
@@ -9,6 +9,11 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { CardGrid } from '@/components/shared/CardGrid';
 import { CountLabel } from '@/components/shared/CountLabel';
 import { useAuth } from '@/contexts/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+import type { ImageJob } from '@/lib/images/image-cache';
+import { ImageCacheStatus } from './ImageCacheStatus';
 import { ALL } from '../facets';
 import { useCollection } from '../useCollection';
 import { FilterBar } from './FilterBar';
@@ -74,6 +79,37 @@ function CollectionPageView<T extends CollectionRow, R>({
     revealedKey.current = location.key;
     reveal(revealRow, config.card.title(revealRow));
   }, [revealRow, location.key, reveal, config.card]);
+
+  // The owner's browser copies each card image into our bucket, background
+  // removed, and swaps a broken one for the item's current picture.
+  const queryClient = useQueryClient();
+  const cleanImage = config.card.cleanImage;
+  const cardImage = config.card.image;
+  const table = config.table;
+  const imageJobs = useMemo<ImageJob[]>(() => {
+    if (!cleanImage || !cardImage || !isAdmin) return [];
+    const field: string = cleanImage.field;
+    return all.flatMap((row) => {
+      const source = cardImage(row);
+      if (!source) return [];
+      const current = (row as Record<string, unknown>)[field] as string | null | undefined;
+      return [{
+        source,
+        want: cleanImage.want,
+        page: cleanImage.page?.(row),
+        fallbacks: cleanImage.fallbacks?.(row),
+        // Silent, and only if the record still holds the picture that was
+        // found dead: an edit the owner saved meanwhile wins, and a write
+        // they did not ask for raises no "Item updated" toast.
+        replace: async (url: string) => {
+          const update = (supabase as unknown as SupabaseClient).from(table).update({ [field]: url }).eq('id', row.id);
+          const { error } = await (current == null ? update.is(field, null) : update.eq(field, current));
+          if (error) throw error;
+          await queryClient.invalidateQueries({ queryKey: [table] });
+        },
+      }];
+    });
+  }, [all, cleanImage, cardImage, isAdmin, table, queryClient]);
 
   const layout = CARD_LAYOUT[config.card.variant];
   const CollectionIcon = config.card.fallbackIcon ?? Library;
@@ -142,6 +178,7 @@ function CollectionPageView<T extends CollectionRow, R>({
               />
             </div>
             <div className="flex min-w-0 flex-wrap items-center gap-1">
+              {isAdmin && cleanImage && <ImageCacheStatus jobs={imageJobs} />}
               {config.summary?.(items, isAdmin, all)}
               {customToolbarContent !== undefined ? (
                 customToolbarContent

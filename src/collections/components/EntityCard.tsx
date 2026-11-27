@@ -1,4 +1,4 @@
-import { useState, useRef, type ReactNode } from 'react';
+import { useState, useRef, type CSSProperties, type ReactNode } from 'react';
 import { BookOpen, ExternalLink, Image, Pencil, Quote, Trash2, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { cn } from '@/lib/utils';
 import { EntityFormDialog } from './EntityFormDialog';
 import { safeHref } from '@/lib/safe-url';
+import { plateProps, shownImageClass, useShownImage } from '@/lib/images/image-cache';
 import type { CardVariant, CollectionConfig, CollectionRow, ImageFit } from '../types';
 
 /**
@@ -27,6 +28,12 @@ interface FaceProps {
   title: string;
   subtitle?: string;
   image?: string;
+  /** The image is still being looked up among the cleaned copies: hold it rather than load the original. */
+  imagePending?: boolean;
+  /** Classes for a cleaned copy with a transparent background, which sits on the theme rather than a plate. */
+  cutoutClass?: string;
+  /** A cleaned copy kept whole: the tile becomes a plate in its backdrop colour. */
+  plate?: { className: string; style: CSSProperties };
   excerpt?: string;
   badge?: string;
   /** Right-aligned beside the title, e.g. a price. */
@@ -85,7 +92,8 @@ function openableProps(openable: boolean, title: string, onOpen: () => void) {
  * neighbours and the wall lost its rhythm.
  */
 function MediaFace({
-  Fallback, imageFit, aspect, title, subtitle, image, excerpt, badge, meta, href, actions, onOpen, openable, canEdit,
+  Fallback, imageFit, aspect, title, subtitle, image, imagePending, cutoutClass, plate, excerpt, badge, meta, href, actions,
+  onOpen, openable, canEdit,
 }: FaceProps) {
   // Stored image URLs go stale -- a cover moves, a shop takes a product photo
   // down -- and a broken <img> renders as alt text on a grey box. Falling back
@@ -97,6 +105,7 @@ function MediaFace({
   // A visitor sees the same tile as a record that never had an image. Only
   // the person who can replace it is told the stored one has stopped loading.
   const brokenImage = canEdit && Boolean(image) && image === failedImage;
+  const loading = imagePending || (showImage && loadedImage !== image);
 
   return (
     <div
@@ -109,14 +118,19 @@ function MediaFace({
       <div
         className={cn(
           'relative overflow-hidden shrink-0',
-          // White only once the logo is showing: the loading caption is
+          // A cut-out copy sits on the theme's stage. Otherwise a logo gets a
+          // white plate -- only once it is showing: the loading caption is
           // written for the muted tile and is unreadable on white in dark theme.
-          imageFit === 'logo' && showImage && loadedImage === image ? 'bg-white' : 'bg-muted',
+          cutoutClass
+            ? 'media-stage'
+            : plate && showImage
+              ? plate.className
+              : imageFit === 'logo' && showImage && loadedImage === image ? 'bg-white' : 'bg-muted',
         )}
-        style={{ aspectRatio: aspect }}
+        style={{ aspectRatio: aspect, ...(plate && showImage ? plate.style : undefined) }}
       >
-        {showImage && loadedImage !== image && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground" role="status"><Fallback className="h-8 w-8" aria-hidden="true" /><span className="text-xs">Loading artwork…</span></div>}
-        {showImage ? (
+        {loading && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground" role="status"><Fallback className="h-8 w-8" aria-hidden="true" /><span className="text-xs">Loading artwork…</span></div>}
+        {imagePending ? null : showImage ? (
           <img
             src={image}
             alt={title}
@@ -124,6 +138,7 @@ function MediaFace({
               'w-full h-full relative',
               loadedImage !== image && 'opacity-0',
               IMAGE_FIT_CLASS[imageFit],
+              cutoutClass,
             )}
             loading="lazy"
             onLoad={() => setLoadedImage(image || null)}
@@ -272,7 +287,10 @@ export function EntityCard<T extends CollectionRow, R>({
   const { card } = config;
   const title = card.title(item);
   const subtitle = card.subtitle?.(item);
-  const image = card.image?.(item);
+  const source = card.image?.(item);
+  const clean = Boolean(card.cleanImage);
+  const shown = useShownImage(source, clean);
+  const image = shown.image?.src;
   const href = safeHref(card.href?.(item));
   const excerpt = card.excerpt?.(item);
   const badge = card.badge?.(item);
@@ -352,6 +370,9 @@ export function EntityCard<T extends CollectionRow, R>({
           title={title}
           subtitle={subtitle}
           image={image}
+          imagePending={shown.pending}
+          cutoutClass={shown.image ? shownImageClass(shown.image, card.imageFit === 'logo') : undefined}
+          plate={plateProps(shown.image)}
           excerpt={excerpt}
           badge={badge}
           meta={meta}
@@ -373,7 +394,8 @@ export function EntityCard<T extends CollectionRow, R>({
         }}
         title={title}
         subtitle={subtitle}
-        imageUrl={image}
+        imageUrl={source}
+        cleanImage={clean}
         link={href}
         badge={badge}
         imageIsContent={card.imageIsContent}
@@ -393,3 +415,4 @@ export function EntityCard<T extends CollectionRow, R>({
     </>
   );
 }
+

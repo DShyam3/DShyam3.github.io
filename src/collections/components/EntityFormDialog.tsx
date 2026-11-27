@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { safeHref, safeImageSrc } from '@/lib/safe-url';
 import { ALL } from '../facets';
 import { mergeFill } from '../form-fill';
+import { BackgroundChoice } from './BackgroundChoice';
 import type {
   CollectionConfig,
   CollectionRow,
@@ -598,6 +599,10 @@ export function EntityFormDialog<T extends CollectionRow, R>({
           <p className="text-xs text-destructive">
             Couldn't load an image from that URL
           </p>
+        )}
+        {mode === 'edit' && item && config.card.cleanImage?.field === field.name && config.card.image?.(item) &&
+          value === String((item as Record<string, unknown>)[field.name] ?? '') && (
+          <BackgroundChoice source={config.card.image(item) as string} />
         )}
       </div>
     );

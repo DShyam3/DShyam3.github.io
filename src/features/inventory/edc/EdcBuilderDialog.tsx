@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { cn } from '@/lib/utils';
+import { useShownImage } from '@/lib/images/image-cache';
 import { edcCategoryLabel, isInEdc } from './categories';
 import type { InventoryRow } from '@/collections/inventory';
 
@@ -81,9 +82,7 @@ export function EdcBuilderDialog({ open, onOpenChange, onCloseAutoFocus, allItem
           <ul className="space-y-2">
             {filteredItems.map((item) => (
               <li key={item.id} className={cn('flex items-center gap-3 rounded-lg border p-3', isInEdc(item) ? 'border-primary bg-primary/5' : 'border-border')}>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted p-1">
-                  {item.image ? <img src={item.image} alt="" loading="lazy" className="h-full w-full object-contain" /> : <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
-                </div>
+                <EdcThumb image={item.image ?? undefined} />
                 <div className="min-w-0 flex-1">
                   <p className="break-words text-sm font-medium">{item.name}</p>
                   <p className="break-words text-xs text-muted-foreground">{[item.brand, edcCategoryLabel(item)].filter(Boolean).join(' · ')}</p>
@@ -101,5 +100,19 @@ export function EdcBuilderDialog({ open, onOpenChange, onCloseAutoFocus, allItem
         <DialogFooter><Button onClick={() => onOpenChange(false)}>Done</Button></DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A row's thumbnail: the item's cleaned copy where there is one, on the same muted tile either way. */
+function EdcThumb({ image }: { image?: string }) {
+  const shown = useShownImage(image, true);
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted p-1">
+      {shown.image ? (
+        <img src={shown.image.src} alt="" loading="lazy" className="no-outline h-full w-full object-contain" />
+      ) : shown.pending ? null : (
+        <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      )}
+    </div>
   );
 }

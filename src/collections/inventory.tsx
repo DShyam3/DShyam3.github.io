@@ -383,6 +383,14 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       return origin;
     },
     image: (item) => item.image ?? undefined,
+    // Product shots come on white: the copy shown is cut out to sit on the
+    // theme, and a shot the shop has taken down is replaced from the item's
+    // own product page.
+    cleanImage: {
+      want: 'product',
+      page: (item) => item.link ?? undefined,
+      field: 'image',
+    },
     href: (item) => item.link ?? undefined,
     meta: (item) =>
       item.price != null && Number(item.price) > 0

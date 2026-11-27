@@ -17,6 +17,9 @@ const PUBLIC_COLLECTION_TABLES = new Set([
   'books',
   'projects',
   'inventory_items',
+  // The index of cleaned card images: public, and read before any Inventory
+  // or Links card shows its picture.
+  'image_cache',
   'articles',
   'inspirations',
   'links',

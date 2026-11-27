@@ -616,6 +616,13 @@ Unblocked; this is pure function territory.
 item can be added to a populated table; a serving scaler cannot be retrofitted
 onto free-text ingredients without re-entering them.
 
+Later:
+
+- Image search fallback for a dead picture whose page refuses the function
+  (Superdrug, Apple, Lululemon): needs a search provider and key — owner's call.
+- Orphaned image copies: when a record's picture changes, its old `image_cache`
+  row and stored object stay; prune rows no record points at.
+
 ### 8.F Travel
 
 The detailed specification is [TRAVEL_BLUEPRINT.md](TRAVEL_BLUEPRINT.md):

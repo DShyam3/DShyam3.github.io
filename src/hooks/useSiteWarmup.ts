@@ -25,6 +25,7 @@ import {
 } from '@/features/watchlist/useWatchlistNews';
 import { viewingOrdersQueryOptions } from '@/features/watchlist/viewing-orders-query';
 import { prefersSavedData, whenIdle, warmChunk } from '@/lib/idle';
+import { imageCacheQuery } from '@/lib/images/image-cache';
 import { EDUCATION_READ, EXPERIENCE_READ } from './useResume';
 import { ABOUT_READ } from './useSiteContent';
 import { supabaseTableQuery } from './useSupabaseTable';
@@ -109,9 +110,11 @@ export function useSiteWarmup() {
       ? [trueLayerConnectionQuery, merchantLogosQuery]
       : [];
 
-    const collectionReads: FetchQueryOptions[] = collections
-      .filter((c) => isAdmin || !c.adminOnly)
-      .map(collectionQuery);
+    const collectionReads: FetchQueryOptions[] = [
+      ...collections.filter((c) => isAdmin || !c.adminOnly).map(collectionQuery),
+      // Inventory and Links cards wait on it before showing a picture.
+      imageCacheQuery as FetchQueryOptions,
+    ];
 
     const warmFinanceCode = () => {
       if (!isAdmin) return;

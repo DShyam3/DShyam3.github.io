@@ -52,6 +52,17 @@ export const linksCollection: CollectionConfig<LinkRow> = {
     title: (link) => link.name,
     subtitle: (link) => labelFor(link.category),
     image: (link) => resolveLinkIcon(link.icon, link.url),
+    // A logo's white plate is lifted off so the mark sits on the theme; a
+    // mark that has stopped loading is replaced by the site's own icon.
+    cleanImage: {
+      want: 'icon',
+      page: (link) => link.url,
+      field: 'icon',
+      fallbacks: (link) => {
+        const host = parseLinkUrl(link.url)?.hostname;
+        return host ? [buildHighDpiFaviconUrl(host)] : [];
+      },
+    },
     href: (link) => link.url,
     excerpt: (link) => link.description ?? undefined,
   },
