@@ -247,9 +247,10 @@ extract in the browser.
 
 ### Database follow-ups found in the 2026-10-24 schema repair
 
-One item, schema files only. It is also described in `supabase/schemas/40_finance.sql`, which points here.
+Two items. The first is also described in `supabase/schemas/40_finance.sql`, which points here.
 
 - **`schemas/` cannot rebuild the database from empty.** `finance_bank_accounts_id_profile_id_key` and `idx_finance_transactions_profile_id_id` exist only in migrations, so the composite foreign keys in 40_finance.sql fail on a schemas-only build (first at `finance_transfer_links_profile_outflow_fkey`). Audit schemas/ against a migrated database object by object and add what is missing; no migration for objects that already exist.
+- **Hosted migration history no longer matches the repo.** Hosted records seven versions the repo lacks (20261121131756, 20261125210715, 20261125211027, 20261125224635, 20261125224656, 20261126123059, 20261127111643), stamped by `apply_migration` under its own versions, not the files': image_cache is 20261127111643 on hosted but 20261126230000 in the repo, links_check 20261126123059 against 20261126100000. So `supabase db push` refuses with DbPushMissingLocalError. Reconcile with `supabase migration repair` (stamped versions marked reverted, repo versions applied) once the owner approves. Apply future migrations with `db push` or `execute_sql` at the repo version, never `apply_migration`.
 
 ### Security audit and scan, 2026-10-24 — what is left
 
@@ -266,8 +267,6 @@ checked, and how, is in `SECURITY.md`.
 
 **Code:**
 
-- `schemas/90_privileges.sql`: default privileges still give `anon` rights on
-  new sequences and functions.
 - `file-signature.ts` reads 32 bytes. A HEIC with a generic major brand (`mif1`
   or `msf1`) is refused when its HEVC brand is fifth or later in the compatible
   list, or when its `ftyp` box size is 0. It fails safe; widen the read only if a

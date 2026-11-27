@@ -12,7 +12,16 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES  TO "postgres";
 
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES  TO "anon";
+-- New sequences and functions: anon gets nothing. The PUBLIC revoke on functions
+-- is global (no IN SCHEMA) because Postgres grants PUBLIC EXECUTE on every new
+-- function and a per-schema revoke cannot remove that. Being global, it also
+-- means a function postgres creates outside public and storage is callable by
+-- no one else, service_role included, until it is granted. A function anon must
+-- call grants it explicitly, with its own GRANT EXECUTE ... TO "anon".
+-- This file runs last, so none of these defaults reach what 00-40 declare: a
+-- function or sequence there still needs its own REVOKE ALL ... FROM PUBLIC,
+-- "anon", as the table grants do, or a schemas build would leave it open.
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON SEQUENCES FROM "anon";
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES  TO "authenticated";
 
@@ -20,7 +29,9 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQ
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS  TO "postgres";
 
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS  TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON FUNCTIONS FROM "anon";
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS  TO "authenticated";
 
@@ -48,3 +59,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON TA
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "authenticated";
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES  TO "service_role";
+
+-- Sequences 00-40 created under the image's default, which gives anon ALL. anon
+-- writes no table, so it needs none of them.
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA "public" FROM "anon";

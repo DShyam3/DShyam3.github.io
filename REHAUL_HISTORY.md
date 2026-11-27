@@ -3442,3 +3442,19 @@ Decisions:
 5. **Pairs count as one collection.** Budget categories with their items, and goals with their contributions, are judged together, because the load sets each pair only when both reads succeed.
 
 Closure: the rules live in `src/features/finance/unloaded-tables.ts` (`planFailedLoad`), covered by `unloaded-tables.test.ts`. Verified on the local stack by revoking read on bank accounts and budget tables (grants restored). Not verified: the whole-profile notice after a load that throws, real devices, and hosted.
+
+### New sequences and functions grant anon nothing — 2026-11-27
+
+**New sequences and functions in `public` grant `anon` nothing, and `PUBLIC` loses its default EXECUTE on new functions.** Postgres's default privileges had given `anon` rights on sequences and functions that `postgres` creates in `public`. The fix is `supabase/migrations/20261127182933_anon_default_privileges.sql`, with the same defaults in `supabase/schemas/90_privileges.sql` for a fresh build.
+
+**The PUBLIC revoke is global, not per schema.** `ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`. A per-schema revoke cannot remove a grant Postgres makes to PUBLIC globally, and without this `anon` kept EXECUTE through PUBLIC. The accepted cost: a function `postgres` creates outside `public` and `storage` is callable by no other role, service_role included, until it is granted. The repo creates none today.
+
+**Existing function ACLs are untouched.** `is_admin` stays callable by anon because a public-read policy calls it. The four trigger functions still granted to PUBLIC (`set_watched_at`, `update_episodes_watched_status`, `update_season_watched_status`, `finance_keep_row_scope`) need no EXECUTE to fire.
+
+**`schemas/90` runs last, so its defaults never reach objects declared in 00 to 40.** A function or sequence declared there needs its own REVOKE. The file ends with `REVOKE ALL ON ALL SEQUENCES IN SCHEMA "public" FROM "anon"`, which covers the seven existing sequences; anon writes no table, so it needs none.
+
+**`authenticated` keeps its ALL on new sequences and functions.** That is wider than the table allowlist of the 2026-10-24 entry. It was not narrowed here.
+
+**The hosted route went through `execute_sql`, not `db push`.** `supabase db push --dry-run` refused with DbPushMissingLocalError: hosted records seven versions the repo lacks, stamped by earlier `apply_migration` calls under their own versions (REHAUL_PLAN.md, Database follow-ups). One DO block checked the file text's md5 (`f7eaa0cab861686d6c16133a04e75bae`, 4,300 bytes) before running it, ran it without its BEGIN and COMMIT lines, and recorded it in `supabase_migrations.schema_migrations` at version `20261127182933`, with the file text as its statement. History repair was not done; it needs the owner's approval.
+
+Status: applied to hosted at `20261127182933` via `execute_sql`, md5-checked and recorded. Verified on hosted (PG17): the `public` sequence and function defaults grant `anon` nothing, no public sequence grants `anon`, `is_admin` is executable by anon, and signed-out REST reads of `movies`, `tv_shows`, `visited_countries`, `visited_cities`, `watchlist_ratings` and `watchlist_events` return 200. Local stack: applied by hand and not recorded in its `schema_migrations`. Files uncommitted at time of writing. Not done: a schemas-only build on blank Postgres, and a check that this CLI's `db diff` compares sequence and function privileges.
