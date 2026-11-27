@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck:functions": "deno check supabase/functions/**/*.ts",
-    "test:functions": "deno test supabase/functions/_shared/ supabase/functions/watchlist-cron-sync/ supabase/functions/links-check/ supabase/functions/links-metadata/ supabase/functions/item-image/"
+    "test:functions": "deno test supabase/functions/_shared/ supabase/functions/watchlist-cron-sync/ supabase/functions/links-check/ supabase/functions/links-metadata/ supabase/functions/item-image/ supabase/functions/travel-photo/"
   },
   "dependencies": {
     "@fontsource/doto": "5.3.0",
@@ -61,7 +61,6 @@
     "@types/react-dom": "18.3.7",
     "@vitejs/plugin-react-swc": "4.3.3",
     "autoprefixer": "10.4.21",
-    "dotenv": "17.4.2",
     "eslint": "9.32.0",
     "eslint-plugin-react-hooks": "5.2.0",
     "eslint-plugin-react-refresh": "0.4.20",

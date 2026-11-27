@@ -167,13 +167,25 @@ export const calculateFinance = (settings: FinanceSettings) => {
   const benefitTax = ukBenefitInKindTax(salaryInput, benefitInKindValue);
   const benefitTaxDeduction = benefitTaxCollectedByCode ? 0 : benefitTax;
 
+  const salaryPensionGross = grossSalary * (personalPensionPercent / 100);
+  let stackedCash = 0;
   const cashBenefits: CashBenefitAfterTax[] = packageBenefits
     .filter(b => b.kind === 'cash')
     .map(b => {
+      const value = taxableValueOf(b);
+      const stackedInput: UkTaxInput = stackedCash > 0
+        ? {
+            ...taxInput,
+            income: taxInput.income + stackedCash,
+            pensionContribution: salaryPensionGross,
+            pensionShare: 0,
+          }
+        : taxInput;
       const { gross, incomeTax: cashTax, nationalInsurance: cashNi, studentLoan: cashLoan, net } = ukCashAfterTax(
-        salaryInput,
-        taxableValueOf(b),
+        stackedInput,
+        value,
       );
+      stackedCash += value;
       return { id: b.id, name: b.name, gross, incomeTax: cashTax, nationalInsurance: cashNi, studentLoan: cashLoan, net };
     });
 
@@ -192,7 +204,7 @@ export const calculateFinance = (settings: FinanceSettings) => {
     const monthly = annualAmount / 12;
     const weekly = annualAmount / weeksInYear;
     const daily = annualAmount / (daysInYear || 1);
-    const hourly = daily / workingHoursPerDay;
+    const hourly = daily / (workingHoursPerDay || 1);
     return { annual: annualAmount, monthly, weekly, daily, hourly };
   };
 

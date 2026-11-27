@@ -472,13 +472,16 @@ describe('calculateFinance: cash package items', () => {
     expect(results.cashBenefits[0].net).toBeCloseTo(2937.8, 3);
   });
 
-  it('taxes each cash item on its own, not one on top of the other', () => {
+  it('stacks each cash item on top of prior cash items so thresholds and tapers apply accurately', () => {
     const results = run(
       settings({ packageBenefits: [bonus, benefit({ id: 'second', name: 'Second', amount: 5000, kind: 'cash' })] }),
     );
     expect(results.cashBenefits.map(c => c.id)).toEqual(['bonus', 'second']);
-    expect(results.cashBenefits[1].incomeTax).toBe(results.cashBenefits[0].incomeTax);
-    expect(results.cashBenefits[1].net).toBe(results.cashBenefits[0].net);
+    // £50,000 + first £5,000 straddles the £50,270 higher-rate threshold (£270 at 20% + £4,730 at 40% = £1,946);
+    // the second £5,000 sits entirely in the 40% band (£2,000).
+    expect(results.cashBenefits[0].incomeTax).toBeCloseTo(1946, 3);
+    expect(results.cashBenefits[1].incomeTax).toBeCloseTo(2000, 3);
+    expect(results.cashBenefits[1].net).toBeLessThan(results.cashBenefits[0].net);
   });
 
   it('adds the loans that apply to the payment', () => {

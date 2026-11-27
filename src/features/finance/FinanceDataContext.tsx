@@ -444,13 +444,6 @@ function useProvideFinanceData() {
   // save). Sent before a load reads, so the load shows them instead of a copy
   // that predates them -- and an edit built on that copy cannot send it back.
   const beforeLoadFlushesRef = useRef(new Set<() => void>());
-  const rememberStoredRowsRef = useRef<(<T extends object>(
-    table: RowTable,
-    rows: readonly T[],
-    toRow: (row: T) => Record<string, unknown>,
-    owner: string | null,
-    fromLoad?: boolean,
-  ) => void) | null>(null);
   const registerBeforeLoadFlush = useCallback((flush: () => void) => {
     beforeLoadFlushesRef.current.add(flush);
     return () => { beforeLoadFlushesRef.current.delete(flush); };
@@ -1420,21 +1413,6 @@ function useProvideFinanceData() {
       id,
       createdAt: new Date().toISOString(),
     };
-    const nextObs = [created, ...debtObservations];
-    setDebtObservations(nextObs);
-
-    const updatedDebts = debts.map(d => {
-      if (d.id === observation.debtId) {
-        const obs = [created, ...(d.observations || [])];
-        return {
-          ...d,
-          balance: observation.balance,
-          observations: obs,
-        };
-      }
-      return d;
-    });
-    setDebts(updatedDebts);
 
     const { error } = await supabase.from('finance_debt_observations').insert({
       id,
@@ -1452,6 +1430,24 @@ function useProvideFinanceData() {
       return;
     }
 
+    const nextObs = [created, ...debtObservations];
+    setDebtObservations(nextObs);
+
+    const updatedDebts = debts.map(d => {
+      if (d.id === observation.debtId) {
+        const obs = [created, ...(d.observations || [])].sort((a, b) =>
+          (a.statementDate || a.observedOn).localeCompare(b.statementDate || b.observedOn)
+        );
+        return {
+          ...d,
+          balance: obs[obs.length - 1].balance,
+          observations: obs,
+        };
+      }
+      return d;
+    });
+    setDebts(updatedDebts);
+
     const saved = await saveDataToSupabase('accounts', {
       bankAccounts,
       memberships,
@@ -1468,6 +1464,13 @@ function useProvideFinanceData() {
 
   const deleteDebtObservation = async (id: string, debtId: string) => {
     if (!isAdmin || !profileId) return;
+
+    const { error } = await supabase.from('finance_debt_observations').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Could not delete observation', description: error.message, variant: 'destructive' });
+      return;
+    }
+
     const nextObs = debtObservations.filter(o => o.id !== id);
     setDebtObservations(nextObs);
 
@@ -1488,18 +1491,14 @@ function useProvideFinanceData() {
     });
     setDebts(updatedDebts);
 
-    const { error } = await supabase.from('finance_debt_observations').delete().eq('id', id);
-    if (error) {
-      toast({ title: 'Could not delete observation', description: error.message, variant: 'destructive' });
-      return;
-    }
-
     if (latestObs) {
-      const { error: balanceError } = await supabase.from('finance_debts')
-        .update({ balance: latestObs.balance })
-        .eq('id', debtId)
-        .eq('profile_id', profileId);
-      if (balanceError) {
+      const saved = await saveDataToSupabase('accounts', {
+        bankAccounts,
+        memberships,
+        creditScores,
+        debts: updatedDebts,
+      });
+      if (!saved) {
         toast({ title: 'Balance not updated', description: 'The reading was deleted, but the debt\'s stored balance was not updated. Reload to check.', variant: 'destructive' });
         return;
       }
@@ -1551,7 +1550,6 @@ function useProvideFinanceData() {
     const impact = calculateRuleImpact(mockTransactions, payload);
     const updatedTxs = reapplyRules(nextRules, mockTransactions);
     setMockTransactions(updatedTxs);
-    rememberStoredRowsRef.current?.('finance_transactions', updatedTxs, t => transactionRow(t, profileId), profileId, true);
 
     toast({
       title: 'Rule Saved',
@@ -1576,7 +1574,6 @@ function useProvideFinanceData() {
 
     const updatedTxs = reapplyRules(nextRules, mockTransactions);
     setMockTransactions(updatedTxs);
-    rememberStoredRowsRef.current?.('finance_transactions', updatedTxs, t => transactionRow(t, profileId), profileId, true);
 
     toast({ title: 'Rule Deleted', description: 'Category rule removed.' });
     return { error: null };
@@ -2119,7 +2116,7 @@ function useProvideFinanceData() {
           rawTransactionsRef.current = mappedTransactions;
           const appliedTransactions = applyCategoryRules(mappedTransactions, rulesShown);
           setMockTransactions(appliedTransactions);
-          rememberStoredRows('finance_transactions', appliedTransactions, t => transactionRow(t, profileId), userTransactions.length > 0 ? profileId : null, true);
+          rememberStoredRows('finance_transactions', mappedTransactions, t => transactionRow(t, profileId), userTransactions.length > 0 ? profileId : null, true);
           markLoaded('finance_transactions', appliedTransactions);
         } else if (clearing.has('transactions')) {
           rawTransactionsRef.current = [];
@@ -2419,6 +2416,7 @@ function useProvideFinanceData() {
     void fetchTransfers(profileId);
     void fetchPayslips(profileId);
     void fetchPayslipReconciliations(profileId);
+    void fetchPayslipReimbursementLinks(profileId);
     void fetchTransferLinks(profileId);
     void fetchTransferDismissals(profileId);
     void fetchTransferSingleLegs(profileId);
@@ -2541,7 +2539,6 @@ function useProvideFinanceData() {
     }
     storedRowsRef.current.set(table, stored);
   };
-  rememberStoredRowsRef.current = rememberStoredRows;
 
   /** Restarts the deadline of the save running for `table`'s key. */
   const markSaveProgress = (table: RowTable) => saveProgressRef.current.get(SAVE_KEY_OF[table])?.();
@@ -3161,8 +3158,12 @@ function useProvideFinanceData() {
         if (tcError) throw tcError;
       } else if (key === 'recurring_templates') {
         const templatesList = contentData as RecurringTemplate[];
-        const { error: clearError } = await supabase.from('finance_recurring_templates').delete().eq('is_default', false);
-        if (clearError) throw clearError;
+        const { data: existingRows, error: fetchError } = await supabase
+          .from('finance_recurring_templates')
+          .select('id')
+          .eq('is_default', false);
+        if (fetchError) throw fetchError;
+        const oldIds = (existingRows ?? []).map(r => r.id);
         if (templatesList.length > 0) {
           const { error: insertError } = await supabase.from('finance_recurring_templates').insert(templatesList.map(t => ({
             is_default: false,
@@ -3177,10 +3178,18 @@ function useProvideFinanceData() {
           })));
           if (insertError) throw insertError;
         }
+        if (oldIds.length > 0) {
+          const { error: clearError } = await supabase.from('finance_recurring_templates').delete().in('id', oldIds);
+          if (clearError) throw clearError;
+        }
       } else if (key === 'credit_bureaus') {
         const bureausList = contentData as CreditBureauConfig[];
-        const { error: clearError } = await supabase.from('finance_credit_bureaus').delete().eq('is_default', false);
-        if (clearError) throw clearError;
+        const { data: existingRows, error: fetchError } = await supabase
+          .from('finance_credit_bureaus')
+          .select('id')
+          .eq('is_default', false);
+        if (fetchError) throw fetchError;
+        const oldIds = (existingRows ?? []).map(r => r.id);
         if (bureausList.length > 0) {
           const { error: insertError } = await supabase.from('finance_credit_bureaus').insert(bureausList.map(b => ({
             is_default: false,
@@ -3193,10 +3202,18 @@ function useProvideFinanceData() {
           })));
           if (insertError) throw insertError;
         }
+        if (oldIds.length > 0) {
+          const { error: clearError } = await supabase.from('finance_credit_bureaus').delete().in('id', oldIds);
+          if (clearError) throw clearError;
+        }
       } else if (key === 'holiday_defaults') {
         const hdObj = contentData as Record<number, { count: number; dates: string; occasion: string }>;
-        const { error: clearError } = await supabase.from('finance_holiday_defaults').delete().eq('is_default', false);
-        if (clearError) throw clearError;
+        const { data: existingRows, error: fetchError } = await supabase
+          .from('finance_holiday_defaults')
+          .select('id')
+          .eq('is_default', false);
+        if (fetchError) throw fetchError;
+        const oldIds = (existingRows ?? []).map(r => r.id);
         const hdRows = Object.entries(hdObj).map(([month, details]) => ({
           is_default: false,
           month_index: parseInt(month, 10),
@@ -3208,10 +3225,18 @@ function useProvideFinanceData() {
           const { error: insertError } = await supabase.from('finance_holiday_defaults').insert(hdRows);
           if (insertError) throw insertError;
         }
+        if (oldIds.length > 0) {
+          const { error: clearError } = await supabase.from('finance_holiday_defaults').delete().in('id', oldIds);
+          if (clearError) throw clearError;
+        }
       } else if (key === 'budget_presets') {
         const presetsObj = contentData as Record<string, CategoryPreset[]>;
-        const { error: clearError } = await supabase.from('finance_budget_presets').delete().eq('is_default', false);
-        if (clearError) throw clearError;
+        const { data: existingRows, error: fetchError } = await supabase
+          .from('finance_budget_presets')
+          .select('id')
+          .eq('is_default', false);
+        if (fetchError) throw fetchError;
+        const oldIds = (existingRows ?? []).map(r => r.id);
         const presetRows = Object.entries(presetsObj).flatMap(([type, list]) =>
           (list || []).map(p => ({
             is_default: false,
@@ -3224,6 +3249,10 @@ function useProvideFinanceData() {
         if (presetRows.length > 0) {
           const { error: insertError } = await supabase.from('finance_budget_presets').insert(presetRows);
           if (insertError) throw insertError;
+        }
+        if (oldIds.length > 0) {
+          const { error: clearError } = await supabase.from('finance_budget_presets').delete().in('id', oldIds);
+          if (clearError) throw clearError;
         }
       }
       return true;

@@ -12,7 +12,7 @@
  * `toISODate` does.
  */
 
-import { calendarParts, epochDay, localCalendarDay } from './dates';
+import { calendarParts, epochDay, getDaysInMonth, localCalendarDay } from './dates';
 
 export type StudentLoanPlanKey = 'plan1' | 'plan2' | 'plan4' | 'plan5' | 'postgrad';
 
@@ -138,6 +138,18 @@ export interface DebtProjectionPoint {
 const yearOfCalendarDay = (iso: string): number => calendarParts(iso)?.year ?? Number.NaN;
 
 /**
+ * Adds whole months to a local calendar date, clamping the day to the target
+ * month's length (e.g. Jan 31 + 1 month -> Feb 28/29 instead of Mar 3).
+ */
+const addMonthsClamped = (year: number, monthIndex: number, day: number, months: number): Date => {
+  const totalMonths = year * 12 + monthIndex + months;
+  const targetYear = Math.floor(totalMonths / 12);
+  const targetMonthIndex = ((totalMonths % 12) + 12) % 12;
+  const clampedDay = Math.min(day, getDaysInMonth(targetYear, targetMonthIndex));
+  return new Date(targetYear, targetMonthIndex, clampedDay);
+};
+
+/**
  * The rate in force on `on`.
  *
  * `on` is a calendar day: a `YYYY-MM-DD` string, or a `Date` or timestamp
@@ -195,11 +207,12 @@ export const projectDebtBalance = (
   opts: DebtProjectionOptions,
 ): DebtProjectionPoint[] => {
   // If the debt carries recorded observations, anchor the projection on the latest observation
-  const latestObs = debt.observations && debt.observations.length > 0
+  const sortedObservations = debt.observations && debt.observations.length > 0
     ? [...debt.observations].sort((a, b) =>
         (a.statementDate || a.observedOn).localeCompare(b.statementDate || b.observedOn)
-      ).pop()
-    : undefined;
+      )
+    : [];
+  const latestObs = sortedObservations[sortedObservations.length - 1];
 
   const currentYear = opts.currentYear ?? (
     latestObs
@@ -212,10 +225,12 @@ export const projectDebtBalance = (
   // unchanged.
   const hasSchedule = !!debt.ratePeriods && debt.ratePeriods.length > 0;
   const projectionStart = opts.today ?? new Date(currentYear, 0, 1);
+  const startYearLocal = projectionStart.getFullYear();
+  const startMonthLocal = projectionStart.getMonth();
+  const startDayLocal = projectionStart.getDate();
   const monthlyRateAt = (month: number): number => {
     if (!hasSchedule) return debt.interestRate / 100 / 12;
-    const on = new Date(projectionStart);
-    on.setMonth(on.getMonth() + month);
+    const on = addMonthsClamped(startYearLocal, startMonthLocal, startDayLocal, month);
     return rateInForce(debt.ratePeriods, debt.interestRate, on) / 100 / 12;
   };
 
@@ -255,11 +270,9 @@ export const projectDebtBalance = (
       : (debt.draws && debt.draws.length > 0 ? debt.draws.reduce((sum, d) => sum + d.amount, 0) : balance);
 
     const obsByYear = new Map<number, number>();
-    if (debt.observations) {
-      for (const obs of debt.observations) {
-        const y = yearOfCalendarDay(obs.statementDate || obs.observedOn);
-        if (!Number.isNaN(y)) obsByYear.set(y, obs.balance);
-      }
+    for (const obs of sortedObservations) {
+      const y = yearOfCalendarDay(obs.statementDate || obs.observedOn);
+      if (!Number.isNaN(y)) obsByYear.set(y, obs.balance);
     }
 
     const totalYears = currentYear - startYear;
@@ -391,8 +404,8 @@ export const calculateDebtDrift = (params: DebtDriftParams): DebtDriftResult => 
   // Step month by month to predict expected balance
   let predicted = anchorBalance;
   for (let m = 1; m <= wholeMonths; m++) {
-    // The anchor's day of month, `m` months on, as a local calendar day.
-    const stepDate = new Date(d1.year, d1.month - 1 + m, d1.day);
+    // The anchor's day of month, `m` months on, clamped to the target month's length.
+    const stepDate = addMonthsClamped(d1.year, d1.month - 1, d1.day, m);
     const rate = rateInForce(ratePeriods, interestRate, stepDate) / 100 / 12;
     const interest = predicted * rate;
     predicted += interest;

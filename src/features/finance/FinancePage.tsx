@@ -2,7 +2,6 @@ import { toISODate } from '@/lib/finance/dates';
 import { memo, Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { format } from 'date-fns';
 import { SPRING_PILL } from '@/theme/motion';
 import { Navigate, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -223,7 +222,7 @@ function FinanceView() {
   const recurringProfile = useRef(profileId);
   recurringProfile.current = profileId;
   const { ledger, exclusionsUnreliable } = useSpendingLedger();
-  const todayISO = format(new Date(), 'yyyy-MM-dd');
+  const todayISO = toISODate(new Date());
   const detectedRecurrings = useMemo(
     () => (activeTab === 'recurrings' && recurringDataReady && !exclusionsUnreliable)
       ? detectRecurringPayments(ledger, todayISO)

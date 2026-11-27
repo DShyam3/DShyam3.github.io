@@ -4,8 +4,9 @@ import { requireAdmin } from '../_shared/require-admin.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
 import { selectAllPages } from '../_shared/select-all-pages.ts'
 import { createUsageBatcher } from '../_shared/api-usage.ts'
+import { readCapped } from '../_shared/read-capped.ts'
 
-const activeUsage = createUsageBatcher('edge')
+type UsageBatcher = ReturnType<typeof createUsageBatcher>
 
 // Route C of the transaction-logo work: resolve a merchant's mark ONCE,
 // server-side, and cache it in our own bucket.
@@ -271,6 +272,7 @@ class RateLimited extends Error {}
 async function searchBrand(
   query: string,
   clientId: string,
+  usage: UsageBatcher,
 ): Promise<{ domain: string; icon: string | null } | null> {
   const url = `https://${BRANDFETCH_SEARCH_HOST}/v2/search/${encodeURIComponent(query)}?c=${encodeURIComponent(clientId)}`
 
@@ -287,14 +289,14 @@ async function searchBrand(
       redirect: 'manual',
       signal: AbortSignal.timeout(8000),
     })
-    activeUsage.record({
+    usage.record({
       provider: 'brandfetch',
       endpoint: 'v2/search',
       statusCode: res.status,
       durationMs: Date.now() - t0,
     })
   } catch {
-    activeUsage.record({
+    usage.record({
       provider: 'brandfetch',
       endpoint: 'v2/search',
       statusCode: null,
@@ -360,6 +362,7 @@ const allowedImageUrl = (candidate: string, base?: URL): URL | null => {
 
 async function fetchImage(
   rawUrl: string,
+  usage: UsageBatcher,
 ): Promise<{ bytes: Uint8Array; contentType: string } | null> {
   let url = allowedImageUrl(rawUrl)
   if (!url) return null
@@ -374,14 +377,14 @@ async function fetchImage(
         redirect: 'manual',
         signal: AbortSignal.timeout(8000),
       })
-      activeUsage.record({
+      usage.record({
         provider: 'brandfetch',
         endpoint: 'cdn/icon',
         statusCode: res.status,
         durationMs: Date.now() - t0,
       })
     } catch {
-      activeUsage.record({
+      usage.record({
         provider: 'brandfetch',
         endpoint: 'cdn/icon',
         statusCode: null,
@@ -420,10 +423,9 @@ async function fetchImage(
     return null
   }
 
-  const buffer = await res.arrayBuffer()
-  if (buffer.byteLength === 0 || buffer.byteLength > MAX_BYTES) return null
+  const { bytes, whole } = await readCapped(res, MAX_BYTES)
+  if (!whole || bytes.byteLength === 0) return null
 
-  const bytes = new Uint8Array(buffer)
   // Magic bytes, not their Content-Type header, and deliberately no SVG: an
   // SVG served from our own storage origin can execute script if a person
   // opens it directly, which is not a trade worth a sharper logo.
@@ -439,6 +441,7 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  const usage = createUsageBatcher('edge')
   try {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
@@ -540,9 +543,16 @@ serve(async (req) => {
       occurrences.set(slug, (occurrences.get(slug) ?? 0) + 1)
     }
 
-    const { data: known } = await supabaseAdmin
+    const { data: known, error: knownError } = await supabaseAdmin
       .from('finance_merchant_logos')
       .select('slug, storage_path, source_domain')
+    if (knownError) {
+      console.error('Failed to read known merchant logos:', knownError.message)
+      return new Response(JSON.stringify({ error: 'Failed to read merchant logos' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     // Reconcile first: anything cached under a slug the directory no longer
     // names is removed, index row and stored object together.
@@ -644,7 +654,7 @@ serve(async (req) => {
         // A hinted brand skips search: its domain is already known, and asking
         // by name is exactly what goes wrong for these.
         const hinted = MERCHANT_DOMAIN_HINTS[slug]
-        resolved = hinted ? { domain: hinted, icon: null } : await searchBrand(query, clientId)
+        resolved = hinted ? { domain: hinted, icon: null } : await searchBrand(query, clientId, usage)
         if (resolved) {
           // `fallback/404` because the CDN's default for a brand with no icon
           // is Brandfetch's own logo, served as a 200 -- which is how EE, Shell
@@ -652,7 +662,7 @@ serve(async (req) => {
           // miss draws the monogram.
           const iconUrl = resolved.icon
             ?? `https://${BRANDFETCH_CDN_HOST}/${encodeURIComponent(resolved.domain)}/fallback/404/icon?c=${encodeURIComponent(clientId)}`
-          image = await fetchImage(iconUrl)
+          image = await fetchImage(iconUrl, usage)
         }
       } catch (err) {
         if (err instanceof RateLimited) {
@@ -774,6 +784,6 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } finally {
-    await activeUsage.flush()
+    await usage.flush()
   }
 })

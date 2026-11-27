@@ -129,14 +129,19 @@ export function StatementImportDialog({
         sourceRow: 0,
       })));
     const seen = new Set<string>();
+    const occurrenceCounts = new Map<string, number>();
 
     return parsed.transactions.map(transaction => {
-      const id = statementTransactionId(selectedAccountId, transaction);
-      const key = `${id}:${transaction.sourceRow}`;
       const fallbackKey = statementTransactionKey(selectedAccountId, { ...transaction, sourceId: undefined });
-      const duplicate = existingIds.has(id) || existingFallbackKeys.has(fallbackKey)
+      const occurrence = transaction.sourceId ? 0 : (occurrenceCounts.get(fallbackKey) ?? 0);
+      if (!transaction.sourceId) {
+        occurrenceCounts.set(fallbackKey, occurrence + 1);
+      }
+      const id = statementTransactionId(selectedAccountId, transaction, occurrence);
+      const key = `${id}:${transaction.sourceRow}`;
+      const duplicate = existingIds.has(id) || (occurrence === 0 && existingFallbackKeys.has(fallbackKey))
         ? 'existing'
-        : seen.has(id) ? 'file' : undefined;
+        : (occurrence > 0 || seen.has(id)) ? 'file' : undefined;
       seen.add(id);
       return { transaction, id, key, duplicate };
     });

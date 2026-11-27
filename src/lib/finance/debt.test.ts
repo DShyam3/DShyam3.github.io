@@ -368,6 +368,23 @@ describe('projectDebtBalance with a rate schedule', () => {
     const year1 = withJune.find(p => p.year === 2026)!;
     expect(year1.interest).toBeCloseTo(10000 * (Math.pow(1.01, 7) - 1), 6);
   });
+
+  it('clamps month-end dates when stepping months so Jan 31 + 1 month stays in February', () => {
+    // Rate switches on 1 March. Stepping 1 month from 31 January must land on
+    // 28 February (still 0%), not overflow to 3 March (12%).
+    const projected = projectDebtBalance(
+      {
+        balance: 10000,
+        interestRate: 0,
+        minPayment: 0,
+        ratePeriods: [{ effectiveFrom: '2025-03-01', rate: 12 }],
+      },
+      { ...opts, today: new Date(2025, 0, 31) },
+    );
+    // Months 0 (Jan 31) and 1 (Feb 28) at 0%; months 2..11 (Mar..Dec) at 1% (10 months).
+    const year1 = projected.find(p => p.year === 2026)!;
+    expect(year1.interest).toBeCloseTo(10000 * (Math.pow(1.01, 10) - 1), 6);
+  });
 });
 
 describe('projectDebtBalance for PCP', () => {
@@ -436,6 +453,25 @@ describe('projectDebtBalance anchored on observations', () => {
     };
     const points = projectDebtBalance(debt, opts);
     expect(points[0].balance).toBe(8000);
+  });
+
+  it('picks the later observation in the same year even when observations are given newest-first', () => {
+    const points = projectDebtBalance(
+      {
+        balance: 8000,
+        originalAmount: 15000,
+        interestRate: 0,
+        minPayment: 100,
+        startDate: '2022-01-01',
+        observations: [
+          { id: 'o-late', debtId: 'd1', observedOn: '2023-11-01', balance: 11000, source: 'manual' as const },
+          { id: 'o-early', debtId: 'd1', observedOn: '2023-02-01', balance: 13500, source: 'manual' as const },
+          { id: 'o-cur', debtId: 'd1', observedOn: '2025-01-01', balance: 8000, source: 'manual' as const },
+        ],
+      },
+      { ...opts, currentYear: 2025, includeHistory: true },
+    );
+    expect(points.find(p => p.year === 2023)!.balance).toBe(11000);
   });
 });
 
@@ -536,6 +572,21 @@ describe('calculateDebtDrift', () => {
     });
     expect(res.monthsElapsed).toBe(6);
     expect(res.predictedBalance).toBe(Math.round(10000 * Math.pow(1.01, 5) * 100) / 100);
+  });
+
+  it('does not overflow Jan 31 + 1 month into March when checking rate periods', () => {
+    const res = calculateDebtDrift({
+      anchorBalance: 10000,
+      anchorDate: '2025-01-31',
+      targetBalance: 10000,
+      targetDate: '2025-02-28',
+      monthlyPayment: 0,
+      interestRate: 0,
+      ratePeriods: [{ effectiveFrom: '2025-03-01', rate: 12 }],
+    });
+    expect(res.monthsElapsed).toBe(1);
+    expect(res.predictedBalance).toBe(10000);
+    expect(res.drift).toBe(0);
   });
 
   it('returns the anchor untouched when the target is not after it', () => {

@@ -51,6 +51,8 @@ describe('projectPension', () => {
   it('treats a negative pot or contribution as zero rather than draining it', () => {
     const p = projectPension({ currentPot: -500, annualContribution: -100, years: 3, realGrowthPercent: 5 });
     expect(p.finalPot).toBe(0);
+    expect(p.totalGrowth).toBe(0);
+    expect(p.years.every(y => y.growth === 0)).toBe(true);
   });
 
   it('rounds a fractional term down rather than part-projecting a year', () => {

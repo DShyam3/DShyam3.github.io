@@ -7,7 +7,7 @@
  */
 
 import { useMemo } from 'react';
-import { format } from 'date-fns';
+import { toISODate } from '@/lib/finance/dates';
 import { forecastBalance } from '@/lib/finance/balance-forecast';
 import { useFinanceData } from './FinanceDataContext';
 import { useFinanceTotals } from './useFinanceTotals';
@@ -21,7 +21,7 @@ export function useBalanceForecast() {
   const { results } = useFinanceTotals();
   const { ledger, exclusionsUnreliable } = useSpendingLedger();
 
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = toISODate(new Date());
   const annualNetPay = results.netTakeHome;
 
   const payments = useRecurringEvidence(true);

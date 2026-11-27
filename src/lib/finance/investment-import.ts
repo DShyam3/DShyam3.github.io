@@ -7,7 +7,14 @@
  * cost basis or valuation as unknown rather than manufacturing a return.
  */
 
-import { parseDelimitedRows, parseStatementAmount } from './statement-import';
+import {
+  cellAt,
+  chooseDelimiter,
+  findColumn,
+  normaliseHeader,
+  parseDelimitedRows,
+  parseStatementAmount,
+} from './statement-import';
 
 export type InvestmentImportProvider = 'trading212' | 'kraken';
 export type ImportedInvestmentCategory = 'Stock' | 'ETF' | 'Crypto' | 'Mutual Fund' | 'Real Estate' | 'Cash' | 'Other';
@@ -75,27 +82,11 @@ interface ActivityRow {
 const MAX_ASSET_NAME_LENGTH = 160;
 const EPSILON = 1e-10;
 
-const normaliseHeader = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 const cleanCell = (value: string) => Array.from(value, character => character.charCodeAt(0) < 32 ? ' ' : character).join('').replace(/\s+/g, ' ').trim();
 const cleanName = (value: string) => cleanCell(value).slice(0, MAX_ASSET_NAME_LENGTH);
-const cellAt = (row: string[], index: number) => index >= 0 ? cleanCell(row[index] ?? '') : '';
-
-const findColumn = (headers: string[], names: string[]) => {
-  const normalised = headers.map(normaliseHeader);
-  return normalised.findIndex(header => names.includes(header));
-};
 
 const findColumnContaining = (headers: string[], matcher: (header: string) => boolean) =>
   headers.map(normaliseHeader).findIndex(matcher);
-
-const chooseDelimiter = (text: string) => {
-  const candidates = [',', ';', '\t'];
-  const sample = text.split(/\r?\n/).filter(line => line.trim()).slice(0, 10);
-  return candidates.reduce((best, candidate) => {
-    const count = (delimiter: string) => sample.reduce((total, line) => total + line.split(delimiter).length - 1, 0);
-    return count(candidate) > count(best) ? candidate : best;
-  }, ',');
-};
 
 const parseCsvTable = (text: string): CsvTable | undefined => {
   const rows = parseDelimitedRows(text.replace(/^\uFEFF/, ''), chooseDelimiter(text));

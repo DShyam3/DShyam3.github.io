@@ -11,7 +11,7 @@
  */
 
 import { useMemo } from 'react';
-import { format } from 'date-fns';
+import { toISODate } from '@/lib/finance/dates';
 import { recurringPaymentEvidence } from '@/lib/finance/recurring-detection';
 import { useFinanceData } from './FinanceDataContext';
 import { useSpendingLedger } from './useSpendingLedger';
@@ -20,7 +20,7 @@ import type { MockTransaction } from './finance-types';
 export function useRecurringEvidence(enabled: boolean): ReadonlyMap<string, MockTransaction> {
   const { allRecurrings, recurringDataReady } = useFinanceData();
   const { ledger, exclusionsUnreliable } = useSpendingLedger();
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = toISODate(new Date());
 
   return useMemo(
     () => new Map((enabled && recurringDataReady && !exclusionsUnreliable ? allRecurrings : []).flatMap(bill => {

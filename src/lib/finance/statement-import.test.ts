@@ -60,6 +60,16 @@ describe('statement import identity', () => {
     expect(statementTransactionId('account-a', transaction)).not.toBe(statementTransactionId('account-b', transaction));
   });
 
+  it('gives repeated same-day identical rows without a sourceId distinct deterministic IDs per occurrence', () => {
+    expect(statementTransactionId('account-a', transaction, 0)).toBe(statementTransactionId('account-a', transaction));
+    const second = statementTransactionId('account-a', transaction, 1);
+    expect(second).not.toBe(statementTransactionId('account-a', transaction, 0));
+    expect(second).toBe(statementTransactionId('account-a', transaction, 1));
+    // Rows with a provider sourceId keep a single ID regardless of occurrence.
+    const withSource = { ...transaction, sourceId: 'fit-1' };
+    expect(statementTransactionId('account-a', withSource, 1)).toBe(statementTransactionId('account-a', withSource, 0));
+  });
+
   it('detects supported file formats and refuses opaque files', () => {
     expect(detectStatementFormat('history.QFX', '')).toBe('ofx');
     expect(detectStatementFormat('history.txt', '<OFX><STMTTRN>')).toBe('ofx');

@@ -42,7 +42,7 @@ import {
   type TMDBVideo,
 } from './sync-helpers.ts'
 
-let activeUsage = createUsageBatcher('cron')
+type UsageBatcher = ReturnType<typeof createUsageBatcher>
 
 // The one watchlist sync. pg_cron calls it nightly with the service role key,
 // in parts a few minutes apart (see parseShard and the scheduling
@@ -322,13 +322,17 @@ function buildCorsHeaders(req: Request) {
  * always was rather than failing every night forever. A 429 waits out its
  * Retry-After once. Anything else throws, and fails the title.
  */
-async function fetchTMDB<T>(endpoint: string, params: Record<string, string> = {}): Promise<T | null> {
+async function fetchTMDB<T>(
+  endpoint: string,
+  usage: UsageBatcher,
+  params: Record<string, string> = {},
+): Promise<T | null> {
   const query = new URLSearchParams({ ...params, api_key: TMDB_API_KEY || '' })
   const url = `${TMDB_BASE_URL}/${endpoint}?${query.toString()}`
   for (let attempt = 0; ; attempt++) {
     const t0 = Date.now()
     const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
-    activeUsage.record({
+    usage.record({
       provider: 'tmdb',
       endpoint,
       statusCode: res.status,
@@ -373,7 +377,7 @@ serve(async (req) => {
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const isServiceRole = isServiceRoleRequest(authHeader, serviceRoleKey)
-  activeUsage = createUsageBatcher(isServiceRole ? 'cron' : 'edge')
+  const usage = createUsageBatcher(isServiceRole ? 'cron' : 'edge')
   if (!isServiceRole) {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -627,16 +631,17 @@ serve(async (req) => {
               try {
                 data = await fetchTMDB<TMDBDetails>(
                   detailPath,
+                  usage,
                   detailParams(`${baseAppend},${tmdbType === 'tv' ? 'aggregate_credits' : 'credits'}`),
                 )
               } catch (creditsError) {
                 // Credits must never fail a title: the call without them is the
                 // one every run made before credits were stored.
                 console.warn(`Credits fetch failed for ${item.title}; retrying without`, creditsError)
-                data = await fetchTMDB<TMDBDetails>(detailPath, detailParams(baseAppend))
+                data = await fetchTMDB<TMDBDetails>(detailPath, usage, detailParams(baseAppend))
               }
             } else {
-              data = await fetchTMDB<TMDBDetails>(detailPath, detailParams(baseAppend))
+              data = await fetchTMDB<TMDBDetails>(detailPath, usage, detailParams(baseAppend))
             }
             if (!data?.id) return
 
@@ -877,6 +882,7 @@ serve(async (req) => {
                       // trailer rides along on the same call.
                       const sDetails = await fetchTMDB<TMDBSeasonDetails>(
                         `tv/${item.tmdb_id}/season/${s.season_number}`,
+                        usage,
                         { append_to_response: 'videos', ...VIDEO_PARAMS },
                       )
                       const validEpisodes = (sDetails?.episodes || []).filter(hasAirDate)
@@ -1145,10 +1151,10 @@ serve(async (req) => {
         const startedAt = Date.now()
         try {
           const answer = await run()
-          activeUsage.record({ provider: 'wikidata', endpoint, statusCode: 200, outcome: 'ok', durationMs: Date.now() - startedAt })
+          usage.record({ provider: 'wikidata', endpoint, statusCode: 200, outcome: 'ok', durationMs: Date.now() - startedAt })
           return answer
         } catch (error) {
-          activeUsage.record({ provider: 'wikidata', endpoint, statusCode: null, outcome: 'error', durationMs: Date.now() - startedAt })
+          usage.record({ provider: 'wikidata', endpoint, statusCode: null, outcome: 'error', durationMs: Date.now() - startedAt })
           console.warn(`[Sync ${runLabel}] Wikidata ${endpoint} failed:`, error)
           return null
         }
@@ -1156,9 +1162,9 @@ serve(async (req) => {
       const [spinoffs, universes] = await Promise.all([
         seeds.length === 0
           ? Promise.resolve(null)
-          : timed('tv-spinoffs', () => fetchTvSpinoffs(spinoffSeedIds(seeds), { tmdbApiKey: TMDB_API_KEY, signal, usage: activeUsage })),
+          : timed('tv-spinoffs', () => fetchTvSpinoffs(spinoffSeedIds(seeds), { tmdbApiKey: TMDB_API_KEY, signal, usage })),
         TMDB_API_KEY
-          ? timed('film-universes', () => fetchFilmUniverses(activeUsage, { tmdbApiKey: TMDB_API_KEY, signal }))
+          ? timed('film-universes', () => fetchFilmUniverses(usage, { tmdbApiKey: TMDB_API_KEY, signal }))
           : Promise.resolve(null),
       ])
       const spinoffsStored = spinoffs?.complete === true && spinoffs.siblings !== 'failed' &&
@@ -1190,6 +1196,7 @@ serve(async (req) => {
           try {
             const videos = await fetchTMDB<TMDBVideos>(
               `tv/${season.tmdbId}/season/${season.seasonNumber}/videos`,
+              usage,
               VIDEO_PARAMS,
             )
             check(await supabaseAdmin
@@ -1251,7 +1258,7 @@ serve(async (req) => {
           // OMDb reports a bad key or a spent daily limit as a 401 with a JSON
           // body, so the body is read whatever the status.
           outcome = parseOmdbResponse(await res.json().catch(() => null))
-          activeUsage.record({
+          usage.record({
             provider: 'omdb',
             endpoint: 'title-by-imdb',
             statusCode: res.status,
@@ -1259,7 +1266,7 @@ serve(async (req) => {
             durationMs: Date.now() - omdbT0,
           })
         } catch {
-          activeUsage.record({
+          usage.record({
             provider: 'omdb',
             endpoint: 'title-by-imdb',
             statusCode: null,
@@ -1367,7 +1374,7 @@ serve(async (req) => {
                   { signal: AbortSignal.timeout(15000) },
                 )
                 outcome = parseOmdbSeasonResponse(await res.json().catch(() => null))
-                activeUsage.record({
+                usage.record({
                   provider: 'omdb',
                   endpoint: 'season-by-imdb',
                   statusCode: res.status,
@@ -1375,7 +1382,7 @@ serve(async (req) => {
                   durationMs: Date.now() - omdbT0,
                 })
               } catch {
-                activeUsage.record({
+                usage.record({
                   provider: 'omdb',
                   endpoint: 'season-by-imdb',
                   statusCode: null,
@@ -1598,7 +1605,7 @@ serve(async (req) => {
                 id?: number
                 name?: string
                 parts?: { id?: number; title?: string; release_date?: string | null; poster_path?: string | null }[]
-              }>(`collection/${collectionId}`)
+              }>(`collection/${collectionId}`, usage)
               if (!col) {
                 if (existingCachedCollectionIds.has(collectionId)) {
                   await supabaseAdmin.from('watchlist_collection_upcoming').delete().eq('collection_id', collectionId)
@@ -1762,6 +1769,6 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } finally {
-    await activeUsage.flush()
+    await usage.flush()
   }
 })

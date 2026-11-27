@@ -17,6 +17,7 @@ serve(async (req) => {
   const corsHeaders = {
     ...corsOriginHeader(req),
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
   }
 
   if (req.method === 'OPTIONS') {
@@ -53,8 +54,8 @@ serve(async (req) => {
     }
 
     const fetchStartedAt = Date.now()
-    const res = await fetch(GOV_UK_HOLIDAYS_URL)
-    void recordApiUsage({
+    const res = await fetch(GOV_UK_HOLIDAYS_URL, { signal: AbortSignal.timeout(15_000) })
+    await recordApiUsage({
       provider: 'bank_holidays',
       endpoint: 'bank-holidays.json',
       source: isServiceRole ? 'cron' : 'edge',

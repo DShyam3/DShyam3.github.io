@@ -69,7 +69,8 @@ export const projectPension = (inputs: PensionInputs): PensionProjection => {
   const contributionGrowth = (inputs.contributionGrowthPercent ?? 0) / 100;
 
   const points: PensionYear[] = [];
-  let pot = Math.max(0, inputs.currentPot);
+  const startingPot = Math.max(0, inputs.currentPot);
+  let pot = startingPot;
   let contributed = 0;
   let yearlyContribution = Math.max(0, inputs.annualContribution);
 
@@ -82,7 +83,7 @@ export const projectPension = (inputs: PensionInputs): PensionProjection => {
       year: y,
       pot: round2(pot),
       contributed: round2(contributed),
-      growth: round2(pot - inputs.currentPot - contributed),
+      growth: round2(pot - startingPot - contributed),
     });
     yearlyContribution *= 1 + contributionGrowth;
   }
@@ -92,7 +93,7 @@ export const projectPension = (inputs: PensionInputs): PensionProjection => {
     years: points,
     finalPot,
     totalContributed: round2(contributed),
-    totalGrowth: round2(finalPot - inputs.currentPot - contributed),
+    totalGrowth: round2(finalPot - startingPot - contributed),
     sustainableAnnualIncome: round2((finalPot * SAFE_WITHDRAWAL_PERCENT) / 100),
   };
 };

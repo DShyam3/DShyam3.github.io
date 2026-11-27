@@ -30,31 +30,46 @@ export interface AdminCheckFailure {
   error: string
 }
 
+export type AdminCheckResult =
+  | { ok: true; user: { id: string } }
+  | { ok: false; failure: AdminCheckFailure }
+
 /**
- * Returns null when the caller is an administrator, or the response body and
- * status to reject them with.
+ * Verifies the caller is an administrator and returns their user record, or
+ * the response body and status to reject them with.
  *
  * `userClient` must be built with the caller's Authorization header, not the
  * service role -- the service role bypasses RLS and would report itself as
  * whatever the function asked.
  */
-export async function requireAdmin(
+export async function requireAdminUser(
   userClient: SupabaseClient,
-): Promise<AdminCheckFailure | null> {
+): Promise<AdminCheckResult> {
   const { data: { user }, error: userError } = await userClient.auth.getUser()
   if (userError || !user) {
-    return { status: 401, error: 'Unauthorized' }
+    return { ok: false, failure: { status: 401, error: 'Unauthorized' } }
   }
 
   const { data, error } = await userClient.rpc('is_admin')
   if (error) {
     console.warn('Admin check failed to resolve:', error.message)
-    return { status: 403, error: 'Forbidden: Access restricted to administrator' }
+    return { ok: false, failure: { status: 403, error: 'Forbidden: Access restricted to administrator' } }
   }
 
   if (data !== true) {
-    return { status: 403, error: 'Forbidden: Access restricted to administrator' }
+    return { ok: false, failure: { status: 403, error: 'Forbidden: Access restricted to administrator' } }
   }
 
-  return null
+  return { ok: true, user }
+}
+
+/**
+ * Returns null when the caller is an administrator, or the response body and
+ * status to reject them with.
+ */
+export async function requireAdmin(
+  userClient: SupabaseClient,
+): Promise<AdminCheckFailure | null> {
+  const result = await requireAdminUser(userClient)
+  return result.ok ? null : result.failure
 }

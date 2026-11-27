@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { format, parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { formatDayMonth } from '@/lib/format-date';
 import type { RecurringBill } from '@/features/finance/finance-types';
-import { getDaysInMonth, getStartDayOfWeek } from '@/lib/finance/dates';
+import { getDaysInMonth, getStartDayOfWeek, toISODate } from '@/lib/finance/dates';
 import {
   occurrenceTotals,
   scheduleBills,
@@ -49,7 +49,7 @@ export const BillsCalendar: React.FC<BillsCalendarProps> = ({ recurrings, paymen
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = toISODate(new Date());
   const [todayYear, todayMonth] = today.split('-').map(Number);
   const shown = new Date(todayYear, todayMonth - 1 + monthOffset, 1);
   const year = shown.getFullYear();
@@ -83,7 +83,7 @@ export const BillsCalendar: React.FC<BillsCalendarProps> = ({ recurrings, paymen
   // A selection that no longer holds a bill (the data changed) filters nothing.
   const activeDay = selectedDay && byDate.has(selectedDay) ? selectedDay : null;
   const listed = activeDay ? byDate.get(activeDay)! : occurrences;
-  const monthName = format(shown, 'MMMM');
+  const monthName = shown.toLocaleDateString('en-GB', { month: 'long' });
 
   const changeMonth = (step: number) => {
     setMonthOffset(offset => Math.min(MAX_MONTHS_AHEAD, Math.max(0, offset + step)));
@@ -192,7 +192,7 @@ export const BillsCalendar: React.FC<BillsCalendarProps> = ({ recurrings, paymen
               key={`${occurrence.billId}-${occurrence.date}`}
               className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-0.5 border-t border-border/40 py-2 text-xs font-mono sm:grid-cols-[3.5rem_minmax(0,1fr)_auto_7rem]"
             >
-              <span className="text-muted-foreground">{format(parseISO(occurrence.date), 'd MMM')}</span>
+              <span className="text-muted-foreground">{formatDayMonth(occurrence.date)}</span>
               <span className="flex min-w-0 items-center gap-2">
                 {occurrence.emoji && <span className="shrink-0 text-sm">{occurrence.emoji}</span>}
                 <span className="truncate font-semibold text-foreground">

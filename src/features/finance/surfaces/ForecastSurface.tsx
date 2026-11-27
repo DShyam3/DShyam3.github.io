@@ -8,11 +8,11 @@
  */
 
 import { useMemo, useState } from 'react';
-import { format, parseISO } from 'date-fns';
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { formatDayMonth } from '@/lib/format-date';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import type { ForecastEvent, ForecastUnavailableReason } from '@/lib/finance/balance-forecast';
 import { useBalanceForecast } from '../useBalanceForecast';
@@ -27,8 +27,11 @@ const UNAVAILABLE: Record<ForecastUnavailableReason, string> = {
   invalid_window: 'Forecast unavailable.',
 };
 
-const shortDate = (date: string) => format(parseISO(date), 'd MMM');
-const longDate = (date: string) => format(parseISO(date), 'EEE d MMM');
+const shortDate = (date: string) => formatDayMonth(date);
+const longDate = (date: string) => {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+};
 
 const axisGBP = (value: number) => {
   const abs = Math.abs(value);

@@ -40,6 +40,8 @@ export interface NetFlows {
   excludedTotal: number;
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 /**
  * Transaction ids that belong to a recorded transfer, in either direction.
  *
@@ -83,7 +85,6 @@ export const netFlows = (
     else spend += Math.abs(tx.amount);
   }
 
-  const round2 = (n: number) => Math.round(n * 100) / 100;
   return {
     income: round2(income),
     spend: round2(spend),
@@ -109,6 +110,5 @@ export const transferBalance = (
     if (t.fromProfileId === profileId) sent += t.amount;
     if (t.toProfileId === profileId) received += t.amount;
   }
-  const round2 = (n: number) => Math.round(n * 100) / 100;
   return { sent: round2(sent), received: round2(received), net: round2(received - sent) };
 };

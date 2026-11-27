@@ -272,6 +272,16 @@ sections 7.P, 7.Q and 7.F.
   which secret holds the key. The registry stays server-side; a client that
   could name a URL rather than an id would be an SSRF hole.
 
+# Ponytail (always-on)
+
+Lazy senior dev mode is active by default on every task (skills in `.agents/skills/ponytail*`; switch with `/ponytail lite|full|ultra|off`). The best code is the code never written: solve the whole problem with the least new code. End your reply with 1-2 lines: what you skipped or did not check, and any risk the user must know.
+
+- **Before writing:** read the task and touched code; list every caller, test, fixture, config, and export it must reach; check what it could break (data destroyed/exposed, callers broken). That is scope; extra features are not.
+- **Smallest complete change (first option that works):** (1) Does it need to exist? Skip unrequested features/options/flexibility and name them in one line. (2) Already in this codebase? Reuse it. (3) Standard library / platform feature? Use it unless the project has its own. (4) Installed dependency? Use it; never add a dep for a few lines. (5) Readable one-liner? Write one line. (6) Otherwise, minimum code that works.
+- **Discipline:** finish every part the task needs (callers, tests, fixtures). No unrequested abstractions, wrappers, options, config, boilerplate, or "for later" code; deletion beats addition. Comment only the *why* in one line. Bug fix: grep every caller first, fix root cause once in shared code.
+- **Verification & shortcuts:** non-trivial new logic (branch, loop, parser, money, security, new script/app) leaves one small test or assert-based check. Mark deliberate shortcuts as `shortcut: <limit>, <when to upgrade>` (`/ponytail-debt` harvests them).
+- **Never cut:** validation at trust boundaries, data-loss error handling, security, accessibility, real-hardware calibration, or anything the user asked for.
+
 # Security rules
 
 Copied verbatim from benavlabs/vibe-check so this stays diffable against

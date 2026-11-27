@@ -4,6 +4,7 @@ import { requireAdmin } from '../_shared/require-admin.ts'
 import { isServiceRoleRequest } from '../_shared/service-role.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
 import { resolveWithDns } from '../_shared/public-address.ts'
+import { selectAllPages } from '../_shared/select-all-pages.ts'
 import { checkLink, nextCheckRow } from './check.ts'
 
 // Checks every saved link and records what it found in `link_checks`, which
@@ -72,8 +73,14 @@ serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
     const [linksResult, checksResult] = await Promise.all([
-      admin.from('links').select('id, url'),
-      admin.from('link_checks').select('link_id, url, checked_at, check_failures, failing_since'),
+      selectAllPages<LinkRow>(
+        (from, to) => admin.from('links').select('id, url', { count: 'exact' }).order('id').range(from, to),
+        (row) => row.id,
+      ),
+      selectAllPages<PreviousCheck>(
+        (from, to) => admin.from('link_checks').select('link_id, url, checked_at, check_failures, failing_since', { count: 'exact' }).order('link_id').range(from, to),
+        (row) => row.link_id,
+      ),
     ])
     if (linksResult.error) throw linksResult.error
     if (checksResult.error) throw checksResult.error

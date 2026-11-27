@@ -9,10 +9,11 @@
  * Run with `node scripts/fetch-platform-logos.mjs` when a provider rebrands;
  * the downloaded files are committed so the site never fetches them at runtime.
  */
-import 'dotenv/config';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+try { process.loadEnvFile?.(); } catch { /* .env is optional when env vars are already set */ }
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const site = JSON.parse(await readFile(resolve(SCRIPT_DIR, '../src/config/site.json'), 'utf-8'));

@@ -4,9 +4,11 @@ import { Check, Plus, Edit2, Trash2 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { format, parseISO } from 'date-fns';
+import { toISODate } from '@/lib/finance/dates';
+import { formatDayMonth } from '@/lib/format-date';
 import { earlyPaymentTarget, type RecurringCandidate } from '@/lib/finance/recurring-detection';
 import { BillsCalendar } from '@/features/finance/components/BillsCalendar';
+import { isDueThisMonth } from '../finance-defaults';
 
 interface RecurringsTabProps {
   recurrings: RecurringBill[];
@@ -26,17 +28,6 @@ interface RecurringsTabProps {
   onUndismissRecurring: (id: string) => void;
 }
 
-const isDueThisMonth = (bill: RecurringBill, currentMonth: number): boolean => {
-  if (bill.frequency === 'monthly') return true;
-  if (bill.frequency === 'weekly') return true;
-  if (bill.frequency === 'annually' && bill.dueMonth === currentMonth) return true;
-  if (bill.frequency === 'quarterly') {
-    const startMonth = bill.dueMonth || 1;
-    return (currentMonth - startMonth) % 3 === 0;
-  }
-  return false;
-};
-
 const getDueDateText = (bill: RecurringBill, currentMonth: number, displayMonth?: number): string => {
   const monthToUse = displayMonth || currentMonth;
   const monthStr = new Date(2026, monthToUse - 1, 1).toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
@@ -45,7 +36,7 @@ const getDueDateText = (bill: RecurringBill, currentMonth: number, displayMonth?
 };
 
 const EarlyPaymentButton: React.FC<{ target: string; disabled: boolean; onPay: () => void }> = ({ target, disabled, onPay }) => {
-  const date = format(parseISO(target), 'd MMM');
+  const date = formatDayMonth(target);
   return (
     <button
       type="button"
@@ -80,7 +71,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   const inactiveBills = recurrings.filter(bill => bill.status === 'inactive' || bill.status === 'dismissed');
   const thisMonthBills = activeBills.filter(r => isDueThisMonth(r, currentMonth));
   const todayDay = new Date().getDate();
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = toISODate(new Date());
   const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
 
   interface DisplayBill extends RecurringBill {

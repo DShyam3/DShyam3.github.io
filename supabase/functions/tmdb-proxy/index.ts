@@ -158,7 +158,7 @@ serve(async (req) => {
     const rateLimitCap = isDetailLookup ? DETAIL_LIMIT : MAX_REQUESTS_PER_WINDOW
 
     if (await isRateLimited(rateLimitKey, rateLimitCap)) {
-        void recordApiUsage({
+        await recordApiUsage({
             provider: reqEndpoint.startsWith('wikidata/') ? 'wikidata' : 'tmdb',
             endpoint: usageEndpoint(reqEndpoint),
             statusCode: 429,
@@ -188,7 +188,7 @@ serve(async (req) => {
 
         if (endpoint === 'wikidata/tv-spinoffs') {
             if (await isRateLimited(`${callerKey(req)}:tv-spinoffs`, SPINOFF_LIMIT, SPINOFF_WINDOW_SECONDS)) {
-                void recordApiUsage({
+                await recordApiUsage({
                     provider: 'wikidata',
                     endpoint: 'tv-spinoffs',
                     statusCode: 429,
@@ -208,7 +208,7 @@ serve(async (req) => {
             const usage = createUsageBatcher()
             try {
                 const { links: results } = await fetchTvSpinoffs(ids, { tmdbApiKey: TMDB_API_KEY, usage })
-                void recordApiUsage({
+                await recordApiUsage({
                     provider: 'wikidata',
                     endpoint: 'tv-spinoffs',
                     statusCode: 200,
@@ -224,13 +224,13 @@ serve(async (req) => {
                     },
                 })
             } finally {
-                void usage.flush()
+                await usage.flush()
             }
         }
 
         if (endpoint === 'wikidata/film-universes') {
             if (await isRateLimited(`${callerKey(req)}:film-universes`, UNIVERSE_LIMIT, UNIVERSE_WINDOW_SECONDS)) {
-                void recordApiUsage({
+                await recordApiUsage({
                     provider: 'wikidata',
                     endpoint: 'film-universes',
                     statusCode: 429,
@@ -249,7 +249,7 @@ serve(async (req) => {
             const usage = createUsageBatcher()
             try {
                 const results = await fetchFilmUniverses(usage, { tmdbApiKey: TMDB_API_KEY })
-                void recordApiUsage({
+                await recordApiUsage({
                     provider: 'wikidata',
                     endpoint: 'film-universes',
                     statusCode: 200,
@@ -265,7 +265,7 @@ serve(async (req) => {
                     },
                 })
             } finally {
-                void usage.flush()
+                await usage.flush()
             }
         }
 
@@ -285,9 +285,11 @@ serve(async (req) => {
         })
         tmdbParams.append('api_key', TMDB_API_KEY || '')
 
-        const response = await fetch(`${TMDB_BASE_URL}/${endpoint}?${tmdbParams.toString()}`)
+        const response = await fetch(`${TMDB_BASE_URL}/${endpoint}?${tmdbParams.toString()}`, {
+            signal: AbortSignal.timeout(15_000),
+        })
         const data = await response.json()
-        void recordApiUsage({
+        await recordApiUsage({
             provider: 'tmdb',
             endpoint,
             statusCode: response.status,
@@ -306,7 +308,7 @@ serve(async (req) => {
             },
         })
     } catch (error) {
-        void recordApiUsage({
+        await recordApiUsage({
             provider: reqEndpoint.startsWith('wikidata/') ? 'wikidata' : 'tmdb',
             endpoint: usageEndpoint(reqEndpoint),
             statusCode: 502,

@@ -160,7 +160,9 @@ serve(async (req) => {
         }
       })()
       try {
-        const res = await fetch(url, init)
+        const timeoutSignal = AbortSignal.timeout(30_000)
+        const signal = init?.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal
+        const res = await fetch(url, { ...init, signal })
         usage.record({ provider: 'truelayer', endpoint, statusCode: res.status, durationMs: Date.now() - t0 })
         return res
       } catch (err) {
@@ -230,6 +232,16 @@ serve(async (req) => {
 
     // ACTION: check_connection
     if (action === 'check_connection') {
+      if (!selfProfileId) {
+        return new Response(JSON.stringify({
+          connected: false,
+          connections: [],
+          expires_at: null,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
       const { data: connections, error: connErr } = await supabaseAdmin
         .from('finance_truelayer_connection')
         .select('id, provider_id, provider_name, provider_logo_uri, consent_expires_at, last_synced_at, backfilled_from, backfill_complete, expires_at, created_at')
@@ -238,6 +250,10 @@ serve(async (req) => {
 
       if (connErr) {
         console.error('Failed to fetch connections:', connErr)
+        return new Response(JSON.stringify({ error: 'Could not check bank connections' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
       }
 
       const list = connections || []
@@ -789,11 +805,21 @@ serve(async (req) => {
             }
 
             const refreshData = await refreshResponse.json()
+            const expiresInSeconds = Number(refreshData.expires_in)
+            if (
+              typeof refreshData.access_token !== 'string' ||
+              refreshData.access_token.length === 0 ||
+              !Number.isFinite(expiresInSeconds)
+            ) {
+              console.error(`Invalid token refresh payload for ${connection.provider_name}`)
+              connectionErrors.push({ provider: connection.provider_name, error: 'Token refresh failed' })
+              continue
+            }
             accessToken = refreshData.access_token
             refreshToken = refreshData.refresh_token || refreshToken
-            expiresAt = new Date(Date.now() + refreshData.expires_in * 1000)
+            expiresAt = new Date(Date.now() + expiresInSeconds * 1000)
 
-            await supabaseAdmin
+            const { error: tokenUpdateError } = await supabaseAdmin
               .from('finance_truelayer_connection')
               .update({
                 access_token: accessToken,
@@ -802,6 +828,11 @@ serve(async (req) => {
                 updated_at: new Date().toISOString(),
               })
               .eq('id', connection.id)
+            if (tokenUpdateError) {
+              console.error(`Failed to persist refreshed token for ${connection.provider_name}:`, tokenUpdateError)
+              connectionErrors.push({ provider: connection.provider_name, error: 'Token refresh failed' })
+              continue
+            }
           }
 
           const logDataApiFailure = (resource: string, response: Response) => {
@@ -829,9 +860,15 @@ serve(async (req) => {
           if (!accountsRes.ok && !cardsRes.ok) {
             logDataApiFailure('accounts', accountsRes)
             logDataApiFailure('cards', cardsRes)
+            const combinedStatus =
+              accountsRes.status === 401 || accountsRes.status === 403
+                ? accountsRes.status
+                : cardsRes.status === 401 || cardsRes.status === 403
+                  ? cardsRes.status
+                  : Math.max(accountsRes.status, cardsRes.status)
             connectionErrors.push({
               provider: connection.provider_name,
-              error: connectionErrorMessage('accounts or cards', Math.max(accountsRes.status, cardsRes.status)),
+              error: connectionErrorMessage('accounts or cards', combinedStatus),
             })
             continue
           }
@@ -931,15 +968,28 @@ serve(async (req) => {
           if (unseenSources.length > 0) {
             const { data: insertedStates, error: insertStatesError } = await supabaseAdmin
               .from('finance_truelayer_source_sync')
-              .insert(unseenSources.map(source => ({
-                connection_id: connection.id,
-                source_kind: source.kind,
-                provider_account_id: source.raw.account_id,
-              })))
+              .upsert(
+                unseenSources.map(source => ({
+                  connection_id: connection.id,
+                  source_kind: source.kind,
+                  provider_account_id: source.raw.account_id,
+                })),
+                { onConflict: 'connection_id,source_kind,provider_account_id', ignoreDuplicates: true },
+              )
               .select('id, source_kind, provider_account_id, backfilled_from, backfill_complete')
             if (insertStatesError) throw insertStatesError
             for (const state of (insertedStates || []) as SourceState[]) {
               statesBySource.set(sourceKey(state.source_kind, state.provider_account_id), state)
+            }
+            if (unseenSources.some(source => !statesBySource.has(sourceKey(source.kind, source.raw.account_id)))) {
+              const { data: refreshedStates, error: refreshedStatesError } = await supabaseAdmin
+                .from('finance_truelayer_source_sync')
+                .select('id, source_kind, provider_account_id, backfilled_from, backfill_complete')
+                .eq('connection_id', connection.id)
+              if (refreshedStatesError) throw refreshedStatesError
+              for (const state of (refreshedStates || []) as SourceState[]) {
+                statesBySource.set(sourceKey(state.source_kind, state.provider_account_id), state)
+              }
             }
           }
 
@@ -970,7 +1020,7 @@ serve(async (req) => {
             }
             const txs = ((await res.json()).results || []) as TlTransaction[]
             const rows = txs
-              .filter(tx => typeof tx.transaction_id === 'string' && typeof tx.timestamp === 'string')
+              .filter(tx => typeof tx.transaction_id === 'string' && typeof tx.timestamp === 'string' && Number.isFinite(Number(tx.amount)))
               .map(tx => ({
                 is_default: false,
                 profile_id: selfProfileId,

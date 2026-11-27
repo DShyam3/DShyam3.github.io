@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8';
-import { requireAdmin } from '../_shared/require-admin.ts';
+import { requireAdminUser } from '../_shared/require-admin.ts';
 import { ALLOWED_ORIGINS, corsOriginHeader } from '../_shared/site-origins.ts';
 import { cleanJpeg } from './jpeg.ts';
 
@@ -19,10 +19,9 @@ serve(async req => {
       global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
       auth: { persistSession: false },
     });
-    const denied = await requireAdmin(userClient);
-    if (denied) return respond(denied.status, { error: denied.status === 401 ? 'Unauthorized' : 'Forbidden' });
-    const { data: { user } } = await userClient.auth.getUser();
-    if (!user) return respond(401, { error: 'Unauthorized' });
+    const adminCheck = await requireAdminUser(userClient);
+    if (!adminCheck.ok) return respond(adminCheck.failure.status, { error: adminCheck.failure.status === 401 ? 'Unauthorized' : 'Forbidden' });
+    const { user } = adminCheck;
     if (!req.body || Number(req.headers.get('content-length') ?? 0) > MAX_BYTES) return respond(413, { error: 'Image too large' });
     const reader = req.body.getReader();
     const parts: Uint8Array[] = [];

@@ -46,12 +46,6 @@ const HALF_HEIGHT = yOfTheta(Math.PI / 3);
 /** Width / height of the projected world, ~2.05:1. */
 export const EQUAL_EARTH_ASPECT = HALF_WIDTH / HALF_HEIGHT;
 
-/**
- * Row spacing at the equator, as a multiple of an even 1/rows split of the
- * height. Equal Earth gives the equator ~1.38x its even share.
- */
-export const EQUAL_EARTH_ROW_UNIT = (A1 * SIN_SCALE * Math.PI) / (2 * HALF_HEIGHT);
-
 /** Shown on the map. */
 export const EQUAL_EARTH_LABEL = 'Equal Earth';
 export const EQUAL_EARTH_NOTE =
@@ -97,27 +91,4 @@ export function unprojectEqualEarth(nx: number, ny: number): { lon: number; lat:
     if (Math.abs(lon) > Math.PI) return null;
     const lat = Math.asin(Math.max(-1, Math.min(1, Math.sin(theta) / SIN_SCALE)));
     return { lon, lat };
-}
-
-export interface RowScale {
-    /** Column spacing at this latitude, relative to the equator. */
-    hScale: number;
-    /** Row spacing at this latitude, relative to the equator. */
-    vScale: number;
-}
-
-/**
- * How far apart neighbouring grid cells land at a given latitude, relative to
- * the equator. Equal-area means these multiply out to cos φ: the grid squeezes
- * towards the poles, hard vertically and mildly horizontally, and the dots have
- * to follow or they merge into a solid band.
- */
-export function equalEarthRowScale(lat: number): RowScale {
-    const theta = Math.asin(SIN_SCALE * Math.sin(lat));
-    const cosTheta = Math.cos(theta);
-    const d = dydtheta(theta);
-    return {
-        hScale: (cosTheta * A1) / d,
-        vScale: (d * Math.cos(lat)) / (cosTheta * A1),
-    };
 }

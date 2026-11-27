@@ -54,7 +54,7 @@ const DEFAULT_OPTIONS: Required<StatementParseOptions> = {
 
 const MAX_DESCRIPTION_LENGTH = 240;
 
-const normaliseHeader = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+export const normaliseHeader = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const DATE_HEADERS = ['date', 'transactiondate', 'posteddate', 'bookingdate'];
 const DESCRIPTION_HEADERS = [
@@ -66,12 +66,12 @@ const CREDIT_HEADERS = ['credit', 'credits', 'moneyin', 'deposit', 'deposits'];
 const DIRECTION_HEADERS = ['type', 'transactiontype', 'direction'];
 const SOURCE_ID_HEADERS = ['transactionid', 'id', 'fitid', 'referenceid'];
 
-const findColumn = (headers: string[], names: string[]) => {
+export const findColumn = (headers: string[], names: string[]) => {
   const normalised = headers.map(normaliseHeader);
   return normalised.findIndex(header => names.includes(header));
 };
 
-const cellAt = (row: string[], index: number) => index >= 0 ? (row[index] ?? '').trim() : '';
+export const cellAt = (row: string[], index: number) => index >= 0 ? (row[index] ?? '').trim() : '';
 
 const validIsoDate = (year: number, month: number, day: number): string | undefined => {
   if (year < 1900 || year > 2200 || month < 1 || month > 12 || day < 1 || day > 31) return undefined;
@@ -184,7 +184,7 @@ export const parseDelimitedRows = (text: string, delimiter: string): string[][] 
   return rows;
 };
 
-const chooseDelimiter = (text: string) => {
+export const chooseDelimiter = (text: string) => {
   const candidates = [',', ';', '\t'];
   const sample = text.split(/\r?\n/).filter(line => line.trim()).slice(0, 10);
   return candidates.reduce((best, candidate) => {
@@ -366,12 +366,22 @@ const fnv1a = (value: string, seed: number) => {
   return hash.toString(36);
 };
 
-export const statementTransactionKey = (accountId: string, transaction: ParsedStatementTransaction) => {
-  const source = transaction.sourceId ? `source:${canonicalText(transaction.sourceId)}` : `row:${transaction.date}|${transaction.amount.toFixed(2)}|${canonicalText(transaction.description)}`;
+export const statementTransactionKey = (
+  accountId: string,
+  transaction: ParsedStatementTransaction,
+  occurrence = 0,
+) => {
+  const source = transaction.sourceId
+    ? `source:${canonicalText(transaction.sourceId)}`
+    : `row:${transaction.date}|${transaction.amount.toFixed(2)}|${canonicalText(transaction.description)}${occurrence > 0 ? `|#${occurrence}` : ''}`;
   return `${accountId}|${source}`;
 };
 
-export const statementTransactionId = (accountId: string, transaction: ParsedStatementTransaction) => {
-  const key = statementTransactionKey(accountId, transaction);
+export const statementTransactionId = (
+  accountId: string,
+  transaction: ParsedStatementTransaction,
+  occurrence = 0,
+) => {
+  const key = statementTransactionKey(accountId, transaction, occurrence);
   return `statement_${fnv1a(key, 0x811c9dc5)}_${fnv1a(key, 0x9e3779b9)}`;
 };

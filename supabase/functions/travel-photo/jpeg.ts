@@ -36,8 +36,10 @@ export function cleanJpeg(input: Uint8Array): Uint8Array {
       const scanStart = at;
       while (at < input.length) {
         if (input[at] !== 0xff) { at++; continue; }
-        const next = input[at + 1];
-        if (next === 0 || (next >= 0xd0 && next <= 0xd7)) { at += 2; continue; }
+        let markerAt = at + 1;
+        while (markerAt < input.length && input[markerAt] === 0xff) markerAt++;
+        const next = input[markerAt];
+        if ((markerAt === at + 1 && next === 0) || (next >= 0xd0 && next <= 0xd7)) { at = markerAt + 1; continue; }
         break;
       }
       chunks.push(input.subarray(scanStart, at));
