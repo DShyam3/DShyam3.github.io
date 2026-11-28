@@ -1,4 +1,4 @@
-Updated 2026-11-28. `origin/main` at `adf3cb0b` (Discover started-franchises follow-up, live on Pages via deploy `46136844637`). Synced with anon default privileges, travel map fixes, Ponytail setup and audit fixes.
+Updated 2026-11-28. `origin/main` at `912be21e` (Discover `Haven’t seen it` label, live on Pages via deploy `46139260367`). Synced with anon default privileges, travel map fixes, Ponytail setup and audit fixes.
 
 ## Closed
 
@@ -10,7 +10,7 @@ Updated 2026-11-28. `origin/main` at `adf3cb0b` (Discover started-franchises fol
 
 - **HAVE YOU ALREADY WATCHED? no longer ends empty** (`a486dcae`, on `origin/main`, live on Pages via deploy `46070577186`; decision in `REHAUL_HISTORY.md`, 2026-11-27). For the owner, franchise cards also count released films saved but not watched: `Seen it` marks the saved film watched, `Not seen` answers no, stopped films count as answered. An empty Likely seen grid on screen pages on through the widely watched pool. Reviewed by `reviewer` (Opus); its two bugs and four of five risks fixed.
 - **Started franchises only** (`adf3cb0b`, live on Pages via deploy `46136844637`; not checked on Pages): saved films are asked about, and `Not seen` offered, only in a franchise with a title watched or a series in progress and not stopped (`franchiseStarted`), after Pages showed merely saved collections (Open Season, 0 of 4) filling the section.
-- **`Not seen` buttons read `Haven’t seen it`** (committed, not pushed): the owner found `Not seen` beside the `Not started` badge unclear, so the answer now pairs with `Seen it` on franchise rows and Likely seen tiles, in the footer and in the reset dialog.
+- **`Not seen` buttons read `Haven’t seen it`** (`912be21e`, live on Pages via deploy `46139260367`; not checked on Pages): the owner found `Not seen` beside the `Not started` badge unclear, so the answer now pairs with `Seen it` on franchise rows and Likely seen tiles, in the footer and in the reset dialog.
 
 ## Travel (pushed)
 
@@ -35,6 +35,7 @@ Updated 2026-11-28. `origin/main` at `adf3cb0b` (Discover started-franchises fol
 
 - **Discover collapsible (`c6f410b1`):** unverified: layout with real Discover data loaded (the dev server on 8089 had no TMDB CORS, so only failure states were seen); Undo focus fallback (needs Likely seen data); real devices. Verified on a dev server: click/Space/Enter toggle, `aria-expanded` and hidden body, focus ring, reload persistence, picker-alone forces open, 2400px two-column grid, 44px touch target under touch emulation, no React warnings.
 - **Discover empty-section fix (`a486dcae`, live):** on Pages signed out, Likely seen filled after about 2 minutes (the call pacer's rate); the owner saw the saved-film cards with `Seen it` / `Not seen` on Pages, but their writes were not exercised. Focus loss when a card's last answer removes the card is not fixed. The console 404 was `GET /rest/v1/image_cache` before that table existed on hosted Supabase (last 2026-11-27 11:16 UTC).
+- **Freeze report (2026-11-28):** the owner saw the page and Chrome tab switching freeze. Signed out on Pages, Discover had no long task over 99 ms in 70 s; with the full library (1,949 titles, 14,167 episodes) `libraryLookup` takes 17 ms and the taste profile 11 ms. The Mac was at load average 115 (Codex, WindowServer, Antigravity, a VM). Signed-in paths unmeasured; asked the owner to check Chrome's Task Manager next time.
 - **Discover order on owner data:** browser check not run (REHAUL_PLAN.md item 6).
 - **Ponytail audit follow-ups:** Monolith splits (#18) and `src/lib/finance/llm.ts` removal were intentionally deferred.
 - **Travel & Inventory:** real-device iPhone/iPad checks of map pinch zoom and touches.
