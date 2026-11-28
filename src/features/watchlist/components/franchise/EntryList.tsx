@@ -118,7 +118,7 @@ export function EntryList({
   onOpen: (entry: OrderEntryView) => void;
   onAddToLibrary?: (entry: OrderEntryView) => void;
   onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
-  /** "Not seen" on a saved film not yet watched; `notSeen` holds the keys already answered. */
+  /** "Haven’t seen it" (a Not seen answer) on a saved film not yet watched; `notSeen` holds the keys already answered. */
   onNotSeen?: (entry: OrderEntryView) => void;
   notSeen?: ReadonlySet<string>;
   onDismiss?: (entry: OrderEntryView) => void;
@@ -303,7 +303,7 @@ export function EntryList({
                         className="min-h-10 gap-1.5 text-muted-foreground"
                       >
                         <EyeOff className="h-4 w-4" aria-hidden="true" />
-                        Not seen
+                        Haven’t seen it
                       </Button>
                     )}
                     {onDismiss && entry.state === 'not-in-library' && !notInterested && (

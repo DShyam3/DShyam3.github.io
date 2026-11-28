@@ -133,7 +133,7 @@ function SuggestionActions({ item, onDismiss, onSeen, onNotSeen, actions, layout
       <div className="flex flex-wrap gap-2">
         {isAdmin && <Button onClick={() => { void actions.add(false); }} disabled={actions.pending}><Plus className="h-4 w-4" />Add to watchlist</Button>}
         {isAdmin && released && seenIt(<><Check className="h-4 w-4" />Seen it</>, { size: 'default', className: 'min-h-11 text-sm' })}
-        {onNotSeen && <Button variant="outline" onClick={onNotSeen} disabled={actions.pending}><EyeOff className="h-4 w-4" />Not seen</Button>}
+        {onNotSeen && <Button variant="outline" onClick={onNotSeen} disabled={actions.pending}><EyeOff className="h-4 w-4" />Haven’t seen it</Button>}
         <Button variant="ghost" onClick={onDismiss} disabled={actions.pending}><X className="h-4 w-4" />Not interested</Button>
       </div>
     );
@@ -156,11 +156,11 @@ function SuggestionActions({ item, onDismiss, onSeen, onNotSeen, actions, layout
       {onNotSeen && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground" onClick={onNotSeen} disabled={actions.pending} aria-label={`Mark ${title} as not seen`}>
+            <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground" onClick={onNotSeen} disabled={actions.pending} aria-label={`Haven’t seen it — ${title}`}>
               <EyeOff className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Not seen</TooltipContent>
+          <TooltipContent>Haven’t seen it</TooltipContent>
         </Tooltip>
       )}
       <Tooltip>
@@ -731,7 +731,7 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
   // a stray tap lands: ask first.
   const confirmReset = () => askReset({
     title: 'Reset Discover answers?',
-    description: `Forgets your ${discovery.dismissedCount.toLocaleString('en-GB')} Not interested, Skip these and Not seen ${discovery.dismissedCount === 1 ? 'answer' : 'answers'} ${discovery.synced ? 'on every device' : 'on this browser'}, so Discover suggests those titles again. This can’t be undone.`,
+    description: `Forgets your ${discovery.dismissedCount.toLocaleString('en-GB')} “Not interested”, “Skip these” and “Haven’t seen it” ${discovery.dismissedCount === 1 ? 'answer' : 'answers'} ${discovery.synced ? 'on every device' : 'on this browser'}, so Discover suggests those titles again. This can’t be undone.`,
     confirmLabel: 'Reset answers',
     onConfirm: resetAnswers,
     // The button leaves once nothing is left to reset.
@@ -928,7 +928,7 @@ export function DiscoverySection({ type, section = 'all' }: { type: LibraryType;
 
       <div ref={footerRef} tabIndex={-1} className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         <span>
-          Suggestions from TMDB. “Not interested” hides a title across Discover; “Skip these” hides a page of suggestions for {SKIP_DAYS} days, but not from “Have you already watched?”; “Not seen” stops a title being asked about in “Have you already watched?”, and “None of these” answers it for every title shown there (Undo takes it back). All are {discovery.synced ? 'saved across your devices' : 'remembered on this browser'}.
+          Suggestions from TMDB. “Not interested” hides a title across Discover; “Skip these” hides a page of suggestions for {SKIP_DAYS} days, but not from “Have you already watched?”; “Haven’t seen it” stops a title being asked about in “Have you already watched?”, and “None of these” marks every Likely seen tile that way (Undo takes it back). All are {discovery.synced ? 'saved across your devices' : 'remembered on this browser'}.
         </span>
         {discovery.dismissedCount > 0 && <Button variant="ghost" onClick={confirmReset}>Reset Discover answers…</Button>}
         {resetFailed && <p role="alert" className="text-destructive">Couldn’t reset your answers. Try again.</p>}
