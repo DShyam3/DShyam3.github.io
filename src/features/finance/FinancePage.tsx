@@ -60,7 +60,7 @@ import { NetWorthTrend } from './components/NetWorthTrend';
 import { FinanceSectionBoundary, FinanceSectionLoading } from './components/FinanceSectionBoundary';
 import { Button } from '@/components/ui/button';
 import { coversAllProfileData, describeTables, isSharedTable } from './unloaded-tables';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useHiddenFigures } from './useHiddenFigures';
 import type {
   BudgetCategory,
@@ -614,11 +614,23 @@ function FinanceView() {
   const unreviewedCount = mockTransactions.filter(tx => !tx.isReviewed).length;
 
   /**
-   * The number each surface leads with. Home is absent on purpose: it is
-   * already a cockpit of several figures, and crowning it with one more would
-   * just repeat whichever it picked.
+   * The number each surface leads with. Every surface's hero renders in this
+   * one slot, so switching surfaces updates a single SurfaceHero and its
+   * figure rolls from the old value to the new one instead of remounting.
    */
   const surfaceHero = (() => {
+    if (activeSurface === 'home') {
+      return (
+        <SurfaceHero
+          label="Free to spend this month"
+          value={formatGBP(freeToSpend)}
+          loading={!hasLoaded}
+          tone={freeToSpend < 0 ? 'negative' : 'neutral'}
+          detail={<>{totalBudget > 0 ? 'Budget' : 'Monthly income'} minus recorded spending and unpaid bills. {freeToSpend < 0 ? 'Spending and bills exceed this allowance.' : `${formatGBP(dailyFreeToSpend)} per day across ${daysRemainingInMonth} remaining days.`}</>}
+          aside={<Button variant="outline" onClick={() => setActiveTab('budget')}>Review plan <ArrowUpRight className="h-4 w-4" /></Button>}
+        />
+      );
+    }
     if (activeSurface === 'spending') {
       return (
         <SurfaceHero

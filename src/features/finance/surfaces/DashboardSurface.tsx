@@ -23,7 +23,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Activity, ArrowUpRight, Check, CheckCircle2, PiggyBank, RefreshCw } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { useFinanceTotals } from '../useFinanceTotals';
-import { SurfaceHero } from '../components/SurfaceHero';
 import { CategoryBar } from '@/components/ui/bar-list';
 import { Figure } from '../components/Figure';
 import { AlertList } from '../components/AlertList';
@@ -65,8 +64,8 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   const {
     results, breakdownRates, nextPayday, currentMonth, daysInMonth, todayDateObj,
     totalBudget, totalSpent, totalLoanBalance, totalAssets, totalDebt, netWorth,
-    monthlyIncome, netCashFlow, freeToSpend, unpaidRecurrings, dailyFreeToSpend,
-    incomeFlowPercent, spendFlowPercent, daysRemainingInMonth, currentYear, currentMonthIdx,
+    monthlyIncome, netCashFlow, freeToSpend, unpaidRecurrings,
+    incomeFlowPercent, spendFlowPercent, currentYear, currentMonthIdx,
   } = useFinanceTotals();
 
   const getSpendingProgressData = () => {
@@ -356,14 +355,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   return (
     <>
 <div className="space-y-6">
-  <SurfaceHero
-    label="Free to spend this month"
-    value={formatGBP(freeToSpend)}
-    loading={!hasLoaded}
-    tone={freeToSpend < 0 ? 'negative' : 'neutral'}
-    detail={<>{totalBudget > 0 ? 'Budget' : 'Monthly income'} minus recorded spending and unpaid bills. {freeToSpend < 0 ? 'Spending and bills exceed this allowance.' : `${formatGBP(dailyFreeToSpend)} per day across ${daysRemainingInMonth} remaining days.`}</>}
-    aside={<Button variant="outline" onClick={() => setActiveTab('budget')}>Review plan <ArrowUpRight className="h-4 w-4" /></Button>}
-  />
+  {/* Hero lives in FinancePage's shared slot so it rolls across surfaces. */}
   {/* PRIMARY COCKPIT & LOWER ROW — side-by-side on 32:9 ultrawide */}
   <div className="ultrawide-finance-home">
   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0">
