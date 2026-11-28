@@ -304,6 +304,24 @@ Base `--radius` is `0.375rem` (6px) in `src/index.css` (stepping down to `0.25re
 Use 16–24px gaps and 20–32px panel padding as starting points, adjusted for the
 content and available viewport.
 
+**Spacing sits on a 4px grid.** Padding, margin, gap, `space-*` and offsets are
+multiples of 4px; a 1px hairline offsetting a border is the only exception.
+`src/theme/spacing-grid.test.ts` fails any new off-grid value and ratchets the
+legacy ones down (`src/theme/spacing-grid-baseline.json`).
+
+- No Tailwind half steps (`*-0.5`, `*-1.5`, `*-2.5`, `*-3.5`) and no odd rem
+  lengths (`0.85rem`, `0.6rem`) in spacing.
+- A chip, kbd or compact control gets a fixed height (`h-5`, `h-8`) with
+  `items-center` and horizontal padding only. Odd vertical padding was what
+  landed `text-xs` + `py-0.5` on 20px; a height does that on the grid.
+- Fluid spacing snaps: `clamp(1rem, round(2vw, 4px), 2rem)`, with a plain
+  fallback for browsers before `round()`. The one bare `vw` is
+  `.record-inspector`'s `right`, which tracks the centred page edge and stays
+  in the baseline on purpose.
+- Icon-to-label gap is 8px (`gap-2`) in navigation and toolbars.
+- Sizes (`h-3.5` icons), line heights and chart-library margins are outside
+  the rule.
+
 Example using the existing primitives:
 
 ```tsx

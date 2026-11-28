@@ -36,7 +36,7 @@ interface DockedDetailBodyProps {
 function DockedDetailBody({ detail, onClose }: DockedDetailBodyProps) {
   return (
     <div className="space-y-4">
-      <div className="sticky -top-4 z-10 -mx-4 px-4 pt-1 pb-2.5 bg-popover/95 backdrop-blur-md border-b border-border/50 flex items-center justify-between gap-2">
+      <div className="sticky -top-4 z-10 -mx-4 px-4 pt-1 pb-3 bg-popover/95 backdrop-blur-md border-b border-border/50 flex items-center justify-between gap-2">
         <p className="readout-label text-primary truncate">
           {detail.eyebrow}
         </p>
@@ -74,7 +74,7 @@ function InspectorBody({ target, onNavigate, onClose }: InspectorBodyProps) {
   return (
     <>
       <div className="space-y-4">
-        <div className="space-y-1.5 border-b border-border/50 pb-3">
+        <div className="space-y-2 border-b border-border/50 pb-3">
           <div className="flex items-start justify-between gap-2">
             <p className="readout-label text-primary">
               {target.eyebrow}
@@ -99,7 +99,7 @@ function InspectorBody({ target, onNavigate, onClose }: InspectorBodyProps) {
         </div>
 
         {target.rows.length > 0 ? (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <p className="readout-label">
               Readout
             </p>
@@ -133,7 +133,7 @@ function InspectorBody({ target, onNavigate, onClose }: InspectorBodyProps) {
                 to={target.primaryAction.to}
                 onClick={onNavigate}
                 className={cn(
-                  't-press inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary/40 bg-primary/15 px-3 py-2 text-xs font-medium text-foreground hover:bg-primary/25 transition-colors text-center',
+                  't-press inline-flex items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/15 px-3 py-2 text-xs font-medium text-foreground hover:bg-primary/25 transition-colors text-center',
                   !target.secondaryAction?.to && 'col-span-2',
                 )}
               >
@@ -146,7 +146,7 @@ function InspectorBody({ target, onNavigate, onClose }: InspectorBodyProps) {
                 to={target.secondaryAction.to}
                 onClick={onNavigate}
                 className={cn(
-                  't-press inline-flex items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-border transition-colors text-center',
+                  't-press inline-flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-border transition-colors text-center',
                   !target.primaryAction?.to && 'col-span-2',
                 )}
               >

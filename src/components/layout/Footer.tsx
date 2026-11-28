@@ -27,7 +27,7 @@ export function Footer() {
                     )}
                     <DotMatrixClock />
                 </div>
-                <div className="hidden md:flex shrink-0 flex-col lg:flex-row items-end lg:items-center gap-x-3.5 text-right">
+                <div className="hidden md:flex shrink-0 flex-col lg:flex-row items-end lg:items-center gap-x-3 text-right">
                     <DotMatrixText text="Designed by" size="xs" wrap={false} />
                     <DotMatrixText text={SITE.name} size="xs" wrap={false} />
                 </div>

@@ -704,7 +704,7 @@ html[data-display="larger"] .travel-tooltip-open::after {
 .home-mode-tabs {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.5rem;
   overflow-x: auto;
   min-width: 0;
   scrollbar-width: none;
@@ -720,8 +720,9 @@ html[data-display="larger"] .travel-tooltip-open::after {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.4rem 0.85rem;
+  gap: 0.5rem;
+  min-height: 2rem;
+  padding: 0 0.75rem;
   border-radius: 999px;
   border: 1px solid hsl(var(--border) / 0.55);
   background: hsl(var(--card) / 0.45);
@@ -772,7 +773,7 @@ html[data-display="larger"] .travel-tooltip-open::after {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding-right: 0.15rem;
+  padding-right: 0.25rem;
   padding-bottom: 0.5rem;
 }
 
@@ -794,8 +795,9 @@ html[data-display="larger"] .travel-tooltip-open::after {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.85rem;
-  padding: clamp(1rem, 2vw, 1.5rem);
+  gap: 0.75rem;
+  padding: 1rem; /* before round(): Chrome 125, Firefox 118 */
+  padding: clamp(1rem, round(2vw, 4px), 1.5rem);
   border: 1px solid hsl(var(--border) / 0.65);
   border-radius: 1.25rem;
   min-width: 0;
@@ -852,13 +854,13 @@ html[data-display="larger"] .travel-tooltip-open::after {
   justify-content: space-between;
   height: 100%;
   min-height: 19rem;
-  padding: 0.9rem 1rem;
+  padding: 1rem;
   border-radius: 1.25rem;
   border: 1px solid hsl(var(--border) / 0.65);
   background:
     radial-gradient(ellipse at 50% 45%, hsl(var(--primary) / 0.1), transparent 70%),
     hsl(var(--card) / 0.75);
-  gap: 0.65rem;
+  gap: 0.75rem;
   overflow: hidden;
 }
 
@@ -873,8 +875,8 @@ html[data-display="larger"] .travel-tooltip-open::after {
 .home-constellation-orbit-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.6rem;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
   border-radius: 999px;
   border: 1px solid hsl(var(--border) / 0.7);
   background: hsl(var(--background) / 0.65);
@@ -919,15 +921,15 @@ html[data-display="larger"] .travel-tooltip-open::after {
 .home-constellation-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.5rem;
   z-index: 1;
 }
 
 .home-cluster-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.55rem;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
   border-radius: 999px;
   border: 1px solid hsl(var(--border) / 0.6);
   background: hsl(var(--background) / 0.6);
@@ -960,7 +962,7 @@ html[data-display="larger"] .travel-tooltip-open::after {
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
-  padding-inline: 0.15rem;
+  padding-inline: 0.25rem;
 }
 
 .home-section-eyebrow {
@@ -983,12 +985,12 @@ html[data-display="larger"] .travel-tooltip-open::after {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: min(78%, 18rem);
-  gap: 0.625rem;
+  gap: 0.75rem;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
-  scroll-padding-inline: 0.15rem;
-  padding: 0.15rem 0.15rem 0.5rem;
+  scroll-padding-inline: 0.25rem;
+  padding: 0.25rem 0.25rem 0.5rem;
   /* Thin rather than hidden: a mouse in a narrow window needs something to drag. */
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
@@ -1047,9 +1049,9 @@ html[data-display="larger"] .travel-tooltip-open::after {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.5rem;
   min-width: 0;
-  padding: 0.9rem 1rem;
+  padding: 1rem;
   border-radius: inherit;
   text-align: left;
   cursor: pointer;
@@ -1102,7 +1104,7 @@ html[data-display="larger"] .travel-tooltip-open::after {
 .fact-card-text {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.25rem;
   min-width: 0;
 }
 
@@ -1138,8 +1140,8 @@ html[data-display="larger"] .travel-tooltip-open::after {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-top: 0.15rem;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
   font-size: 0.875rem;
   line-height: 1.2;
   color: hsl(var(--muted-foreground));
@@ -1167,7 +1169,7 @@ html[data-display="larger"] .travel-tooltip-open::after {
 .fact-card-more {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.25rem;
   margin-top: auto;
   font-size: 0.75rem;
   font-weight: 600;
@@ -1175,7 +1177,7 @@ html[data-display="larger"] .travel-tooltip-open::after {
 }
 
 .fact-card-admin {
-  padding: 0 1rem 0.85rem;
+  padding: 0 1rem 1rem;
 }
 
 /* Biography & Projects Mode Grid */

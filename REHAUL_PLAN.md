@@ -172,6 +172,21 @@ calculator scenario; the wider pass below remains open.
 | Home View All | Expands inline. A capped preview linking to Transactions is a product decision, not containment work |
 | Extreme-height fallback | A document-flow shell for very short windows or high zoom is not built. Build it only if a measured failure needs it |
 
+### 4px spacing grid — what is left
+
+The shell (header, rail, menu, command dock, inspector, footer, page gutters)
+and the home page are on the grid, and `src/theme/spacing-grid.test.ts` guards
+the rule in `DESIGN_SYSTEM.md`. The baseline still holds 815 off-grid values in
+105 files.
+
+| Item | Why it is open |
+|---|---|
+| Finance (493 values, 43 files) | Largest share; `TaxIncomeSurface.tsx` alone has 97. The uncommitted finance work that blocked it landed in `2ebd1bbf`; check for an active finance session before starting. The finance tab bar in `surfaces.css` is on the grid by padding; give it a fixed height when this lands |
+| Shared primitives in `src/components/ui/` (25 values, 12 files) | `Button` size `sm` (`py-1.5`), badge, dropdown and select items. One change reaches every page; the home page is otherwise down to these |
+| Travel half of `src/pages/Index.css` (20) | Sidebar rows, tooltips and city panel in px (`6px 12px`, `10px`, `9px`); the Travel page carries another session's map work, so check for it first |
+| Chips on `text-xs` + `py-0.5` (75 uses) | Convert to a fixed `h-5`, not `py-1`, or each grows from 20px to 24px |
+| `gap-1.5` (188) and `mt-0.5` (57) | Pick `gap-1`/`gap-2` by icon size; some `mt-0.5` are optical icon nudges that need another alignment, not a rounding |
+
 ### Unblocked, and the only implementation items outstanding
 
 A **product catalogue is a different feature** and there is no free source for

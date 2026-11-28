@@ -166,9 +166,9 @@ export function CommandDock() {
   return (
     <>
       {/* From md only: below it the header's search button opens the same
-          palette, and a second bar would cost a phone 68px. */}
-      <div className="hidden md:block shrink-0 wide-container relative z-30 pb-1.5 pt-1">
-        <div className="flex items-center rounded-2xl border border-border/60 bg-card/75 px-3 py-1.5 backdrop-blur-md">
+          palette, and a second bar would cost a phone 56px. */}
+      <div className="hidden md:block shrink-0 wide-container relative z-30 pb-2 pt-1">
+        <div className="flex items-center rounded-2xl border border-border/60 bg-card/75 min-h-11 px-3 backdrop-blur-md">
           <button
             type="button"
             onClick={() => setCommandOpen(true)}
@@ -180,7 +180,7 @@ export function CommandDock() {
                 <DotMatrixText text="Search apps and records" size="ui" wrap={false} />
               </span>
             </span>
-            <kbd className="shrink-0 rounded border border-border/70 bg-background/80 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+            <kbd className="shrink-0 inline-flex h-5 items-center rounded border border-border/70 bg-background/80 px-1 font-mono text-xs text-muted-foreground">
               ⌘K
             </kbd>
           </button>
@@ -231,7 +231,7 @@ export function CommandDock() {
                           setQuery('');
                           inputRef.current?.focus();
                         }}
-                        className="t-press rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                        className="t-press rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
                       >
                         Clear
                       </button>
@@ -252,7 +252,7 @@ export function CommandDock() {
                 {filteredLinks.length > 0 ? (
                   <CommandGroup
                     heading={<span className="readout-label"><DotMatrixText text={`Apps (${filteredLinks.length})`} size="ui" /></span>}
-                    className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-1.5"
+                    className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-2"
                   >
                     {filteredLinks.map((link) => {
                       const itemValue = `route:${link.to}`;
@@ -303,7 +303,7 @@ export function CommandDock() {
                           ) : null}
                         </span>
                       }
-                      className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 [&_[cmdk-group-items]]:gap-1.5"
+                      className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 [&_[cmdk-group-items]]:gap-2"
                     >
                       {recordHits.map((hit) => {
                         const itemValue = `record:${hit.key}`;
@@ -325,7 +325,7 @@ export function CommandDock() {
                                 </span>
                               ) : null}
                             </span>
-                            <span className="flex items-center gap-1.5 shrink-0 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
                               <span>{hit.collectionTitle}</span>
                               <AppIcon
                                 icon={SFArrowUpRight}
@@ -354,7 +354,7 @@ export function CommandDock() {
                 {quickActions.length > 0 ? (
                   <CommandGroup
                     heading={<span className="readout-label"><DotMatrixText text={`Quick actions (${quickActions.length})`} size="ui" /></span>}
-                    className="mt-3 border-t border-border/50 pt-3 [&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-1.5"
+                    className="mt-3 border-t border-border/50 pt-3 [&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-1 sm:[&_[cmdk-group-items]]:grid-cols-2 [&_[cmdk-group-items]]:gap-2"
                   >
                     {quickActions.map((action) => {
                       const Icon = action.Icon;

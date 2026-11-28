@@ -87,7 +87,7 @@ export function NavMenu({ className }: { className?: string }) {
         aria-controls={panelId}
         className={cn(
           'nav-link flex flex-shrink-0 items-center justify-center gap-2 rounded',
-          'max-[699px]:h-11 max-[699px]:w-11 min-[700px]:px-2 min-[700px]:py-1.5',
+          'max-[699px]:h-11 max-[699px]:w-11',
           'ring-offset-background hover:bg-secondary/70 focus-visible:outline-none',
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           // The fill alone marks the open state. `nav-link-active` also
@@ -144,7 +144,7 @@ export function NavMenu({ className }: { className?: string }) {
       >
         <nav
           aria-label="App switcher"
-          className="grid grid-cols-2 gap-x-1 gap-y-0.5 sm:grid-cols-3 lg:grid-cols-4"
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
         >
           {links.map((link) => {
             const active = location.pathname === link.to || (link.to !== '/' && location.pathname.startsWith(`${link.to}/`));
@@ -160,7 +160,7 @@ export function NavMenu({ className }: { className?: string }) {
                 style={accentStyle}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'nav-link min-w-0 overflow-hidden rounded-lg px-2 py-2.5 gap-1.5 transition-colors hover:bg-secondary/60',
+                  'nav-link min-w-0 overflow-hidden rounded-lg transition-colors hover:bg-secondary/60',
                   active && 'nav-link-active bg-secondary/60',
                 )}
               >

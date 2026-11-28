@@ -60,10 +60,6 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        badge: {
-          new: 'hsl(var(--badge-new))',
-          'new-foreground': 'hsl(var(--badge-new-foreground))',
-        },
         positive: {
           DEFAULT: 'hsl(var(--positive))',
           foreground: 'hsl(var(--positive-foreground))',

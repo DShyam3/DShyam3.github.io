@@ -290,7 +290,7 @@ const Index = () => {
                   <Button
                     variant="secondary"
                     size="sm"
-                    className="rounded-full text-xs gap-1.5"
+                    className="rounded-full text-xs"
                     onClick={() => openAndDownload(cvUrl, SITE.cvFileName)}
                   >
                     <Download className="h-3.5 w-3.5" />
@@ -456,7 +456,7 @@ const Index = () => {
                       onClick={handleInspectEntry}
                     >
                       <div className="about-timeline-row relative flex items-start gap-4">
-                        <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white ring-1 ring-black/10 rounded-md p-1.5 group-hover/item:scale-105 transition-transform overflow-hidden">
+                        <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white ring-1 ring-black/10 rounded-md p-2 group-hover/item:scale-105 transition-transform overflow-hidden">
                           <img
                             src={entry.item.logo_url}
                             alt={org}
@@ -491,7 +491,7 @@ const Index = () => {
                             <p className="text-sm font-medium leading-snug text-foreground">
                               {org}
                             </p>
-                            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground/80">
+                            <p className="mt-2 text-xs leading-relaxed text-muted-foreground/80">
                               {[
                                 entry.item.location,
                                 `${entry.item.start_date} - ${entry.item.end_date}`,

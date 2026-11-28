@@ -1,7 +1,7 @@
 /* Shared responsive contract: content widths, legibility and input capability. */
 :root {
   --page-max: 100vw;
-  --page-gutter: clamp(1rem, 2vw, 2rem);
+  --page-gutter: clamp(1rem, round(2vw, 4px), 2rem);
 }
 
 /* ─── The middle card ─────────────────────────────────────────────────
@@ -44,11 +44,16 @@
     display: flex;
   }
   .app-frame {
-    --frame-pad: clamp(1rem, 1.5vw, 1.5rem);
+    --frame-pad: clamp(1rem, round(1.5vw, 4px), 1.5rem);
     border: 1px solid hsl(var(--border) / .55);
     border-radius: 1.5rem;
     background-color: hsl(var(--card) / .22);
   }
+}
+/* round() is Chrome 125+, Firefox 118+; before it the gutters would compute to 0. */
+@supports not (width: round(1px, 1px)) {
+  :root { --page-gutter: 1rem; }
+  .app-frame { --frame-pad: 1rem; }
 }
 @media (min-width: 1280px) and (min-height: 600px) {
   /* The inspector grows with the window: 22rem until ~1354px, 26% of
@@ -65,7 +70,7 @@
   }
 }
 @media (max-height: 560px) {
-  .app-frame-slot { padding-block: .375rem; }
+  .app-frame-slot { padding-block: .25rem; }
 }
 
 /* A workspace page's panes scroll instead of the card, but only while both
@@ -288,7 +293,7 @@ html[data-display="larger"] .city-remove-btn { opacity: 1; }
 .app-shell[data-section="watchlist"] .card-grid { --card-min: 11rem; --card-gap: 1rem; }
 .app-shell[data-section="watchlist"] .card-body { padding: .75rem; }
 @media (min-width: 640px) and (max-height: 850px) {
-  .app-shell[data-section="watchlist"] .card-grid { --card-min: 9.5rem; --card-gap: .875rem; }
+  .app-shell[data-section="watchlist"] .card-grid { --card-min: 9.5rem; --card-gap: .75rem; }
   header.app-header { padding-block: .5rem; }
 }
 @media (min-width: 1800px) and (min-height: 1000px) {
