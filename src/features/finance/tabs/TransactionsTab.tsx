@@ -720,6 +720,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     {opt.name}
                   </SelectItem>
                 ))}
+                <SelectItem value="Business Expense" className="text-xs font-mono">Business Expense</SelectItem>
                 <SelectItem value="Other" className="text-xs font-mono">Other</SelectItem>
               </SelectContent>
             </Select>
@@ -1210,6 +1211,12 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         {opt.name}
                       </DropdownMenuItem>
                     ))}
+                    <DropdownMenuItem
+                      className="text-xs cursor-pointer"
+                      onClick={() => handleBulkCategory('Business Expense')}
+                    >
+                      Business Expense
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -1618,6 +1625,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         {opt.name}
                       </SelectItem>
                     ))}
+                    <SelectItem value="Business Expense" className="text-xs font-mono">Business Expense</SelectItem>
                     <SelectItem value="Other" className="text-xs font-mono">Other</SelectItem>
                   </SelectContent>
                 </Select>

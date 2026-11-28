@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import {
-  checkPayslip, compareToModel, findDuplicatePayslip, findPayslipReimbursementCandidates, findPayslipTransactionCandidates, isReimbursementLine, studentLoanExpectedInTaxYear, studentLoanPaidInTaxYear,
+  checkPayslip, compareToModel, findDuplicatePayslip, findPayslipTransactionCandidates, studentLoanExpectedInTaxYear, studentLoanPaidInTaxYear,
   unambiguousPayslipMatches,
   calendarYearOf, inCalendarYear, inTaxYear, sumPayslips, taxYearOf, type Payslip, type PayslipLine,
 } from '@/lib/finance';
@@ -109,16 +109,12 @@ export function PayslipsSection() {
   const {
     payslips,
     payslipReconciliations,
-    payslipReimbursementLinks,
-    payslipReimbursementsAvailable,
     mockTransactions,
     savePayslip,
     deletePayslip,
     savePayslipReconciliation,
     savePayslipReconciliations,
     deletePayslipReconciliation,
-    savePayslipReimbursementLink,
-    deletePayslipReimbursementLink,
     profileId,
     settings,
     setSettings,
@@ -233,88 +229,6 @@ export function PayslipsSection() {
     [candidatesByPayslip, reconciliationsByPayslip],
   );
   const [isConfirmingMatches, setIsConfirmingMatches] = useState(false);
-  const [updatingReimbursement, setUpdatingReimbursement] = useState<string | null>(null);
-  const [newReimbursementPayslip, setNewReimbursementPayslip] = useState('');
-  const [newReimbursementLabel, setNewReimbursementLabel] = useState('Expense reimbursement');
-  const [newReimbursementAmount, setNewReimbursementAmount] = useState('');
-  const [isSavingReimbursementLine, setIsSavingReimbursementLine] = useState(false);
-  const reimbursementRows = useMemo(() => {
-    const usedTransactionIds = new Set(payslipReimbursementLinks.map(link => link.transactionId));
-    const availableSpending = mockTransactions.filter(transaction =>
-      !usedTransactionIds.has(transaction.id)
-      && transaction.providerCategory !== 'transfer'
-      && transaction.category.toLowerCase() !== 'transfer');
-    return payslips.flatMap(payslip => {
-      const candidates = findPayslipReimbursementCandidates(payslip, availableSpending);
-      const eligibleRows = (payslip.lines ?? []).flatMap((line, lineIndex) => {
-        if (line.kind !== 'payment' || !isReimbursementLine(line.label) || line.amount <= 0) return [];
-        const link = payslipReimbursementLinks.find(item => item.payslipId === payslip.id && item.lineIndex === lineIndex);
-        const transaction = link && mockTransactions.find(item => item.id === link.transactionId);
-        const current = Boolean(link && transaction && line.label === link.lineLabel
-          && Math.round(line.amount * 100) === Math.round(link.lineAmount * 100)
-          && findPayslipReimbursementCandidates(payslip, [transaction])
-            .some(candidate => candidate.lineIndex === lineIndex && candidate.transactionId === transaction.id));
-        return [{ payslip, line, lineIndex, link, transaction, current,
-          candidates: candidates.filter(candidate => candidate.lineIndex === lineIndex) }];
-      });
-      const eligibleIndexes = new Set(eligibleRows.map(row => row.lineIndex));
-      const staleRows = payslipReimbursementLinks
-        .filter(link => link.payslipId === payslip.id && !eligibleIndexes.has(link.lineIndex))
-        .map(link => ({
-          payslip,
-          line: { label: link.lineLabel, amount: link.lineAmount, kind: 'payment' as const },
-          lineIndex: link.lineIndex,
-          link,
-          transaction: mockTransactions.find(item => item.id === link.transactionId),
-          current: false,
-          candidates: [],
-        }));
-      return [...eligibleRows, ...staleRows];
-    });
-  }, [mockTransactions, payslipReimbursementLinks, payslips]);
-  const confirmReimbursement = async (payslipId: string, lineIndex: number, transactionId: string) => {
-    setUpdatingReimbursement(`${payslipId}:${lineIndex}`);
-    try {
-      await savePayslipReimbursementLink(payslipId, lineIndex, transactionId);
-    } finally {
-      setUpdatingReimbursement(null);
-    }
-  };
-  const unlinkReimbursement = async (id: string) => {
-    setUpdatingReimbursement(id);
-    try {
-      await deletePayslipReimbursementLink(id);
-    } finally {
-      setUpdatingReimbursement(null);
-    }
-  };
-  const addReimbursementLine = async () => {
-    const payslip = payslips.find(item => item.id === newReimbursementPayslip);
-    const amount = Number(newReimbursementAmount);
-    const label = newReimbursementLabel.trim();
-    if (!payslip || !isReimbursementLine(label) || !Number.isFinite(amount) || amount <= 0) return;
-    setIsSavingReimbursementLine(true);
-    try {
-      const outcome = await savePayslip({
-        ...payslip,
-        lines: [...(payslip.lines ?? []), { kind: 'payment', label, amount }],
-      });
-      if (outcome === 'saved') {
-        setNewReimbursementAmount('');
-        setNewReimbursementLabel('Expense reimbursement');
-      }
-    } finally {
-      setIsSavingReimbursementLine(false);
-    }
-  };
-  const removeReimbursementLine = async (payslip: Payslip, lineIndex: number) => {
-    setUpdatingReimbursement(`${payslip.id}:${lineIndex}`);
-    try {
-      await savePayslip({ ...payslip, lines: (payslip.lines ?? []).filter((_, index) => index !== lineIndex) });
-    } finally {
-      setUpdatingReimbursement(null);
-    }
-  };
   const confirmClearMatches = async () => {
     setIsConfirmingMatches(true);
     try {
@@ -572,7 +486,7 @@ export function PayslipsSection() {
         type: 'monetary',
         kind: 'benefit-in-kind',
         emoji,
-        notes: 'Payrolled Benefit in Kind (from payslip)',
+        notes: 'From payslip',
       };
     });
     const updatedSettings = { ...settings, packageBenefits: [...(settings.packageBenefits ?? []), ...added] };
@@ -646,12 +560,13 @@ export function PayslipsSection() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
             {[
               ['Take-home', formatGBP(summary.net)],
               ['Earned', formatGBP(summary.gross)],
               ['Tax + NI', formatGBP(summary.incomeTax + summary.nationalInsurance)],
               ['Into pension', formatGBP(summary.pensionEmployee + summary.pensionEmployer)],
+              ['Student loan', formatGBP(summary.studentLoan)],
             ].map(([label, value], index) => (
               <div key={label} className={cn('min-w-0 rounded-xl border px-3 py-3 sm:px-4 sm:py-4', index === 0 ? 'border-primary/25 bg-primary/10' : 'border-border/40 bg-card/60')}>
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
@@ -694,12 +609,14 @@ export function PayslipsSection() {
           </div>
 
           <div className="space-y-5">
-            {groups.map(group => (
+            {groups.map((group, groupIndex) => {
+              const isCollapsed = collapsed[group.collapseKey] ?? groupIndex > 0;
+              return (
               <section key={group.collapseKey} className="overflow-hidden rounded-2xl border border-border/50 bg-card/70">
                 <button
                   type="button"
-                  aria-expanded={!collapsed[group.collapseKey]}
-                  onClick={() => setCollapsed(c => ({ ...c, [group.collapseKey]: !c[group.collapseKey] }))}
+                  aria-expanded={!isCollapsed}
+                  onClick={() => setCollapsed(c => ({ ...c, [group.collapseKey]: !isCollapsed }))}
                   className="flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-3 bg-primary/5 px-4 py-4 text-left transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
                 >
                   {group.logo && (
@@ -711,22 +628,34 @@ export function PayslipsSection() {
                     <div className="text-base font-semibold text-foreground [overflow-wrap:anywhere]">{group.title}</div>
                     <div className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">{group.subtitle}</div>
                   </div>
-                  <div className="flex min-w-0 flex-wrap gap-x-5 gap-y-2 font-mono sm:ml-auto sm:text-right">
-                    <div className="text-right">
+                  <div className="grid min-w-0 grid-cols-2 gap-x-5 gap-y-2 font-mono sm:ml-auto sm:grid-cols-[5.75rem_5.75rem_5.75rem_5.75rem_5.75rem] sm:gap-x-3 sm:text-right">
+                    <div className="sm:text-right">
                       <div className="text-xs text-muted-foreground">Earned</div>
                       <div className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{formatGBP(group.totals.gross)}</div>
                     </div>
-                    <div className="text-right">
+                    <div className="sm:text-right">
+                      <div className="text-xs text-muted-foreground">Into pension</div>
+                      <div className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{formatGBP(group.totals.pensionEmployee + group.totals.pensionEmployer)}</div>
+                    </div>
+                    <div className="sm:text-right">
+                      <div className="text-xs text-muted-foreground">Tax + NI</div>
+                      <div className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{formatGBP(group.totals.incomeTax + group.totals.nationalInsurance)}</div>
+                    </div>
+                    <div className="sm:text-right">
+                      <div className="text-xs text-muted-foreground">Student loan</div>
+                      <div className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{formatGBP(group.totals.studentLoan)}</div>
+                    </div>
+                    <div className="sm:text-right">
                       <div className="text-xs text-muted-foreground">Take-home</div>
-                      <div className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{formatGBP(group.totals.net)}</div>
+                      <div className="mt-0.5 text-sm font-bold tabular-nums text-foreground">{formatGBP(group.totals.net)}</div>
                     </div>
                   </div>
-                  {collapsed[group.collapseKey]
+                  {isCollapsed
                     ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                     : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
                 </button>
 
-                {!collapsed[group.collapseKey] && (
+                {!isCollapsed && (
                   <div className="divide-y divide-border/35 border-t border-border/40">
                     {group.slips.map(p => {
                       const check = checkPayslip(p);
@@ -752,16 +681,16 @@ export function PayslipsSection() {
                               <div className="text-xs font-medium text-foreground [overflow-wrap:anywhere]">
                                 {groupBy === 'employer' ? (captured ? 'Payslip' : 'Figures not captured yet') : p.employer || 'No employer'}
                               </div>
-                              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                                {captured && <span className="font-mono tabular-nums">{formatGBP(p.gross)} gross</span>}
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                {captured && <span className="font-mono tabular-nums sm:min-w-[8.5rem]">{formatGBP(p.gross)} gross</span>}
                                 {!captured && groupBy !== 'employer' && <span>Figures not captured yet</span>}
-                                {captured && !check.reconciles && <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Does not add up</span>}
+                                {p.storagePath && <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" aria-hidden="true" /> PDF</span>}
                                 {reconciliation ? (
                                   <span className="inline-flex items-center gap-1 text-positive"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Bank matched</span>
                                 ) : candidateCount > 0 ? (
                                   <span className="inline-flex items-center gap-1"><Link2 className="h-3.5 w-3.5" aria-hidden="true" /> Bank match available</span>
                                 ) : null}
-                                {p.storagePath && <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" aria-hidden="true" /> PDF</span>}
+                                {captured && !check.reconciles && <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Does not add up</span>}
                               </div>
                             </div>
                           </div>
@@ -777,70 +706,9 @@ export function PayslipsSection() {
                   </div>
                 )}
               </section>
-            ))}
+              );
+            })}
           </div>
-
-          {payslipReimbursementsAvailable && <section className="space-y-3 border-t border-border/40 pt-5" aria-labelledby="payslip-reimbursements-heading">
-              <div>
-                <h4 id="payslip-reimbursements-heading" className="text-sm font-semibold text-foreground">Expenses paid back through payroll</h4>
-                <p className="mt-1 text-xs text-muted-foreground">Exact amount matches from spending in the 120 days before each payslip. Confirm the expense yourself.</p>
-              </div>
-              <div className="grid gap-2 rounded-xl border border-border/40 bg-card/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7rem_auto] sm:items-end">
-                <div className="min-w-0 space-y-1">
-                  <Label htmlFor="reimbursement-payslip" className="text-xs">Payslip</Label>
-                  <select id="reimbursement-payslip" value={newReimbursementPayslip} onChange={event => setNewReimbursementPayslip(event.target.value)} className="h-9 w-full min-w-0 rounded-lg border border-border/50 bg-background px-2 text-xs text-foreground">
-                    <option value="">Choose payslip</option>
-                    {payslips.map(payslip => <option key={payslip.id} value={payslip.id}>{formatDate(payslip.payDate)} · {payslip.employer || 'Payslip'}</option>)}
-                  </select>
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <Label htmlFor="reimbursement-label" className="text-xs">Payslip line</Label>
-                  <Input id="reimbursement-label" value={newReimbursementLabel} onChange={event => setNewReimbursementLabel(event.target.value)} className="h-9 text-xs" />
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <Label htmlFor="reimbursement-amount" className="text-xs">Amount paid back</Label>
-                  <Input id="reimbursement-amount" type="number" min="0.01" step="0.01" value={newReimbursementAmount} onChange={event => setNewReimbursementAmount(event.target.value)} className="h-9 text-xs" />
-                </div>
-                <Button type="button" size="sm" variant="outline" className="h-9 text-xs" disabled={isSavingReimbursementLine || !newReimbursementPayslip || !isReimbursementLine(newReimbursementLabel) || !(Number(newReimbursementAmount) > 0)} onClick={() => void addReimbursementLine()}>
-                  Add line
-                </Button>
-              </div>
-              {reimbursementRows.length > 0 && (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {reimbursementRows.map(({ payslip, line, lineIndex, link, transaction, current, candidates }) => (
-                  <div key={`${payslip.id}:${lineIndex}`} className="min-w-0 rounded-xl border border-border/40 bg-card/60 p-3">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-foreground [overflow-wrap:anywhere]">{line.label}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(payslip.payDate)} · {payslip.employer || 'Payslip'}</p>
-                      </div>
-                      <span className="font-mono text-xs font-semibold tabular-nums text-foreground">{formatGBP(line.amount)}</span>
-                    </div>
-                    {!link && !payslipReimbursementLinks.some(item => item.payslipId === payslip.id && item.lineIndex > lineIndex) && (
-                      <Button size="sm" variant="ghost" className="mt-1 h-7 px-1 text-xs text-muted-foreground" disabled={updatingReimbursement !== null} onClick={() => void removeReimbursementLine(payslip, lineIndex)}>Remove line</Button>
-                    )}
-                    {link ? (
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/30 pt-2">
-                        <p className={cn('min-w-0 text-xs', current ? 'text-positive' : 'text-destructive')}>
-                          {current ? 'Confirmed' : 'Needs review'} · {transaction ? `${transaction.name} · ${formatDate(transaction.date)}` : 'Expense unavailable'}
-                        </p>
-                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={updatingReimbursement !== null} onClick={() => void unlinkReimbursement(link.id)}>Unlink</Button>
-                      </div>
-                    ) : candidates.length > 0 ? (
-                      <div className="mt-3 space-y-2 border-t border-border/30 pt-2">
-                        {candidates.map(candidate => (
-                          <div key={candidate.transactionId} className="flex min-w-0 items-center justify-between gap-2">
-                            <p className="min-w-0 truncate text-xs text-muted-foreground" title={candidate.name}>{candidate.name} · {formatDate(candidate.date)}</p>
-                            <Button size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" disabled={updatingReimbursement !== null} onClick={() => void confirmReimbursement(payslip.id, lineIndex, candidate.transactionId)}>Confirm</Button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : <p className="mt-3 border-t border-border/30 pt-2 text-xs text-muted-foreground">No exact expense match found</p>}
-                  </div>
-                ))}
-              </div>
-              )}
-            </section>}
         </>
       )}
 
@@ -1020,7 +888,7 @@ export function PayslipsSection() {
             </div>
           </div>
 
-          <DialogFooter className="pt-3 gap-2 sm:gap-0">
+          <DialogFooter className="pt-3 gap-2">
             {editing && (
               <Button
                 variant="ghost"

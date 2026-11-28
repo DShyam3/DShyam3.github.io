@@ -255,6 +255,23 @@ describe('studentLoanExpectedInTaxYear', () => {
     expect(studentLoanExpectedInTaxYear([...owner, slip({ id: 'bad', payDate: '2026-11-30', gross: Number.NaN })], 2026, plan2))
       .toBeUndefined();
   });
+
+  it('subtracts non-pension benefit sacrifice lines when payslip.lines is present', () => {
+    const withGym = slip({
+      id: 'apr-gym',
+      payDate: '2026-04-30',
+      gross: 3000,
+      pensionEmployee: 120,
+      otherDeductions: 23.99,
+      studentLoan: 36,
+      lines: [
+        { label: 'Pension', amount: 120, kind: 'benefit' },
+        { label: 'Gym', amount: 23.99, kind: 'benefit' },
+      ],
+    });
+    // floor(9% x (3,000 - 120 - 23.99 - 2,448.75)) = 36 rather than 38.
+    expect(studentLoanExpectedInTaxYear([withGym], 2026, plan2)).toBe(36);
+  });
 });
 
 describe('findDuplicatePayslip', () => {

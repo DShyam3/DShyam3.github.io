@@ -309,10 +309,21 @@ export const studentLoanPay = (
  * number gives NaN under salary sacrifice rather than a pay figure that
  * quietly treats it as 0.
  */
+const nonPensionBenefitSacrifice = (
+  lines: readonly { label: string; amount: number; kind: string }[] | undefined,
+): number =>
+  (lines ?? []).reduce(
+    (sum, l) => (l.kind === 'benefit' && !/\bpension\b/i.test(l.label) ? sum + l.amount : sum),
+    0,
+  );
+
 export const payslipLoanPay = (
-  p: { gross: number; pensionEmployee: number },
+  p: { gross: number; pensionEmployee: number; lines?: readonly { label: string; amount: number; kind: string }[] },
   pensionType: StudentLoanPensionType,
-): number => (pensionType === 'salary_sacrifice' ? round2(p.gross - p.pensionEmployee) : p.gross);
+): number => {
+  const pensionOff = pensionType === 'salary_sacrifice' ? p.pensionEmployee : 0;
+  return round2(p.gross - pensionOff - nonPensionBenefitSacrifice(p.lines));
+};
 
 /**
  * What payroll deducts from one month's pay: the plan's share of pay over a

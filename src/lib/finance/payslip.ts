@@ -68,8 +68,10 @@ export interface PayslipLine {
    * `benefit` is a sacrifice taken from the pay column rather than listed
    * under deductions -- pension, a gym membership. It reduces pay without
    * being a deduction, which is why it needs its own name.
+   * `bik` is a payrolled Benefit-in-Kind (added for tax and subtracted back
+   * out before net, so it is not deducted from salary).
    */
-  kind: 'payment' | 'deduction' | 'benefit';
+  kind: 'payment' | 'deduction' | 'benefit' | 'bik';
 }
 
 /** Groups the lines for display, keeping the payslip's own order within each. */
@@ -77,6 +79,7 @@ export const groupPayslipLines = (lines: readonly PayslipLine[] | undefined) => 
   payments: (lines ?? []).filter(l => l.kind === 'payment'),
   benefits: (lines ?? []).filter(l => l.kind === 'benefit'),
   deductions: (lines ?? []).filter(l => l.kind === 'deduction'),
+  biks: (lines ?? []).filter(l => l.kind === 'bik'),
 });
 
 /**

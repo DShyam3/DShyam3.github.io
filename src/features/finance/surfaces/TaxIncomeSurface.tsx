@@ -56,7 +56,7 @@ import {
   type OptimalLeaveBias,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Gift, Pencil, Plus, PoundSterling, Settings, Sparkles, Trash2 } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Gift, Pencil, Plus, PoundSterling, Settings, Sparkles, Trash2, TrendingUp } from 'lucide-react';
 import { useFinanceTotals } from '../useFinanceTotals';
 import { PayslipsSection } from '../components/PayslipsSection';
 import { PillSwitch } from '../components/PillSwitch';
@@ -203,6 +203,8 @@ export default function TaxIncomeSurface({
   ];
 
   // Benefits & Perks Manager Dialog State
+  const [isMinimumsDialogOpen, setIsMinimumsDialogOpen] = useState(false);
+  const [isAddBenefitOpen, setIsAddBenefitOpen] = useState(false);
   const [selectedBenefitPreset, setSelectedBenefitPreset] = useState<string>('custom');
   const [editingBenefitId, setEditingBenefitId] = useState<string | null>(null);
   const [newBenefitName, setNewBenefitName] = useState('');
@@ -213,6 +215,7 @@ export default function TaxIncomeSurface({
   const [newBenefitKind, setNewBenefitKind] = useState<PackageBenefitKind>('benefit-in-kind');
 
   const resetBenefitForm = () => {
+    setIsAddBenefitOpen(false);
     setSelectedBenefitPreset('custom');
     setEditingBenefitId(null);
     setNewBenefitName('');
@@ -236,6 +239,7 @@ export default function TaxIncomeSurface({
   };
 
   const handleStartEditBenefit = (benefit: PackageBenefit) => {
+    setIsAddBenefitOpen(true);
     setEditingBenefitId(benefit.id);
     setSelectedBenefitPreset('custom');
     setNewBenefitName(benefit.name);
@@ -1135,7 +1139,10 @@ export default function TaxIncomeSurface({
               {settings.ukRegion === 'england-and-wales' ? 'England & Wales' : settings.ukRegion === 'scotland' ? 'Scotland' : 'Northern Ireland'} tax rules
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+          <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-center">
+            <Button onClick={() => setIsMinimumsDialogOpen(true)} variant="outline" size="sm" className="h-8 rounded-lg gap-1.5 border-border/40 text-xs font-mono">
+              <TrendingUp className="h-3.5 w-3.5 text-positive" aria-hidden="true" /> vs Minimum
+            </Button>
             <Button onClick={() => setIsBenefitsDialogOpen(true)} variant="outline" size="sm" className="h-8 rounded-lg gap-1.5 border-border/40 text-xs font-mono">
               <Gift className="h-3.5 w-3.5 text-primary" /> Benefits ({settings.packageBenefits?.length || 0})
             </Button>
@@ -2492,8 +2499,8 @@ export default function TaxIncomeSurface({
     <div className="space-y-5 pt-2">
 
       {/* Total Summary */}
-      <div className="rounded-lg border border-border/30 bg-muted/20 p-4 flex items-center justify-between font-mono">
-        <div>
+      <div className="rounded-lg border border-border/30 bg-muted/20 p-4 flex items-start justify-between gap-4 font-mono">
+        <div className="min-w-0 flex-1">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Total Active Benefits</span>
           <span className="font-mono text-xl font-bold text-foreground">
             {formatGBP(results.totalBenefitsValue)}
@@ -2511,25 +2518,42 @@ export default function TaxIncomeSurface({
             </span>
           )}
         </div>
-        <div className="text-right">
-          <span className="text-xs font-semibold text-primary">{settings.packageBenefits?.length || 0} items added</span>
+        <div className="text-right shrink-0 whitespace-nowrap">
+          <span className="text-xs font-semibold text-primary">
+            {(settings.packageBenefits?.length || 0)} {(settings.packageBenefits?.length || 0) === 1 ? 'item' : 'items'} added
+          </span>
         </div>
       </div>
 
       {/* Add / Edit Benefit Form */}
-      <div className="rounded-lg border border-border/30 bg-muted/10 p-4 space-y-3 font-mono">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-          {editingBenefitId ? (
-            <>
-              <Pencil className="w-3.5 h-3.5 text-primary" /> Edit Benefit
-            </>
-          ) : (
-            <>
-              <Plus className="w-3.5 h-3.5 text-primary" /> Add Benefit or Addition
-            </>
-          )}
-        </h4>
+      {(() => {
+        const showBenefitForm = isAddBenefitOpen || editingBenefitId !== null || !(settings.packageBenefits?.length);
+        return (
+          <div className="rounded-lg border border-border/30 bg-muted/10 p-4 space-y-3 font-mono">
+            <button
+              type="button"
+              aria-expanded={showBenefitForm}
+              onClick={() => setIsAddBenefitOpen(v => !v)}
+              className="flex w-full items-center justify-between gap-2 text-left text-xs font-bold uppercase tracking-wider text-foreground"
+            >
+              <span className="flex items-center gap-1.5">
+                {editingBenefitId ? (
+                  <>
+                    <Pencil className="w-3.5 h-3.5 text-primary" /> Edit Benefit
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5 text-primary" /> Add Benefit or Addition
+                  </>
+                )}
+              </span>
+              {showBenefitForm
+                ? <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                : <ChevronRight className="w-4 h-4 text-muted-foreground" aria-hidden="true" />}
+            </button>
 
+            {showBenefitForm && (
+              <>
         <div className="space-y-1">
           <Label htmlFor="benefit-preset" className="text-xs text-muted-foreground font-mono">Benefit Preset</Label>
           <Select value={selectedBenefitPreset} onValueChange={handleSelectBenefitPreset}>
@@ -2649,7 +2673,11 @@ export default function TaxIncomeSurface({
             )}
           </Button>
         </div>
-      </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Active Benefits List */}
       <div role="group" aria-labelledby="benefit-list-label" className="space-y-2">
@@ -2664,15 +2692,12 @@ export default function TaxIncomeSurface({
                   <div className="min-w-0">
                     <p className="text-xs font-semibold font-mono text-foreground truncate">{benefit.name}</p>
                     <p className="text-xs text-muted-foreground font-mono">
-                      {benefit.type === 'percentage' ? `${benefit.amount}% of base salary` : 'Fixed annual amount'}
-                      {benefit.notes ? ` · ${benefit.notes}` : ''}
+                      {benefit.kind === 'cash'
+                        ? `Cash · ${benefit.type === 'percentage' ? `${benefit.amount}% of base salary` : 'Fixed annual'} · about ${formatGBP(results.cashBenefits.find(c => c.id === benefit.id)?.net ?? 0)}/yr after tax`
+                        : `Benefit in kind · ${benefit.type === 'percentage' ? `${benefit.amount}% of base salary` : 'Fixed annual'}`}
                     </p>
-                    {benefit.kind === 'cash' ? (
-                      <p className="text-xs text-muted-foreground font-mono">
-                        Cash · about {formatGBP(results.cashBenefits.find(c => c.id === benefit.id)?.net ?? 0)}/yr after tax
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground font-mono">Benefit in kind</p>
+                    {benefit.notes && !/benefit\s+in\s+kind/i.test(benefit.notes) && (
+                      <p className="text-xs text-muted-foreground/80 font-mono">{benefit.notes}</p>
                     )}
                   </div>
                 </div>
@@ -2718,6 +2743,123 @@ export default function TaxIncomeSurface({
 
     <DialogFooter className="pt-4 border-t border-border/40">
       <Button onClick={() => setIsBenefitsDialogOpen(false)} className="rounded-lg bg-primary text-primary-foreground font-semibold font-mono text-xs h-8 px-4">
+        Done
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
+{/* UK Statutory Minimums Comparison Dialog */}
+<Dialog open={isMinimumsDialogOpen} onOpenChange={setIsMinimumsDialogOpen}>
+  <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-lg max-h-[85dvh] overflow-y-auto p-6">
+    <DialogHeader>
+      <DialogTitle className="text-sm font-mono uppercase tracking-wider font-semibold text-foreground flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-positive" aria-hidden="true" /> Compared to UK Minimums
+      </DialogTitle>
+      <DialogDescription className="text-xs font-mono text-muted-foreground">
+        How your current salary, pension and leave compare against UK statutory minimums (not averages).
+      </DialogDescription>
+    </DialogHeader>
+
+    {(() => {
+      const UK_MIN_HOLIDAYS = 20; // 28 days incl. 8 bank holidays
+      const UK_MIN_EMPLOYER_PENSION_PCT = 3;
+      const UK_MIN_TOTAL_PENSION_PCT = 8;
+      const UK_NLW_2026_HOURLY = 12.71;
+      const workingDaysPerYear = 260;
+      const hoursPerDay = settings.workingHoursPerDay || 7.5;
+      const dayRate = settings.grossSalary / workingDaysPerYear;
+      const hourlyRate = dayRate / hoursPerDay;
+
+      const extraLeaveDays = Math.max(0, settings.workHolidays - UK_MIN_HOLIDAYS);
+      const extraLeaveValue = extraLeaveDays * dayRate;
+
+      const extraEmployerPct = Math.max(0, settings.employerPensionPercent - UK_MIN_EMPLOYER_PENSION_PCT);
+      const extraEmployerValue = (settings.grossSalary * extraEmployerPct) / 100;
+      const totalPensionPct = settings.personalPensionPercent + settings.employerPensionPercent;
+
+      const hourlyMultiple = hourlyRate / UK_NLW_2026_HOURLY;
+      const annualNlw = UK_NLW_2026_HOURLY * hoursPerDay * workingDaysPerYear;
+      const aboveNlwAnnual = Math.max(0, settings.grossSalary - annualNlw);
+      const combinedExtras = extraLeaveValue + extraEmployerValue;
+
+      return (
+        <div className="space-y-4 pt-2 font-mono">
+          <div className="rounded-lg border border-border/30 bg-muted/20 p-4">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
+              Extra Leave + Employer Pension Above Minimum
+            </span>
+            <span className="mt-1 block text-xl font-bold text-positive tabular-nums">
+              +{formatGBP(combinedExtras)}
+              <span className="text-xs font-normal text-muted-foreground ml-1.5">/ year</span>
+            </span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Notational value of extra days off and employer pension above the UK statutory floor.
+            </span>
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border/40 bg-card/40 p-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <span className="block text-xs font-semibold text-foreground">Paid Annual Leave</span>
+                <p className="text-xs text-muted-foreground">
+                  {settings.workHolidays} days vs {UK_MIN_HOLIDAYS} days UK minimum (28 incl. 8 bank holidays), at {formatGBP(dayRate)}/day.
+                </p>
+              </div>
+              <div className="shrink-0 text-right tabular-nums">
+                <span className="block text-xs font-bold text-positive whitespace-nowrap">
+                  {extraLeaveDays > 0 ? `+${extraLeaveDays} days` : 'At minimum'}
+                </span>
+                {extraLeaveDays > 0 && (
+                  <span className="block text-xs text-muted-foreground whitespace-nowrap">
+                    +{formatGBP(extraLeaveValue)}/yr
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border/40 bg-card/40 p-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <span className="block text-xs font-semibold text-foreground">Workplace Pension</span>
+                <p className="text-xs text-muted-foreground">
+                  Employer puts in {settings.employerPensionPercent}% vs {UK_MIN_EMPLOYER_PENSION_PCT}% minimum ({totalPensionPct}% combined vs {UK_MIN_TOTAL_PENSION_PCT}% total).
+                </p>
+              </div>
+              <div className="shrink-0 text-right tabular-nums">
+                <span className="block text-xs font-bold text-positive whitespace-nowrap">
+                  {extraEmployerPct > 0 ? `+${extraEmployerPct}% employer` : 'At minimum'}
+                </span>
+                {extraEmployerPct > 0 && (
+                  <span className="block text-xs text-muted-foreground whitespace-nowrap">
+                    +{formatGBP(extraEmployerValue)}/yr
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border/40 bg-card/40 p-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <span className="block text-xs font-semibold text-foreground">Hourly Pay vs Living Wage</span>
+                <p className="text-xs text-muted-foreground">
+                  UK National Living Wage (21+, 2026/27) is {formatGBP(UK_NLW_2026_HOURLY)}/hr ({formatGBP(annualNlw)}/yr at {hoursPerDay}h/day) — {formatGBP(aboveNlwAnnual)}/yr above minimum.
+                </p>
+              </div>
+              <div className="shrink-0 text-right tabular-nums">
+                <span className="block text-xs font-bold text-positive whitespace-nowrap">
+                  {hourlyMultiple.toFixed(2)}×
+                </span>
+                <span className="block text-xs text-muted-foreground whitespace-nowrap">
+                  {formatGBP(hourlyRate)}/hr
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    <DialogFooter className="pt-4 border-t border-border/40">
+      <Button onClick={() => setIsMinimumsDialogOpen(false)} className="rounded-lg bg-primary text-primary-foreground font-semibold font-mono text-xs h-8 px-4">
         Done
       </Button>
     </DialogFooter>

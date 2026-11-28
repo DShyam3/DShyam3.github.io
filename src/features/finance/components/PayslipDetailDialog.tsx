@@ -62,7 +62,7 @@ export function PayslipDetailDialog({
   const [isUpdatingMatch, setIsUpdatingMatch] = useState(false);
   if (!payslip) return null;
   const check = checkPayslip(payslip);
-  const { payments, benefits, deductions } = groupPayslipLines(payslip.lines);
+  const { payments, benefits, deductions, biks } = groupPayslipLines(payslip.lines);
   const hasLines = payments.length + benefits.length + deductions.length > 0;
 
   const confirmTransaction = async (transactionId: string) => {
@@ -166,6 +166,18 @@ export function PayslipDetailDialog({
             <div className="border-t border-border/40 mt-1 pt-1">
               <Row label="Take-home" value={formatGBP(payslip.net)} />
             </div>
+            {payslip.pensionEmployer > 0 && (
+              <div className="border-t border-border/30 mt-1 pt-1">
+                <Row label="Employer pension (not deducted)" value={`+${formatGBP(payslip.pensionEmployer)}`} tone="muted" />
+              </div>
+            )}
+            {biks.length > 0 && (
+              <div className="border-t border-border/30 mt-1 pt-1">
+                {biks.map(l => (
+                  <Row key={l.label} label={`${formatPayslipLineLabel(l.label)} (taxable benefit)`} value={`+${formatGBP(l.amount)}`} tone="muted" />
+                ))}
+              </div>
+            )}
             {!check.reconciles && (
               <p className="flex items-start gap-1.5 text-xs text-destructive pt-1">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
@@ -238,12 +250,6 @@ export function PayslipDetailDialog({
             </section>
           )}
 
-          {payslip.pensionEmployer > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Your employer also paid {formatGBP(payslip.pensionEmployer)} into your pension.
-              It is not deducted from your pay, so it is not in the figures above.
-            </p>
-          )}
           {payslip.notes && <p className="text-xs text-muted-foreground">{payslip.notes}</p>}
           {payslip.storagePath && (
             <p className="text-xs text-muted-foreground truncate" title={payslip.storagePath}>
@@ -252,7 +258,7 @@ export function PayslipDetailDialog({
           )}
         </div>
 
-        <DialogFooter className="pt-3 gap-2 sm:gap-0">
+        <DialogFooter className="pt-3 gap-2">
           <Button variant="ghost" type="button" onClick={() => onDelete(payslip)}
             className="rounded-lg text-xs h-8 gap-1.5 text-muted-foreground hover:text-destructive sm:mr-auto">
             <Trash2 className="h-3.5 w-3.5" /> Delete

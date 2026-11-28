@@ -14,7 +14,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Calculator, RotateCcw, TrendingUp } from 'lucide-react';
+import { Calculator, ChevronDown, ChevronRight, Plus, RotateCcw, Trash2, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,6 +44,8 @@ import {
   type UkTaxRegion,
   type UkUndergradPlan,
 } from '@/lib/finance';
+import { BENEFIT_KINDS, BENEFIT_PRESETS } from './tax-income-helpers';
+import type { PackageBenefit, PackageBenefitKind } from '@/lib/finance/types';
 import { cn } from '@/lib/utils';
 import { useFinanceData } from '../FinanceDataContext';
 import { useFinanceTotals } from '../useFinanceTotals';
@@ -63,6 +65,7 @@ interface Draft {
   personalAllowance: string;
   /** Gross percent of `pensionBasis`, so it moves with income across the charts. */
   pensionPercent: string;
+  employerPensionPercent: string;
   pensionBasis: UkPensionBasis;
   pensionMethod: UkPensionMethod;
   undergradPlan: UkUndergradPlan;
@@ -156,6 +159,7 @@ const draftFrom = (base: UkTaxInput): Draft => ({
   benefitsInKind: asField(base.benefitsInKind),
   personalAllowance: base.personalAllowance === undefined ? '' : String(base.personalAllowance),
   pensionPercent: asPercentField(base.pensionShare ?? 0),
+  employerPensionPercent: '3',
   pensionBasis: base.pensionBasis ?? 'salary',
   pensionMethod: base.pensionMethod,
   undergradPlan: base.undergradPlan,
@@ -169,7 +173,7 @@ const draftFrom = (base: UkTaxInput): Draft => ({
 const STANDARD_DRAFT = draftFrom(UK_STANDARD_TAX_INPUT);
 
 export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden: boolean }) {
-  const { hasLoaded } = useFinanceData();
+  const { hasLoaded, settings } = useFinanceData();
 
   // Yours follows your settings until you change a field; an edited field is
   // an override and wins until Reset. Each view keeps its own edits, so
@@ -180,20 +184,42 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
   const yoursSeed = useMemo(
     () =>
       figuresHidden
-        ? draftFrom({
-            ...results.taxInput,
-            income: 0,
-            benefitsInKind: 0,
-            pensionContribution: 0,
-            pensionShare: 0,
-            personalAllowance: undefined,
-          })
-        : draftFrom(results.taxInput),
-    [results.taxInput, figuresHidden],
+        ? {
+            ...draftFrom({
+              ...results.taxInput,
+              income: 0,
+              benefitsInKind: 0,
+              pensionContribution: 0,
+              pensionShare: 0,
+              personalAllowance: undefined,
+            }),
+            employerPensionPercent: '0',
+          }
+        : {
+            ...draftFrom(results.taxInput),
+            employerPensionPercent: String(settings.employerPensionPercent),
+          },
+    [results.taxInput, figuresHidden, settings.employerPensionPercent],
   );
   const [profile, setProfile] = useState<Profile>('standard');
   const standard = profile === 'standard';
   const [overrides, setOverrides] = useState<Record<Profile, Partial<Draft>>>({ standard: {}, yours: {} });
+  const [benefitOverrides, setBenefitOverrides] = useState<Record<Profile, PackageBenefit[] | null>>({
+    standard: null,
+    yours: null,
+  });
+  const [isBenefitsOpen, setIsBenefitsOpen] = useState(false);
+  const [benefitPreset, setBenefitPreset] = useState('custom');
+  const [benefitName, setBenefitName] = useState('');
+  const [benefitAmount, setBenefitAmount] = useState('');
+  const [benefitType, setBenefitType] = useState<'monetary' | 'percentage'>('monetary');
+  const [benefitKind, setBenefitKind] = useState<PackageBenefitKind>('cash');
+
+  const seededBenefits = useMemo<PackageBenefit[]>(
+    () => (profile === 'yours' && !figuresHidden ? (settings.packageBenefits ?? []) : []),
+    [profile, figuresHidden, settings.packageBenefits],
+  );
+  const activeBenefits = benefitOverrides[profile] ?? seededBenefits;
 
   const draft = useMemo<Draft>(
     () => ({ ...(profile === 'standard' ? STANDARD_DRAFT : yoursSeed), ...overrides[profile] }),
@@ -201,18 +227,30 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
   );
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setOverrides(prev => ({ ...prev, [profile]: { ...prev[profile], [key]: value } }));
-  const edited = Object.keys(overrides[profile]).length > 0;
+  const edited = Object.keys(overrides[profile]).length > 0 || benefitOverrides[profile] !== null;
 
   const employed = draft.kind === 'employed';
   // Salary sacrifice and net pay are payroll arrangements, so a self-employed
   // profit only has relief at source. The engine applies the same rule.
   const pensionMethod: UkPensionMethod = employed ? draft.pensionMethod : 'relief-at-source';
 
+  const baseIncome = amount(draft.income);
+  const { cashAdditionTotal, bikAdditionTotal } = useMemo(() => {
+    let cash = 0;
+    let bik = 0;
+    for (const b of activeBenefits) {
+      const value = b.type === 'percentage' ? (baseIncome * b.amount) / 100 : b.amount;
+      if (b.kind === 'cash') cash += value;
+      else bik += value;
+    }
+    return { cashAdditionTotal: cash, bikAdditionTotal: bik };
+  }, [activeBenefits, baseIncome]);
+
   const input = useMemo<UkTaxInput>(() => ({
-    income: amount(draft.income),
+    income: baseIncome + cashAdditionTotal,
     kind: draft.kind,
     region: draft.region,
-    benefitsInKind: amount(draft.benefitsInKind),
+    benefitsInKind: amount(draft.benefitsInKind) + (employed ? bikAdditionTotal : 0),
     personalAllowance: allowanceFrom(draft.personalAllowance),
     pensionContribution: 0,
     pensionShare: shareFrom(draft.pensionPercent),
@@ -223,7 +261,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
     children: Math.floor(amount(draft.children)),
     childcareSupport: amount(draft.childcareSupport),
     marriageAllowance: draft.marriageAllowance,
-  }), [draft]);
+  }), [draft, baseIncome, cashAdditionTotal, bikAdditionTotal, employed]);
 
   const result = useMemo(() => calculateUkTax(input), [input]);
   const marginal = useMemo(() => ukMarginalRate(input), [input]);
@@ -366,7 +404,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
   const field = (
     id: string,
     label: string,
-    key: 'income' | 'benefitsInKind' | 'personalAllowance' | 'pensionPercent' | 'children',
+    key: 'income' | 'benefitsInKind' | 'personalAllowance' | 'pensionPercent' | 'employerPensionPercent' | 'children',
     unit: 'pounds' | 'percent' | 'count' = 'pounds',
   ) => (
     <div className="space-y-1.5">
@@ -439,7 +477,10 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
                 variant="ghost"
                 size="sm"
                 className="h-7 -mt-1 gap-1.5 text-xs"
-                onClick={() => setOverrides(prev => ({ ...prev, [profile]: {} }))}
+                onClick={() => {
+                  setOverrides(prev => ({ ...prev, [profile]: {} }));
+                  setBenefitOverrides(prev => ({ ...prev, [profile]: null }));
+                }}
               >
                 <RotateCcw className="h-3.5 w-3.5" /> {standard ? 'Reset' : 'My settings'}
               </Button>
@@ -491,11 +532,36 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
             </div>
           </div>
 
-          {/* Standard keeps the auto-enrolment minimum but lets its payment
-              method change: many larger employers pay it by salary sacrifice.
-              Alone there, it takes the whole row. */}
-          <div className={cn('grid gap-4', !standard && 'sm:grid-cols-2')}>
-            {!standard && field('taxcalc-pension', `Pension (% of ${employed ? 'salary' : 'profit'}, gross)`, 'pensionPercent', 'percent')}
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                {field('taxcalc-pension', `Your pension (% of ${employed ? 'salary' : 'profit'})`, 'pensionPercent', 'percent')}
+                <Slider
+                  aria-label="Your pension percentage"
+                  aria-valuetext={`${amount(draft.pensionPercent)}%`}
+                  min={0}
+                  max={30}
+                  step={0.5}
+                  value={[Math.min(Math.max(amount(draft.pensionPercent), 0), 30)]}
+                  onValueChange={([v]) => set('pensionPercent', String(v))}
+                />
+              </div>
+              {employed && (
+                <div className="space-y-2">
+                  {field('taxcalc-employer-pension', 'Employer pension (%)', 'employerPensionPercent', 'percent')}
+                  <Slider
+                    aria-label="Employer pension percentage"
+                    aria-valuetext={`${amount(draft.employerPensionPercent)}%`}
+                    min={0}
+                    max={20}
+                    step={0.5}
+                    value={[Math.min(Math.max(amount(draft.employerPensionPercent), 0), 20)]}
+                    onValueChange={([v]) => set('employerPensionPercent', String(v))}
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="taxcalc-pension-method" className="text-xs text-muted-foreground">
                 {standard ? 'Pension paid by' : 'Paid by'}
@@ -531,6 +597,151 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
               <Label htmlFor="taxcalc-postgrad" className="text-xs text-muted-foreground">Postgraduate loan</Label>
               <Switch id="taxcalc-postgrad" checked={draft.postgradLoan} onCheckedChange={v => set('postgradLoan', v)} />
             </div>
+          </div>
+
+          <div className="rounded-lg border border-border/40 bg-muted/10 p-3 space-y-3">
+            <button
+              type="button"
+              aria-expanded={isBenefitsOpen}
+              onClick={() => setIsBenefitsOpen(v => !v)}
+              className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium text-foreground"
+            >
+              <span>
+                Benefit &amp; bonus additions
+                {activeBenefits.length > 0 && (
+                  <span className="ml-2 text-muted-foreground font-mono">
+                    ({activeBenefits.length} · +{formatGBP(cashAdditionTotal + (employed ? bikAdditionTotal : 0))}/yr)
+                  </span>
+                )}
+              </span>
+              {isBenefitsOpen
+                ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />}
+            </button>
+
+            {isBenefitsOpen && (
+              <div className="space-y-3 pt-1">
+                <p className="text-xs text-muted-foreground">
+                  What-if bonuses, allowances, or benefits in kind for comparing contracts. Changes stay in this calculator.
+                </p>
+
+                <div className="grid gap-2 sm:grid-cols-12">
+                  <div className="sm:col-span-4">
+                    <Select
+                      value={benefitPreset}
+                      onValueChange={key => {
+                        setBenefitPreset(key);
+                        const preset = BENEFIT_PRESETS.find(p => p.key === key);
+                        if (!preset) return;
+                        setBenefitName(preset.name);
+                        setBenefitAmount(preset.amount);
+                        setBenefitType(preset.type);
+                        setBenefitKind(preset.kind);
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Preset…" /></SelectTrigger>
+                      <SelectContent>
+                        {BENEFIT_PRESETS.map(p => (
+                          <SelectItem key={p.key} value={p.key} className="text-xs">{p.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="sm:col-span-3">
+                    <Input
+                      value={benefitName}
+                      onChange={e => setBenefitName(e.target.value)}
+                      placeholder="Name (e.g. Bonus)"
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={benefitAmount}
+                      onChange={e => setBenefitAmount(e.target.value)}
+                      placeholder={benefitType === 'percentage' ? '10%' : '£/yr'}
+                      className="h-9 text-xs tabular-nums"
+                    />
+                  </div>
+                  <div className="sm:col-span-3 flex items-center gap-1.5">
+                    <Select value={benefitType} onValueChange={(v: 'monetary' | 'percentage') => setBenefitType(v)}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monetary" className="text-xs">£/yr</SelectItem>
+                        <SelectItem value="percentage" className="text-xs">% salary</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <PillSwitch
+                    label="Benefit tax kind"
+                    options={BENEFIT_KINDS}
+                    value={benefitKind}
+                    onChange={setBenefitKind}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs gap-1"
+                    onClick={() => {
+                      const val = parseFloat(benefitAmount);
+                      if (!benefitName.trim() || !Number.isFinite(val) || val <= 0) return;
+                      const next: PackageBenefit = {
+                        id: `calc_benefit_${Date.now()}`,
+                        name: benefitName.trim(),
+                        amount: val,
+                        type: benefitType,
+                        kind: benefitKind,
+                      };
+                      setBenefitOverrides(prev => ({ ...prev, [profile]: [...activeBenefits, next] }));
+                      setBenefitPreset('custom');
+                      setBenefitName('');
+                      setBenefitAmount('');
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add
+                  </Button>
+                </div>
+
+                {activeBenefits.length > 0 && (
+                  <div className="space-y-1.5">
+                    {activeBenefits.map(b => {
+                      const val = b.type === 'percentage' ? (baseIncome * b.amount) / 100 : b.amount;
+                      return (
+                        <div key={b.id} className="flex items-center justify-between gap-2 rounded-md border border-border/30 bg-background/40 px-2.5 py-1.5 text-xs">
+                          <div className="min-w-0 truncate">
+                            <span className="font-medium text-foreground">{b.name}</span>
+                            <span className="ml-2 text-muted-foreground">
+                              {b.kind === 'cash' ? 'Cash' : 'BIK'}
+                              {b.type === 'percentage' ? ` · ${b.amount}%` : ''}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 font-mono tabular-nums">
+                            <span>+{formatGBP(val)}/yr</span>
+                            <button
+                              type="button"
+                              aria-label={`Remove ${b.name}`}
+                              onClick={() => setBenefitOverrides(prev => ({
+                                ...prev,
+                                [profile]: activeBenefits.filter(item => item.id !== b.id),
+                              }))}
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {!standard && (<>
@@ -603,6 +814,35 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
                   </tr>
                 );
               })}
+              {employed && amount(draft.employerPensionPercent) > 0 && (() => {
+                const employerPension = (input.income * amount(draft.employerPensionPercent)) / 100;
+                const totalPension = result.pensionFromPay + employerPension;
+                return (
+                  <>
+                    <tr className="border-t border-border/40">
+                      <th scope="row" className="py-2 pt-3 pr-4 text-left font-normal text-foreground">
+                        Employer pension ({amount(draft.employerPensionPercent)}%)
+                        <span className="mt-0.5 block text-xs text-muted-foreground">Added on top of salary, not deducted.</span>
+                      </th>
+                      {[employerPension, employerPension / 12].map((v, j) => (
+                        <td key={j} className="py-2 pt-3 pl-4 text-right font-mono tabular-nums whitespace-nowrap text-positive">
+                          +{formatGBP(v)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th scope="row" className="py-2 pr-4 text-left font-semibold text-foreground">
+                        Total into pension
+                      </th>
+                      {[totalPension, totalPension / 12].map((v, j) => (
+                        <td key={j} className="py-2 pl-4 text-right font-mono font-semibold tabular-nums whitespace-nowrap text-foreground">
+                          +{formatGBP(v)}
+                        </td>
+                      ))}
+                    </tr>
+                  </>
+                );
+              })()}
             </tbody>
           </table>
 

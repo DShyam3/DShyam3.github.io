@@ -400,6 +400,10 @@ export function parsePayslipText(text: string): ParsedPayslip {
         ...(result.payrolledBenefits ?? []),
         { label: lineBenefits[0].label, monthlyAmount: lineBenefits[0].amount },
       ];
+      result.lines = [
+        ...(result.lines ?? []),
+        { label: lineBenefits[0].label, amount: lineBenefits[0].amount, kind: 'bik' },
+      ];
     } else {
       for (const b of lineBenefits) {
         result.otherDeductions = Math.round(((result.otherDeductions ?? 0) + b.amount) * 100) / 100;

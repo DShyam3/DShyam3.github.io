@@ -30,6 +30,12 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 const buildRescanRow = (existing: Payslip, parsed: Awaited<ReturnType<typeof extractPayslipFromPdf>>): RescanRow | null => {
   const existingReconciles = checkPayslip(existing).reconciles;
+  const parsedBiks = (parsed.lines ?? []).filter(l => l.kind === 'bik');
+  const existingHasBiks = (existing.lines ?? []).some(l => l.kind === 'bik');
+  const mergedLines = existing.lines?.length
+    ? (existingHasBiks || parsedBiks.length === 0 ? existing.lines : [...existing.lines, ...parsedBiks])
+    : parsed.lines;
+
   const candidate: Payslip = {
     ...existing,
     gross: existing.gross === 0 && parsed.gross !== undefined ? parsed.gross : existing.gross,
@@ -40,7 +46,7 @@ const buildRescanRow = (existing: Payslip, parsed: Awaited<ReturnType<typeof ext
     studentLoan: existing.studentLoan === 0 && parsed.studentLoan !== undefined ? parsed.studentLoan : existing.studentLoan,
     otherDeductions: existing.otherDeductions === 0 && parsed.otherDeductions !== undefined ? parsed.otherDeductions : existing.otherDeductions,
     net: existing.net === 0 && parsed.net !== undefined ? parsed.net : existing.net,
-    lines: existing.lines?.length ? existing.lines : parsed.lines,
+    lines: mergedLines,
   };
 
   // If the stored row doesn't reconcile (e.g. payrolled BIKs inflated gross or
@@ -71,6 +77,9 @@ const buildRescanRow = (existing: Payslip, parsed: Awaited<ReturnType<typeof ext
   track('Student loan', existing.studentLoan, candidate.studentLoan);
   track('Other deductions', existing.otherDeductions, candidate.otherDeductions);
   track('Net', existing.net, candidate.net);
+  if (!existingHasBiks && parsedBiks.length > 0) {
+    changes.push(`Taxable benefits: added ${parsedBiks.map(b => b.label).join(', ')}`);
+  }
 
   if (changes.length === 0) return null;
   return { existing, proposed: candidate, changes, include: true };
